@@ -2,35 +2,44 @@
 
 ## Быстрый старт через Docker Compose
 
-Проект теперь можно поднять командой без дополнительной ручной настройки:
+Минимальный сценарий запуска:
 
 ```bash
-docker compose up --build
+docker compose up
 ```
 
 Что происходит автоматически:
-- собирается отдельный Docker-образ для Rust-бэкенда (`docker/rust-backend.Dockerfile`), где уже есть `cargo`, `protoc` и системные зависимости;
-- Postgres при первом старте прогоняет SQL-миграции из `richcrab/migrations`;
+- Rust-сервисы поднимаются из локально собранного образа `richcrabs/rust-backend:local` (Compose принудительно использует `pull_policy: build`), поэтому `cargo` и `protoc` всегда доступны в рантайме;
+- Postgres на первой инициализации применяет миграции из `richcrab/migrations`;
 - после миграций выполняется сидинг (`docker/postgres-init/10-seed.sql`).
 
 ## Переменные окружения
 
-Compose уже содержит безопасные значения по умолчанию, поэтому `git clone && docker compose up --build` работает из коробки.
+Значения по умолчанию уже достаточны для локального рантайма (`git clone && docker compose up`).
 
-Если хочешь переопределить параметры:
+Если нужно переопределить:
 
 ```bash
 cp .env.example .env
 # при необходимости меняешь значения
 ```
 
-Файл `.env.example` полностью runtime-ready для локального запуска.
+`.env.example` уже содержит рабочий runtime-конфиг.
+
+## Если раньше запуск уже падал
+
+Если у тебя остался частично инициализированный том Postgres от неудачного старта, первый успешный запуск может блокироваться старым состоянием БД. Сбрось тома один раз:
+
+```bash
+docker compose down -v
+docker compose up
+```
 
 ## Полезные команды
 
 ```bash
 # запустить в фоне
-docker compose up -d --build
+docker compose up -d
 
 # посмотреть логи
 docker compose logs -f

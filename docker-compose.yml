@@ -11,11 +11,21 @@ services:
       - pg_data:/var/lib/postgresql/data
       - ./docker/postgres-init:/docker-entrypoint-initdb.d
       - ./richcrab/migrations:/migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-richcrab} -d ${POSTGRES_DB:-richcrab}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   redis:
     image: redis:7-alpine
     ports:
       - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   # gateway:
   #   build:
@@ -46,6 +56,8 @@ services:
   #   restart: unless-stopped
 
   entitlements:
+    image: richcrabs/rust-backend:local
+    pull_policy: build
     build: &rust_build
       context: .
       dockerfile: docker/rust-backend.Dockerfile
@@ -55,7 +67,7 @@ services:
       - cargo_target:/app/richcrab/target
       - cargo_registry:/usr/local/cargo/registry
       - cargo_git:/usr/local/cargo/git
-    command: bash -lc "cargo run -p entitlements"
+    command: bash -lc "/usr/local/cargo/bin/cargo run -p entitlements"
     environment: &service_env
       DATABASE_URL: ${DATABASE_URL:-postgres://richcrab:richcrab@postgres:5432/richcrab}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
@@ -69,67 +81,90 @@ services:
       SERVICE_ADDR_BOT: ${SERVICE_ADDR_BOT:-0.0.0.0:50055}
       SERVICE_ADDR_BOT_INGRESS: ${SERVICE_ADDR_BOT_INGRESS:-0.0.0.0:8090}
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "50054:50054"
 
   game:
+    image: richcrabs/rust-backend:local
+    pull_policy: build
     build: *rust_build
     working_dir: /app/richcrab
     volumes: *rust_volumes
-    command: bash -lc "cargo run -p game"
+    command: bash -lc "/usr/local/cargo/bin/cargo run -p game"
     environment: *service_env
     depends_on:
-      - entitlements
-      - redis
+      entitlements:
+        condition: service_started
+      redis:
+        condition: service_healthy
     ports:
       - "50051:50051"
 
   join:
+    image: richcrabs/rust-backend:local
+    pull_policy: build
     build: *rust_build
     working_dir: /app/richcrab
     volumes: *rust_volumes
-    command: bash -lc "cargo run -p join"
+    command: bash -lc "/usr/local/cargo/bin/cargo run -p join"
     environment: *service_env
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     ports:
       - "50052:50052"
 
   quiz:
+    image: richcrabs/rust-backend:local
+    pull_policy: build
     build: *rust_build
     working_dir: /app/richcrab
     volumes: *rust_volumes
-    command: bash -lc "cargo run -p quiz"
+    command: bash -lc "/usr/local/cargo/bin/cargo run -p quiz"
     environment: *service_env
     depends_on:
-      - entitlements
-      - postgres
+      entitlements:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     ports:
       - "50053:50053"
 
   bot:
+    image: richcrabs/rust-backend:local
+    pull_policy: build
     build: *rust_build
     working_dir: /app/richcrab
     volumes: *rust_volumes
-    command: bash -lc "cargo run -p bot"
+    command: bash -lc "/usr/local/cargo/bin/cargo run -p bot"
     environment: *service_env
     depends_on:
-      - entitlements
-      - postgres
+      entitlements:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     ports:
       - "50055:50055"
 
   bot_ingress:
+    image: richcrabs/rust-backend:local
+    pull_policy: build
     build: *rust_build
     working_dir: /app/richcrab
     volumes: *rust_volumes
-    command: bash -lc "cargo run -p bot_ingress"
+    command: bash -lc "/usr/local/cargo/bin/cargo run -p bot_ingress"
     environment: *service_env
     depends_on:
-      - game
-      - postgres
+      game:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     ports:
       - "8090:8090"
 
