@@ -65,6 +65,21 @@ impl GameServiceImpl {
         }
     }
 
+    async fn report_usage(&self, user_id: &str, feature: &str, units: u64) -> Result<(), Status> {
+        let mut client = self.entitlements.clone();
+        client
+            .report_usage(proto::richcrab::v1::ReportUsageRequest {
+                user_id: Some(proto::richcrab::v1::UserId {
+                    value: user_id.to_string(),
+                }),
+                feature: feature.to_string(),
+                units,
+            })
+            .await
+            .map_err(|e| Status::unavailable(format!("entitlements unavailable: {e}")))?;
+        Ok(())
+    }
+
     async fn resolve_room(&self, room_id: &str) -> Result<crate::room_actor::RoomHandle, Status> {
         self.rooms
             .read()
@@ -98,6 +113,8 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             .and_then(|q| (!q.value.is_empty()).then_some(q.value))
             .ok_or_else(|| Status::invalid_argument("quiz_id is required"))?;
 
+        self.check_entitlement(&owner_id, "CREATE_ROOM").await?;
+
         let room_id = uuid::Uuid::new_v4().to_string();
         let invite_token = uuid::Uuid::new_v4().to_string();
 
@@ -130,7 +147,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
 
         let initial_state = RoomState {
             room_id: room_id.clone(),
-            owner_user_id: owner_id,
+            owner_user_id: owner_id.clone(),
             quiz_id,
             title: req.title,
             state: RoomLifecycleState::Lobby,
@@ -143,6 +160,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
 
         let (handle, _task) = spawn_room_actor(initial_state, 64);
         self.rooms.write().await.insert(room_id.clone(), handle);
+        self.report_usage(&owner_id, "CREATE_ROOM", 1).await?;
 
         Ok(Response::new(proto::richcrab::v1::CreateRoomResponse {
             room_id: Some(proto::richcrab::v1::RoomId { value: room_id }),
@@ -180,6 +198,17 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         }
 
         let room = self.resolve_room(&payload.room_id).await?;
+        let (state_tx, state_rx) = oneshot::channel();
+        room.tx
+            .send(RoomCommand::GetState { response: state_tx })
+            .await
+            .map_err(|_| Status::unavailable("room is unavailable"))?;
+        let state = state_rx
+            .await
+            .map_err(|_| Status::internal("room actor response dropped"))?;
+        self.check_entitlement(&state.owner_user_id, "MAX_PLAYERS_IN_ROOM")
+            .await?;
+
         let (tx, rx) = oneshot::channel();
         room.tx
             .send(RoomCommand::Join {
@@ -193,6 +222,8 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             .await
             .map_err(|_| Status::internal("room actor response dropped"))?
             .map_err(Status::failed_precondition)?;
+        self.report_usage(&state.owner_user_id, "MAX_PLAYERS_IN_ROOM", 1)
+            .await?;
 
         Ok(Response::new(proto::richcrab::v1::JoinRoomResponse {
             player_id: Some(proto::richcrab::v1::PlayerId { value: player_id }),
@@ -215,13 +246,13 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             .map(|v| v.value)
             .ok_or_else(|| Status::invalid_argument("requested_by is required"))?;
 
-        self.check_entitlement(&requested_by, "game.start").await?;
+        self.check_entitlement(&requested_by, "START_GAME").await?;
 
         let room = self.resolve_room(&room_id).await?;
         let (tx, rx) = oneshot::channel();
         room.tx
             .send(RoomCommand::StartGame {
-                requested_by,
+                requested_by: requested_by.clone(),
                 response: tx,
             })
             .await
@@ -229,6 +260,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         rx.await
             .map_err(|_| Status::internal("room actor response dropped"))?
             .map_err(Status::failed_precondition)?;
+        self.report_usage(&requested_by, "START_GAME", 1).await?;
 
         Ok(Response::new(proto::richcrab::v1::StartGameResponse {
             started: true,

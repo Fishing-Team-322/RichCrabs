@@ -177,9 +177,13 @@ name = "bot"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "prost-types",
+ "proto",
+ "rand",
  "serde_json",
  "shared",
  "sqlx",
+ "tonic",
  "uuid",
 ]
 
@@ -410,9 +414,11 @@ name = "entitlements"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "proto",
  "serde_json",
  "shared",
  "sqlx",
+ "tonic",
  "uuid",
 ]
 
@@ -1531,9 +1537,13 @@ name = "quiz"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "prost-types",
+ "proto",
+ "serde",
  "serde_json",
  "shared",
  "sqlx",
+ "tonic",
  "uuid",
 ]
 
