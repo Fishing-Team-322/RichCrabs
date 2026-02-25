@@ -11,6 +11,7 @@ service QuizService {
   rpc UpdateQuiz(UpdateQuizRequest) returns (UpdateQuizResponse);
   rpc DeleteQuiz(DeleteQuizRequest) returns (DeleteQuizResponse);
   rpc ListQuizzes(ListQuizzesRequest) returns (ListQuizzesResponse);
+  rpc PublishQuiz(PublishQuizRequest) returns (PublishQuizResponse);
 
   rpc StartAiQuizJob(StartAiQuizJobRequest) returns (StartAiQuizJobResponse);
   rpc GetAiQuizJob(GetAiQuizJobRequest) returns (GetAiQuizJobResponse);
@@ -81,6 +82,17 @@ message ListQuizzesRequest {
 message ListQuizzesResponse {
   repeated Quiz quizzes = 1;
   string next_page_token = 2;
+  optional Error error = 3;
+}
+
+message PublishQuizRequest {
+  QuizId quiz_id = 1;
+  UserId requested_by = 2;
+}
+
+message PublishQuizResponse {
+  optional Quiz quiz = 1;
+  uint32 published_version = 2;
   optional Error error = 3;
 }
 

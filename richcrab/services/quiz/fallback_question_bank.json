@@ -1,0 +1,19 @@
+{
+  "questions": [
+    {
+      "text": "What color is the sky on a clear day?",
+      "options": ["Blue", "Green", "Red", "Purple"],
+      "correct_option_index": 0
+    },
+    {
+      "text": "How many days are there in a leap year?",
+      "options": ["364", "365", "366", "367"],
+      "correct_option_index": 2
+    },
+    {
+      "text": "Which planet is known as the Red Planet?",
+      "options": ["Mars", "Venus", "Jupiter", "Mercury"],
+      "correct_option_index": 0
+    }
+  ]
+}

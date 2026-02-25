@@ -60,4 +60,56 @@ impl BotRepository {
             created_at: row.get("created_at"),
         }))
     }
+
+    pub async fn find_by_id(&self, id: Uuid) -> sqlx::Result<Option<Bot>> {
+        let row = sqlx::query(
+            "SELECT id, user_id, telegram_bot_id, username, token_encrypted, webhook_secret, created_at
+             FROM bots
+             WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|row| Bot {
+            id: row.get("id"),
+            user_id: row.get("user_id"),
+            telegram_bot_id: row.get("telegram_bot_id"),
+            username: row.get("username"),
+            token_encrypted: row.get("token_encrypted"),
+            webhook_secret: row.get("webhook_secret"),
+            created_at: row.get("created_at"),
+        }))
+    }
+
+    pub async fn list(&self) -> sqlx::Result<Vec<Bot>> {
+        let rows = sqlx::query(
+            "SELECT id, user_id, telegram_bot_id, username, token_encrypted, webhook_secret, created_at
+             FROM bots
+             ORDER BY created_at DESC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| Bot {
+                id: row.get("id"),
+                user_id: row.get("user_id"),
+                telegram_bot_id: row.get("telegram_bot_id"),
+                username: row.get("username"),
+                token_encrypted: row.get("token_encrypted"),
+                webhook_secret: row.get("webhook_secret"),
+                created_at: row.get("created_at"),
+            })
+            .collect())
+    }
+
+    pub async fn remove(&self, id: Uuid) -> sqlx::Result<bool> {
+        let result = sqlx::query("DELETE FROM bots WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
 }
