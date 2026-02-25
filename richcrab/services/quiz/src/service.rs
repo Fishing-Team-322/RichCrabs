@@ -1,5 +1,6 @@
 use std::{fs, path::PathBuf};
 
+use anyhow::Context;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -43,13 +44,13 @@ impl QuizServiceImpl {
         }
     }
 
-    fn load_fallback_question_bank() -> Result<Vec<proto::richcrab::v1::QuizQuestion>, Status> {
+    fn load_fallback_question_bank() -> anyhow::Result<Vec<proto::richcrab::v1::QuizQuestion>> {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push("fallback_question_bank.json");
         let json = fs::read_to_string(&path)
-            .map_err(|e| Status::internal(format!("failed to load fallback bank: {e}")))?;
-        let parsed: FallbackQuestionBank = serde_json::from_str(&json)
-            .map_err(|e| Status::internal(format!("failed to parse fallback bank: {e}")))?;
+            .with_context(|| format!("failed to load fallback bank: {}", path.display()))?;
+        let parsed: FallbackQuestionBank =
+            serde_json::from_str(&json).context("failed to parse fallback bank")?;
         Ok(parsed
             .questions
             .into_iter()

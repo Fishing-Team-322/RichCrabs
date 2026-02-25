@@ -40,27 +40,6 @@ impl BotRepository {
         Ok(())
     }
 
-    pub async fn find_by_telegram_bot_id(&self, telegram_bot_id: i64) -> sqlx::Result<Option<Bot>> {
-        let row = sqlx::query(
-            "SELECT id, user_id, telegram_bot_id, username, token_encrypted, webhook_secret, created_at
-             FROM bots
-             WHERE telegram_bot_id = $1",
-        )
-        .bind(telegram_bot_id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(row.map(|row| Bot {
-            id: row.get("id"),
-            user_id: row.get("user_id"),
-            telegram_bot_id: row.get("telegram_bot_id"),
-            username: row.get("username"),
-            token_encrypted: row.get("token_encrypted"),
-            webhook_secret: row.get("webhook_secret"),
-            created_at: row.get("created_at"),
-        }))
-    }
-
     pub async fn find_by_id(&self, id: Uuid) -> sqlx::Result<Option<Bot>> {
         let row = sqlx::query(
             "SELECT id, user_id, telegram_bot_id, username, token_encrypted, webhook_secret, created_at

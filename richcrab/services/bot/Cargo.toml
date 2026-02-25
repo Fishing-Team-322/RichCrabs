@@ -19,3 +19,8 @@ aes-gcm = "0.10"
 base64 = "0.22"
 hex = "0.4"
 serde = { version = "1", features = ["derive"] }
+
+anyhow.workspace = true
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tonic-health = "0.12"
+tracing = "0.1"

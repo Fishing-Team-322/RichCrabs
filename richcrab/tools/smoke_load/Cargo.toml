@@ -1,0 +1,12 @@
+[package]
+name = "smoke_load"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+proto = { path = "../../proto" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tonic = { version = "0.12", features = ["transport"] }
+uuid.workspace = true

@@ -4,6 +4,7 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
+use anyhow::{bail, Context};
 use base64::Engine;
 use chrono::Utc;
 use reqwest::Client;
@@ -114,12 +115,11 @@ impl BotServiceImpl {
         Ok(())
     }
 
-    fn actor_user_id(metadata: &tonic::metadata::MetadataMap) -> Result<String, Status> {
+    fn actor_user_id(metadata: &tonic::metadata::MetadataMap) -> Option<String> {
         metadata
             .get("x-user-id")
             .and_then(|v| v.to_str().ok())
             .map(str::to_string)
-            .ok_or_else(|| Status::invalid_argument("x-user-id metadata is required"))
     }
 
     fn to_proto(bot: &Bot, status: String) -> proto::richcrab::v1::Bot {
@@ -137,39 +137,36 @@ impl BotServiceImpl {
         }
     }
 
-    fn build_crypto_key(&self) -> Result<[u8; 32], Status> {
+    fn build_crypto_key(&self) -> anyhow::Result<[u8; 32]> {
         if self.encryption_key.trim().is_empty() {
-            return Err(Status::failed_precondition(
-                "ENCRYPTION_KEY is not configured",
-            ));
+            bail!("ENCRYPTION_KEY is not configured");
         }
         let hash = shared::crypto::sha256_hex(&self.encryption_key);
         let mut key = [0_u8; 32];
-        hex::decode_to_slice(hash, &mut key)
-            .map_err(|_| Status::failed_precondition("invalid ENCRYPTION_KEY"))?;
+        hex::decode_to_slice(hash, &mut key).context("invalid ENCRYPTION_KEY")?;
         Ok(key)
     }
 
-    fn encrypt_token(&self, token: &str) -> Result<String, Status> {
+    fn encrypt_token(&self, token: &str) -> anyhow::Result<String> {
         let key = self.build_crypto_key()?;
         let cipher = Aes256Gcm::new((&key).into());
         let nonce_bytes: [u8; 12] = rand::random();
         let nonce = Nonce::from_slice(&nonce_bytes);
         let ciphertext = cipher
             .encrypt(nonce, token.as_bytes())
-            .map_err(|_| Status::internal("token encryption failed"))?;
+            .map_err(|_| anyhow::anyhow!("token encryption failed"))?;
         let mut payload = Vec::with_capacity(nonce_bytes.len() + ciphertext.len());
         payload.extend_from_slice(&nonce_bytes);
         payload.extend_from_slice(&ciphertext);
         Ok(base64::engine::general_purpose::STANDARD.encode(payload))
     }
 
-    fn decrypt_token(&self, token_encrypted: &str) -> Result<String, Status> {
+    fn decrypt_token(&self, token_encrypted: &str) -> anyhow::Result<String> {
         let payload = base64::engine::general_purpose::STANDARD
             .decode(token_encrypted)
-            .map_err(|_| Status::internal("token decrypt failed"))?;
+            .context("token decrypt failed")?;
         if payload.len() < 13 {
-            return Err(Status::internal("token decrypt payload is invalid"));
+            bail!("token decrypt payload is invalid");
         }
         let key = self.build_crypto_key()?;
         let cipher = Aes256Gcm::new((&key).into());
@@ -177,8 +174,8 @@ impl BotServiceImpl {
         let nonce = Nonce::from_slice(nonce_bytes);
         let plaintext = cipher
             .decrypt(nonce, ciphertext)
-            .map_err(|_| Status::internal("token decrypt failed"))?;
-        String::from_utf8(plaintext).map_err(|_| Status::internal("token decrypt utf8 failed"))
+            .map_err(|_| anyhow::anyhow!("token decrypt failed"))?;
+        String::from_utf8(plaintext).context("token decrypt utf8 failed")
     }
 
     fn generate_webhook_secret(&self) -> String {
@@ -308,7 +305,8 @@ impl proto::richcrab::v1::bot_service_server::BotService for BotServiceImpl {
         &self,
         request: Request<proto::richcrab::v1::RegisterBotRequest>,
     ) -> Result<Response<proto::richcrab::v1::RegisterBotResponse>, Status> {
-        let actor = Self::actor_user_id(request.metadata())?;
+        let actor = Self::actor_user_id(request.metadata())
+            .ok_or_else(|| Status::invalid_argument("x-user-id metadata is required"))?;
         self.check_and_report(&actor, "REGISTER_BOT").await?;
 
         let req = request.into_inner();
@@ -323,7 +321,9 @@ impl proto::richcrab::v1::bot_service_server::BotService for BotServiceImpl {
 
         let me = self.fetch_me(&req.endpoint).await?;
         let webhook_secret = self.generate_webhook_secret();
-        let encrypted_token = self.encrypt_token(&req.endpoint)?;
+        let encrypted_token = self
+            .encrypt_token(&req.endpoint)
+            .map_err(|e| Status::failed_precondition(e.to_string()))?;
 
         let now = Utc::now();
         let bot = Bot {
@@ -358,7 +358,8 @@ impl proto::richcrab::v1::bot_service_server::BotService for BotServiceImpl {
         &self,
         request: Request<proto::richcrab::v1::RemoveBotRequest>,
     ) -> Result<Response<proto::richcrab::v1::RemoveBotResponse>, Status> {
-        let actor = Self::actor_user_id(request.metadata())?;
+        let actor = Self::actor_user_id(request.metadata())
+            .ok_or_else(|| Status::invalid_argument("x-user-id metadata is required"))?;
         self.check_and_report(&actor, "BOT_COMMAND").await?;
 
         let actor_id = Uuid::parse_str(&actor)
@@ -400,7 +401,8 @@ impl proto::richcrab::v1::bot_service_server::BotService for BotServiceImpl {
         &self,
         request: Request<proto::richcrab::v1::ListBotsRequest>,
     ) -> Result<Response<proto::richcrab::v1::ListBotsResponse>, Status> {
-        let actor = Self::actor_user_id(request.metadata())?;
+        let actor = Self::actor_user_id(request.metadata())
+            .ok_or_else(|| Status::invalid_argument("x-user-id metadata is required"))?;
         self.check_and_report(&actor, "BOT_COMMAND").await?;
         let actor_id = Uuid::parse_str(&actor)
             .map_err(|_| Status::invalid_argument("x-user-id must be uuid"))?;
@@ -424,7 +426,8 @@ impl proto::richcrab::v1::bot_service_server::BotService for BotServiceImpl {
         &self,
         request: Request<proto::richcrab::v1::GetBotStatusRequest>,
     ) -> Result<Response<proto::richcrab::v1::GetBotStatusResponse>, Status> {
-        let actor = Self::actor_user_id(request.metadata())?;
+        let actor = Self::actor_user_id(request.metadata())
+            .ok_or_else(|| Status::invalid_argument("x-user-id metadata is required"))?;
         self.check_and_report(&actor, "BOT_COMMAND").await?;
 
         let id = request
@@ -441,7 +444,9 @@ impl proto::richcrab::v1::bot_service_server::BotService for BotServiceImpl {
             .map_err(|e| Status::internal(format!("read failed: {e}")))?;
 
         let bot = bot.ok_or_else(|| Status::not_found("bot not found"))?;
-        let token = self.decrypt_token(&bot.token_encrypted)?;
+        let token = self
+            .decrypt_token(&bot.token_encrypted)
+            .map_err(|e| Status::internal(e.to_string()))?;
         let status = self
             .get_webhook_status(&token)
             .await

@@ -8,6 +8,7 @@ use shared::{redis_client::RedisClient, redis_keys};
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
+use tracing::info;
 
 use crate::{
     domain::{RoomLifecycleState, RoomState},
@@ -103,6 +104,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         &self,
         request: Request<proto::richcrab::v1::CreateRoomRequest>,
     ) -> Result<Response<proto::richcrab::v1::CreateRoomResponse>, Status> {
+        let metrics = shared::observability::init_metrics();
         let req = request.into_inner();
         let owner_id = req
             .owner_user_id
@@ -116,6 +118,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         self.check_entitlement(&owner_id, "CREATE_ROOM").await?;
 
         let room_id = uuid::Uuid::new_v4().to_string();
+        info!(request_id = %uuid::Uuid::new_v4(), room_id = %room_id, user_id = %owner_id, bot_id = "", "create_room");
         let invite_token = uuid::Uuid::new_v4().to_string();
 
         let pin = loop {
@@ -160,6 +163,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
 
         let (handle, _task) = spawn_room_actor(initial_state, 64);
         self.rooms.write().await.insert(room_id.clone(), handle);
+        metrics.rooms_active.inc();
         self.report_usage(&owner_id, "CREATE_ROOM", 1).await?;
 
         Ok(Response::new(proto::richcrab::v1::CreateRoomResponse {
@@ -175,6 +179,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         &self,
         request: Request<proto::richcrab::v1::JoinRoomRequest>,
     ) -> Result<Response<proto::richcrab::v1::JoinRoomResponse>, Status> {
+        let metrics = shared::observability::init_metrics();
         let req = request.into_inner();
         let ticket = req.join_ticket;
         if ticket.is_empty() {
@@ -187,8 +192,11 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             .await
             .map_err(|e| Status::internal(format!("failed to consume ticket: {e}")))?
             .ok_or_else(|| Status::permission_denied("join ticket is invalid or expired"))?;
-        let payload: JoinTicketPayload = serde_json::from_str(&payload_raw)
-            .map_err(|_| Status::permission_denied("join ticket payload is invalid"))?;
+        let payload: JoinTicketPayload = serde_json::from_str(&payload_raw).map_err(|_| {
+            shared::observability::error("game", "join_ticket_payload_invalid");
+            Status::permission_denied("join ticket payload is invalid")
+        })?;
+        info!(request_id = %uuid::Uuid::new_v4(), room_id = %payload.room_id, user_id = "", bot_id = "", "join_room");
         let issued_at = chrono::DateTime::from_timestamp(payload.issued_at_unix, 0)
             .ok_or_else(|| Status::permission_denied("join ticket issued_at is invalid"))?;
         let max_ticket_age = chrono::Duration::from_std(redis_keys::TICKET_TTL)
@@ -224,6 +232,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             .map_err(Status::failed_precondition)?;
         self.report_usage(&state.owner_user_id, "MAX_PLAYERS_IN_ROOM", 1)
             .await?;
+        metrics.players_connected.inc();
 
         Ok(Response::new(proto::richcrab::v1::JoinRoomResponse {
             player_id: Some(proto::richcrab::v1::PlayerId { value: player_id }),
@@ -274,6 +283,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         request: Request<proto::richcrab::v1::SubmitAnswerRequest>,
     ) -> Result<Response<proto::richcrab::v1::SubmitAnswerResponse>, Status> {
         let req = request.into_inner();
+        info!(request_id = %uuid::Uuid::new_v4(), room_id = req.room_id.as_ref().map(|v| v.value.as_str()).unwrap_or(""), user_id = req.player_id.as_ref().map(|v| v.value.as_str()).unwrap_or(""), bot_id = "", "submit_answer");
         let room_id = req
             .room_id
             .map(|v| v.value)

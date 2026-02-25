@@ -12,3 +12,8 @@ serde_json.workspace = true
 sqlx.workspace = true
 uuid.workspace = true
 tonic = { version = "0.12", features = ["transport"] }
+
+anyhow.workspace = true
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tonic-health = "0.12"
+tracing = "0.1"

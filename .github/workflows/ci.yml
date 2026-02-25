@@ -1,0 +1,69 @@
+name: richcrab-ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: richcrab
+          POSTGRES_PASSWORD: richcrab
+          POSTGRES_DB: richcrab
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U richcrab"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgres://richcrab:richcrab@localhost:5432/richcrab
+      REDIS_URL: redis://localhost:6379
+      ENCRYPTION_KEY: ci-encryption-key
+      TELEGRAM_WEBHOOK_BASE_URL: http://localhost:8090
+      LOG_LEVEL: info
+      SERVICE_ADDR_GAME: 127.0.0.1:50051
+      SERVICE_ADDR_JOIN: 127.0.0.1:50052
+      SERVICE_ADDR_QUIZ: 127.0.0.1:50053
+      SERVICE_ADDR_ENTITLEMENTS: 127.0.0.1:50054
+      SERVICE_ADDR_BOT: 127.0.0.1:50055
+      SERVICE_ADDR_BOT_INGRESS: 127.0.0.1:8090
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --features rustls,postgres
+      - name: Run migrations
+        run: sqlx migrate run --source richcrab/migrations
+      - name: Format check
+        run: cargo fmt --manifest-path richcrab/Cargo.toml --all -- --check
+      - name: Clippy
+        run: cargo clippy --manifest-path richcrab/Cargo.toml --workspace --all-targets -- -D warnings
+      - name: Unit + integration tests
+        run: cargo test --manifest-path richcrab/Cargo.toml --workspace --all-targets
+      - name: Smoke-load binary check
+        run: cargo check --manifest-path richcrab/Cargo.toml -p smoke_load
+
+
+  load_test:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run load test placeholder
+        run: cargo test --manifest-path richcrab/Cargo.toml -p smoke_load --test load_smoke -- --ignored

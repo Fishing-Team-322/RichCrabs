@@ -1,25 +1,17 @@
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::NaiveDate;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct Plan {
-    pub id: Uuid,
     pub code: String,
-    pub title: String,
     pub monthly_quota: i32,
-    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone)]
 pub struct UsageCounter {
-    pub id: Uuid,
-    pub user_id: Uuid,
-    pub period_start: NaiveDate,
     pub quizzes_created: i32,
     pub messages_sent: i32,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
 }
 
 pub struct PlanRepository {
@@ -33,7 +25,7 @@ impl PlanRepository {
 
     pub async fn find_by_code(&self, code: &str) -> sqlx::Result<Option<Plan>> {
         let row = sqlx::query(
-            "SELECT id, code, title, monthly_quota, created_at
+            "SELECT code, monthly_quota
              FROM plans
              WHERE code = $1",
         )
@@ -42,17 +34,14 @@ impl PlanRepository {
         .await?;
 
         Ok(row.map(|row| Plan {
-            id: row.get("id"),
             code: row.get("code"),
-            title: row.get("title"),
             monthly_quota: row.get("monthly_quota"),
-            created_at: row.get("created_at"),
         }))
     }
 
     pub async fn find_default(&self) -> sqlx::Result<Option<Plan>> {
         let row = sqlx::query(
-            "SELECT id, code, title, monthly_quota, created_at
+            "SELECT code, monthly_quota
              FROM plans
              ORDER BY monthly_quota ASC
              LIMIT 1",
@@ -61,11 +50,8 @@ impl PlanRepository {
         .await?;
 
         Ok(row.map(|row| Plan {
-            id: row.get("id"),
             code: row.get("code"),
-            title: row.get("title"),
             monthly_quota: row.get("monthly_quota"),
-            created_at: row.get("created_at"),
         }))
     }
 }
@@ -85,7 +71,7 @@ impl UsageCounterRepository {
         period_start: NaiveDate,
     ) -> sqlx::Result<Option<UsageCounter>> {
         let row = sqlx::query(
-            "SELECT id, user_id, period_start, quizzes_created, messages_sent, created_at, updated_at
+            "SELECT quizzes_created, messages_sent
              FROM usage_counters
              WHERE user_id = $1 AND period_start = $2",
         )
@@ -95,13 +81,8 @@ impl UsageCounterRepository {
         .await?;
 
         Ok(row.map(|row| UsageCounter {
-            id: row.get("id"),
-            user_id: row.get("user_id"),
-            period_start: row.get("period_start"),
             quizzes_created: row.get("quizzes_created"),
             messages_sent: row.get("messages_sent"),
-            created_at: row.get("created_at"),
-            updated_at: row.get("updated_at"),
         }))
     }
 
