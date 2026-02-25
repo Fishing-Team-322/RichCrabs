@@ -9,6 +9,7 @@ find_package(Drogon CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 set(PROTO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../richcrab/proto/proto")
 file(GLOB PROTO_FILES "${PROTO_ROOT}/*.proto")
@@ -68,4 +69,5 @@ target_link_libraries(defay1x9 PRIVATE
   spdlog::spdlog
   gRPC::grpc++
   protobuf::libprotobuf
+  OpenSSL::Crypto
 )

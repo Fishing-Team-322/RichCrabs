@@ -1,5 +1,6 @@
 #include "config.hpp"
 #include <cstdlib>
+#include <stdexcept>
 
 static std::string envStr(const char* k, const std::string& d) {
   if (const char* v = std::getenv(k)) {
@@ -33,6 +34,15 @@ Config Config::LoadFromEnv() {
   c.public_base_url = envStr("GW_PUBLIC_BASE_URL", c.public_base_url);
   c.openapi_path = envStr("GW_OPENAPI_PATH", c.openapi_path);
   c.quizcore_grpc_target = envStr("GW_QUIZCORE_GRPC_TARGET", c.quizcore_grpc_target);
+  c.app_env = envStr("GW_ENV", c.app_env);
+  c.session_signing_key = envStr("GW_SESSION_SIGNING_KEY", "");
+
+  if (c.app_env == "production" && c.session_signing_key.empty()) {
+    throw std::runtime_error("GW_SESSION_SIGNING_KEY is required in production");
+  }
+  if (c.session_signing_key.empty()) {
+    c.session_signing_key = "dev-insecure-session-key";
+  }
 
   c.csrf.cookie_name = envStr("GW_CSRF_COOKIE_NAME", c.csrf.cookie_name);
   c.csrf.header_name = envStr("GW_CSRF_HEADER_NAME", c.csrf.header_name);

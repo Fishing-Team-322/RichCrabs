@@ -12,6 +12,8 @@ struct Config final {
   std::string public_base_url = "http://localhost:8080";
   std::string openapi_path = "./api/openapi.yaml";
   std::string quizcore_grpc_target = "127.0.0.1:50051";
+  std::string app_env = "development";
+  std::string session_signing_key;
 
   security::CsrfConfig csrf{};
   security::SessionCookieConfig session{};
