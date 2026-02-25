@@ -1,4 +1,3 @@
-mod repository;
 mod service;
 
 use std::{env, net::SocketAddr, time::Duration};

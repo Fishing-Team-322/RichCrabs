@@ -1,5 +1,4 @@
 mod domain;
-mod repository;
 mod room_actor;
 mod service;
 

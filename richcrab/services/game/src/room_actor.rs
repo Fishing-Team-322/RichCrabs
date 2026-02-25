@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
+use tracing::info;
 
 use crate::domain::{GameResult, Player, QuestionRound, RoomLifecycleState, RoomState, RoundTimer};
 
@@ -64,6 +65,7 @@ pub fn spawn_room_actor(
                     };
                     state.players.insert(player_id.clone(), player);
                     state.updated_at = Utc::now();
+                    info!(room_id = %state.room_id, room_title = %state.title, player_id = %player_id, "player joined");
 
                     let _ = events_tx.send(proto::richcrab::v1::RoomEvent {
                         payload: Some(proto::richcrab::v1::room_event::Payload::PlayerJoined(
@@ -103,6 +105,7 @@ pub fn spawn_room_actor(
                         duration_secs: 30,
                     });
                     state.updated_at = Utc::now();
+                    info!(room_id = %state.room_id, room_title = %state.title, owner_user_id = %state.owner_user_id, "game started");
 
                     let _ = events_tx.send(proto::richcrab::v1::RoomEvent {
                         payload: Some(proto::richcrab::v1::room_event::Payload::GameStarted(
@@ -132,6 +135,16 @@ pub fn spawn_room_actor(
                         let _ = response.send(Err("no active question".to_string()));
                         continue;
                     };
+                    let round_elapsed_secs = (Utc::now() - round.started_at).num_seconds();
+                    if let Some(timer) = &state.timer {
+                        let timer_elapsed_secs = (Utc::now() - timer.started_at).num_seconds();
+                        if timer_elapsed_secs > i64::from(timer.duration_secs)
+                            || round_elapsed_secs > i64::from(timer.duration_secs)
+                        {
+                            let _ = response.send(Err("round timed out".to_string()));
+                            continue;
+                        }
+                    }
                     if round.question_id != question_id {
                         let _ = response.send(Err("invalid question".to_string()));
                         continue;
@@ -152,6 +165,7 @@ pub fn spawn_room_actor(
                         updated_score = player.score;
                     }
                     state.updated_at = Utc::now();
+                    info!(room_id = %state.room_id, player_id = %player_id, score_delta, updated_score, "answer processed");
 
                     let _ = events_tx.send(proto::richcrab::v1::RoomEvent {
                         payload: Some(proto::richcrab::v1::room_event::Payload::AnswerLocked(
@@ -201,6 +215,9 @@ pub fn spawn_room_actor(
                             winner_player_id: winner,
                             final_scores,
                         });
+                        if let Some(result) = &state.result {
+                            info!(room_id = %state.room_id, winner_player_id = ?result.winner_player_id, total_scores = result.final_scores.len(), "game finished");
+                        }
                     }
 
                     let _ = response.send(Ok(score_delta));
@@ -213,4 +230,51 @@ pub fn spawn_room_actor(
     });
 
     (handle, task)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    use crate::domain::{RoomLifecycleState, RoomState};
+
+    #[tokio::test]
+    async fn submit_answer_fails_when_round_timed_out() {
+        let room_state = RoomState {
+            room_id: "room-1".to_string(),
+            owner_user_id: "owner-1".to_string(),
+            quiz_id: "quiz-1".to_string(),
+            title: "Timeout room".to_string(),
+            state: RoomLifecycleState::InProgress,
+            players: HashMap::new(),
+            current_question: Some(QuestionRound {
+                question_id: "q1".to_string(),
+                started_at: Utc::now() - chrono::Duration::seconds(60),
+                answers_locked: HashSet::new(),
+            }),
+            timer: Some(RoundTimer {
+                started_at: Utc::now() - chrono::Duration::seconds(60),
+                duration_secs: 30,
+            }),
+            result: None,
+            updated_at: Utc::now(),
+        };
+
+        let (room, _task) = spawn_room_actor(room_state, 8);
+
+        let (tx, rx) = oneshot::channel();
+        room.tx
+            .send(RoomCommand::SubmitAnswer {
+                player_id: "player-1".to_string(),
+                question_id: "q1".to_string(),
+                answer: "correct".to_string(),
+                response: tx,
+            })
+            .await
+            .expect("send submit answer");
+
+        let result = rx.await.expect("receive submit answer result");
+        assert_eq!(result.expect_err("must fail"), "round timed out");
+    }
 }

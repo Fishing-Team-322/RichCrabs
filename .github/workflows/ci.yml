@@ -52,7 +52,7 @@ jobs:
       - name: Format check
         run: cargo fmt --manifest-path richcrab/Cargo.toml --all -- --check
       - name: Clippy
-        run: cargo clippy --manifest-path richcrab/Cargo.toml --workspace --all-targets
+        run: cargo clippy --manifest-path richcrab/Cargo.toml --workspace --all-targets -- -D warnings
       - name: Unit + integration tests
         run: cargo test --manifest-path richcrab/Cargo.toml --workspace --all-targets
       - name: Smoke-load binary check

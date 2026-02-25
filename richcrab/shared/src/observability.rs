@@ -167,3 +167,36 @@ impl Interceptor for GrpcObservabilityInterceptor {
         Ok(request)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn metrics_output_contains_required_metrics() {
+        let metrics = init_metrics();
+        metrics
+            .grpc_latency_ms
+            .with_label_values(&["test", "method"])
+            .observe(1.0);
+        metrics.rooms_active.inc();
+        metrics.players_connected.inc();
+        metrics
+            .join_ticket_issued_total
+            .with_label_values(&["test"])
+            .inc();
+        metrics.tg_updates_total.with_label_values(&["ok"]).inc();
+        metrics
+            .errors_total
+            .with_label_values(&["svc", "kind"])
+            .inc();
+        let body = metrics_text().expect("metrics text should be generated");
+
+        assert!(body.contains("rooms_active"));
+        assert!(body.contains("players_connected"));
+        assert!(body.contains("grpc_latency_ms"));
+        assert!(body.contains("join_ticket_issued_total"));
+        assert!(body.contains("tg_updates_total"));
+        assert!(body.contains("errors_total"));
+    }
+}
