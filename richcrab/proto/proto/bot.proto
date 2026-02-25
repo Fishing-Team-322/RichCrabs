@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package richcrab.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+
+service BotService {
+  rpc RegisterBot(RegisterBotRequest) returns (RegisterBotResponse);
+  rpc RemoveBot(RemoveBotRequest) returns (RemoveBotResponse);
+  rpc ListBots(ListBotsRequest) returns (ListBotsResponse);
+  rpc GetBotStatus(GetBotStatusRequest) returns (GetBotStatusResponse);
+}
+
+message Bot {
+  BotId bot_id = 1;
+  string name = 2;
+  string version = 3;
+  string status = 4;
+  google.protobuf.Timestamp registered_at = 5;
+}
+
+message RegisterBotRequest {
+  string name = 1;
+  string version = 2;
+  string endpoint = 3;
+}
+
+message RegisterBotResponse {
+  optional Bot bot = 1;
+  optional Error error = 2;
+}
+
+message RemoveBotRequest {
+  BotId bot_id = 1;
+}
+
+message RemoveBotResponse {
+  bool removed = 1;
+  optional Error error = 2;
+}
+
+message ListBotsRequest {}
+
+message ListBotsResponse {
+  repeated Bot bots = 1;
+  optional Error error = 2;
+}
+
+message GetBotStatusRequest {
+  BotId bot_id = 1;
+}
+
+message GetBotStatusResponse {
+  optional Bot bot = 1;
+  optional Error error = 2;
+}
