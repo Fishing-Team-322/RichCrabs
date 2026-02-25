@@ -1,0 +1,42 @@
+# --- Build folders ---
+build/
+out/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+CTestTestfile.cmake
+cmake_install.cmake
+compile_commands.json
+
+# --- vcpkg artifacts (manifest mode creates them under build/) ---
+**/vcpkg_installed/
+**/vcpkg-buildtrees/
+**/vcpkg-packages/
+**/vcpkg_downloads/
+
+# --- Visual Studio / MSBuild ---
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.vcxproj.*.user
+*.ipch
+*.tlog
+
+# --- C/C++ artifacts ---
+*.obj
+*.pdb
+*.ilk
+*.lib
+*.dll
+*.exp
+*.exe
+
+# --- Logs / cache ---
+*.log
+*.tmp
+.DS_Store
+
+# --- VSCode (если не хочешь коммитить настройки) ---
+.vscode/

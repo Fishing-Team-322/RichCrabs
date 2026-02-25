@@ -1,0 +1,102 @@
+openapi: 3.1.0
+info:
+  title: QuizBattle Gateway API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /health:
+    get:
+      summary: Healthcheck
+      responses:
+        "200": { description: OK }
+
+  /openapi.yaml:
+    get:
+      summary: OpenAPI schema
+      responses:
+        "200": { description: OK }
+
+  /docs:
+    get:
+      summary: Swagger UI
+      responses:
+        "200": { description: OK }
+
+  /api/v1/games:
+    post:
+      summary: Create game
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [topic, questionsPerTeam]
+              properties:
+                topic: { type: string, minLength: 1, maxLength: 120 }
+                questionsPerTeam: { type: integer, enum: [5,6,7] }
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pin, hostToken, wsUrl]
+                properties:
+                  pin: { type: string, pattern: "^[A-Z0-9]{6}$" }
+                  hostToken: { type: string }
+                  wsUrl: { type: string }
+
+  /api/v1/games/{pin}/join:
+    post:
+      summary: Join by PIN
+      parameters:
+        - name: pin
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[A-Z0-9]{6}$" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 32 }
+      responses:
+        "200":
+          description: Joined
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [playerId, team, playerToken, wsUrl]
+                properties:
+                  playerId: { type: string }
+                  team: { type: string, enum: [A,B] }
+                  playerToken: { type: string }
+                  wsUrl: { type: string }
+
+  /api/v1/games/{pin}/start:
+    post:
+      summary: Start game (host only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: pin
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[A-Z0-9]{6}$" }
+      responses:
+        "204": { description: Started }
