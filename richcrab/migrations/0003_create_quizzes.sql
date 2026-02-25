@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS quizzes (
+    id UUID PRIMARY KEY,
+    owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL,
+    questions_json JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
