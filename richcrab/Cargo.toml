@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = [
+  "shared",
+  "services/game",
+  "services/join",
+  "services/quiz",
+  "services/entitlements",
+  "services/bot",
+  "services/bot_ingress",
+  "proto",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"
+
+[workspace.dependencies]
+anyhow = "1"
+chrono = { version = "0.4", features = ["clock"] }
+sha2 = "0.10"
+thiserror = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
