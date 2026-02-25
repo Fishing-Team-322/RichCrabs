@@ -5,8 +5,14 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+anyhow.workspace = true
 shared = { path = "../../shared" }
+proto = { path = "../../proto" }
 chrono.workspace = true
 serde_json.workspace = true
+serde = { version = "1", features = ["derive"] }
 sqlx.workspace = true
 uuid.workspace = true
+axum = "0.7"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
+tonic = { version = "0.12", features = ["transport"] }
