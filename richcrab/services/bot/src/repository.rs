@@ -82,12 +82,14 @@ impl BotRepository {
         }))
     }
 
-    pub async fn list(&self) -> sqlx::Result<Vec<Bot>> {
+    pub async fn list_by_user(&self, user_id: Uuid) -> sqlx::Result<Vec<Bot>> {
         let rows = sqlx::query(
             "SELECT id, user_id, telegram_bot_id, username, token_encrypted, webhook_secret, created_at
              FROM bots
+             WHERE user_id = $1
              ORDER BY created_at DESC",
         )
+        .bind(user_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -105,9 +107,10 @@ impl BotRepository {
             .collect())
     }
 
-    pub async fn remove(&self, id: Uuid) -> sqlx::Result<bool> {
-        let result = sqlx::query("DELETE FROM bots WHERE id = $1")
+    pub async fn remove_by_user(&self, id: Uuid, user_id: Uuid) -> sqlx::Result<bool> {
+        let result = sqlx::query("DELETE FROM bots WHERE id = $1 AND user_id = $2")
             .bind(id)
+            .bind(user_id)
             .execute(&self.pool)
             .await?;
         Ok(result.rows_affected() > 0)
