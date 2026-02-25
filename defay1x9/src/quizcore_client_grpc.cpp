@@ -3,14 +3,19 @@
 #include <grpcpp/grpcpp.h>
 
 #include <chrono>
+#include <utility>
 
+#include "bot.grpc.pb.h"
 #include "common.pb.h"
 #include "game.grpc.pb.h"
 #include "join.grpc.pb.h"
 
+using richcrab::v1::BotService;
 using richcrab::v1::CreateRoomRequest;
 using richcrab::v1::CreateRoomResponse;
 using richcrab::v1::GameService;
+using richcrab::v1::GetBotStatusRequest;
+using richcrab::v1::GetBotStatusResponse;
 using richcrab::v1::GetRoomStateRequest;
 using richcrab::v1::GetRoomStateResponse;
 using richcrab::v1::IssueJoinTicketByInviteRequest;
@@ -19,13 +24,47 @@ using richcrab::v1::IssueJoinTicketResponse;
 using richcrab::v1::JoinRoomRequest;
 using richcrab::v1::JoinRoomResponse;
 using richcrab::v1::JoinService;
+using richcrab::v1::ListBotsRequest;
+using richcrab::v1::ListBotsResponse;
+using richcrab::v1::RegisterBotRequest;
+using richcrab::v1::RegisterBotResponse;
+using richcrab::v1::RemoveBotRequest;
+using richcrab::v1::RemoveBotResponse;
 using richcrab::v1::StartGameRequest;
 using richcrab::v1::StartGameResponse;
+
+namespace {
+QuizCoreRpcStatus mapStatus(const grpc::Status& status) {
+  if (status.ok()) return QuizCoreRpcStatus::kOk;
+  switch (status.error_code()) {
+    case grpc::StatusCode::PERMISSION_DENIED: return QuizCoreRpcStatus::kPermissionDenied;
+    case grpc::StatusCode::INVALID_ARGUMENT: return QuizCoreRpcStatus::kInvalidArgument;
+    case grpc::StatusCode::FAILED_PRECONDITION: return QuizCoreRpcStatus::kFailedPrecondition;
+    case grpc::StatusCode::UNAVAILABLE: return QuizCoreRpcStatus::kUnavailable;
+    default: return QuizCoreRpcStatus::kUnknown;
+  }
+}
+
+QuizCoreBot mapBot(const richcrab::v1::Bot& bot) {
+  QuizCoreBot out;
+  out.bot_id = bot.bot_id().value();
+  out.name = bot.name();
+  out.version = bot.version();
+  out.status = bot.status();
+  if (bot.has_registered_at()) out.registered_at = bot.registered_at().seconds();
+  return out;
+}
+
+void attachUserId(grpc::ClientContext& ctx, const std::string& userId) {
+  ctx.AddMetadata("x-user-id", userId);
+}
+}
 
 class QuizCoreClientGrpc::Impl final {
 public:
   Impl(const std::string& gameAddr,
        const std::string& joinAddr,
+       const std::string& botAddr,
        int deadlineMsCreateRoom,
        int deadlineMsIssueJoinTicket,
        int deadlineMsJoinRoom,
@@ -38,12 +77,15 @@ public:
         deadline_ms_get_room_state(deadlineMsGetRoomState) {
     auto gameChannel = grpc::CreateChannel(gameAddr, grpc::InsecureChannelCredentials());
     auto joinChannel = grpc::CreateChannel(joinAddr, grpc::InsecureChannelCredentials());
+    auto botChannel = grpc::CreateChannel(botAddr, grpc::InsecureChannelCredentials());
     game = GameService::NewStub(gameChannel);
     join = JoinService::NewStub(joinChannel);
+    bot = BotService::NewStub(botChannel);
   }
 
   std::unique_ptr<GameService::Stub> game;
   std::unique_ptr<JoinService::Stub> join;
+  std::unique_ptr<BotService::Stub> bot;
   int deadline_ms_create_room;
   int deadline_ms_issue_join_ticket;
   int deadline_ms_join_room;
@@ -53,6 +95,7 @@ public:
 
 QuizCoreClientGrpc::QuizCoreClientGrpc(const std::string& gameAddr,
                                        const std::string& joinAddr,
+                                       const std::string& botAddr,
                                        int deadlineMsCreateRoom,
                                        int deadlineMsIssueJoinTicket,
                                        int deadlineMsJoinRoom,
@@ -60,6 +103,7 @@ QuizCoreClientGrpc::QuizCoreClientGrpc(const std::string& gameAddr,
                                        int deadlineMsGetRoomState)
     : impl_(std::make_unique<Impl>(gameAddr,
                                    joinAddr,
+                                   botAddr,
                                    deadlineMsCreateRoom,
                                    deadlineMsIssueJoinTicket,
                                    deadlineMsJoinRoom,
@@ -119,7 +163,6 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByPin(const st
   out.player_id = joinResp.player_id().value();
   return out;
 }
-
 
 std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByInvite(const std::string& inviteToken,
                                                                             const std::string& displayName) {
@@ -187,5 +230,75 @@ std::optional<QuizCoreRoomState> QuizCoreClientGrpc::getRoomState(const std::str
     out.players.push_back(std::move(ps));
   }
   if (resp.has_current_question_id()) out.current_question_id = resp.current_question_id();
+  return out;
+}
+
+QuizCoreRegisterBotResult QuizCoreClientGrpc::registerBot(const std::string& userId,
+                                                          const std::string& name,
+                                                          const std::string& version,
+                                                          const std::string& endpoint) {
+  grpc::ClientContext ctx;
+  attachUserId(ctx, userId);
+  RegisterBotRequest req;
+  req.set_name(name);
+  req.set_version(version);
+  req.set_endpoint(endpoint);
+
+  RegisterBotResponse resp;
+  const auto status = impl_->bot->RegisterBot(&ctx, req, &resp);
+
+  QuizCoreRegisterBotResult out;
+  out.status = mapStatus(status);
+  if (!status.ok() || resp.has_error() || !resp.has_bot()) return out;
+  out.bot = mapBot(resp.bot());
+  return out;
+}
+
+QuizCoreListBotsResult QuizCoreClientGrpc::listBots(const std::string& userId) {
+  grpc::ClientContext ctx;
+  attachUserId(ctx, userId);
+  ListBotsRequest req;
+
+  ListBotsResponse resp;
+  const auto status = impl_->bot->ListBots(&ctx, req, &resp);
+
+  QuizCoreListBotsResult out;
+  out.status = mapStatus(status);
+  if (!status.ok() || resp.has_error()) return out;
+  for (const auto& bot : resp.bots()) out.bots.push_back(mapBot(bot));
+  return out;
+}
+
+QuizCoreRemoveBotResult QuizCoreClientGrpc::removeBot(const std::string& userId,
+                                                      const std::string& botId) {
+  grpc::ClientContext ctx;
+  attachUserId(ctx, userId);
+  RemoveBotRequest req;
+  req.mutable_bot_id()->set_value(botId);
+
+  RemoveBotResponse resp;
+  const auto status = impl_->bot->RemoveBot(&ctx, req, &resp);
+
+  QuizCoreRemoveBotResult out;
+  out.status = mapStatus(status);
+  if (!status.ok() || resp.has_error()) return out;
+  out.removed = resp.removed();
+  return out;
+}
+
+QuizCoreGetBotResult QuizCoreClientGrpc::getBotStatus(const std::string& userId,
+                                                      const std::string& botId) {
+  grpc::ClientContext ctx;
+  attachUserId(ctx, userId);
+  GetBotStatusRequest req;
+  req.mutable_bot_id()->set_value(botId);
+
+  GetBotStatusResponse resp;
+  const auto status = impl_->bot->GetBotStatus(&ctx, req, &resp);
+
+  QuizCoreGetBotResult out;
+  out.status = mapStatus(status);
+  if (!status.ok() || resp.has_error() || !resp.has_bot()) return out;
+  out.bot = mapBot(resp.bot());
   return out;
 }

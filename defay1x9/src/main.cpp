@@ -41,6 +41,34 @@ static drogon::HttpResponsePtr jsonOk(const Json::Value& j) {
   return drogon::HttpResponse::newHttpJsonResponse(j);
 }
 
+static std::string resolveUserId(const drogon::HttpRequestPtr& req, const Config& conf) {
+  auto s = security::VerifySessionFromRequest(req, conf.session);
+  if (s && s->role == "host" && !s->user_id.empty()) return s->user_id;
+  return conf.default_user_id;
+}
+
+static int mapRpcStatusToHttp(QuizCoreRpcStatus status) {
+  switch (status) {
+    case QuizCoreRpcStatus::kPermissionDenied: return 403;
+    case QuizCoreRpcStatus::kInvalidArgument: return 400;
+    case QuizCoreRpcStatus::kFailedPrecondition: return 409;
+    case QuizCoreRpcStatus::kUnavailable: return 503;
+    case QuizCoreRpcStatus::kOk: return 502;
+    case QuizCoreRpcStatus::kUnknown:
+    default: return 502;
+  }
+}
+
+static Json::Value botToJson(const QuizCoreBot& bot) {
+  Json::Value j;
+  j["botId"] = bot.bot_id;
+  j["name"] = bot.name;
+  j["version"] = bot.version;
+  j["status"] = bot.status;
+  j["registeredAt"] = static_cast<Json::Int64>(bot.registered_at);
+  return j;
+}
+
 int main() {
   auto conf = Config::LoadFromEnv();
   security::SetSessionSigningKey(conf.session_signing_key);
@@ -51,6 +79,7 @@ int main() {
 
   QuizCoreClientGrpc quizCore(conf.grpc_game_addr,
                               conf.grpc_join_addr,
+                              conf.grpc_bot_addr,
                               conf.grpc_deadline_ms_create_room,
                               conf.grpc_deadline_ms_issue_join_ticket,
                               conf.grpc_deadline_ms_join_room,
@@ -271,6 +300,82 @@ int main() {
         cb(resp);
       },
       {drogon::Post});
+
+  // POST /api/v1/bots
+  drogon::app().registerHandler(
+      "/api/v1/bots",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+        auto jptr = req->getJsonObject();
+        if (!jptr) { cb(jsonError(400, "invalid_json")); return; }
+
+        const std::string name = (*jptr).get("name", "").asString();
+        const std::string version = (*jptr).get("version", "").asString();
+        const std::string endpoint = (*jptr).get("endpoint", "").asString();
+        if (name.empty() || version.empty() || endpoint.empty()) {
+          cb(jsonError(400, "name_version_endpoint_required"));
+          return;
+        }
+
+        const auto result = quizCore.registerBot(resolveUserId(req, conf), name, version, endpoint);
+        if (!result.bot) {
+          cb(jsonError(mapRpcStatusToHttp(result.status), "bot_register_failed"));
+          return;
+        }
+
+        Json::Value r;
+        r["bot"] = botToJson(*result.bot);
+        cb(jsonOk(r));
+      },
+      {drogon::Post});
+
+  // GET /api/v1/bots
+  drogon::app().registerHandler(
+      "/api/v1/bots",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+        const auto result = quizCore.listBots(resolveUserId(req, conf));
+        if (result.status != QuizCoreRpcStatus::kOk) {
+          cb(jsonError(mapRpcStatusToHttp(result.status), "bot_list_failed"));
+          return;
+        }
+
+        Json::Value r;
+        for (const auto& bot : result.bots) r["bots"].append(botToJson(bot));
+        cb(jsonOk(r));
+      },
+      {drogon::Get});
+
+  // DELETE /api/v1/bots/{botId}
+  drogon::app().registerHandler(
+      "/api/v1/bots/{1}",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string botId) {
+        const auto result = quizCore.removeBot(resolveUserId(req, conf), botId);
+        if (result.status != QuizCoreRpcStatus::kOk) {
+          cb(jsonError(mapRpcStatusToHttp(result.status), "bot_remove_failed"));
+          return;
+        }
+        if (!result.removed) { cb(jsonError(404, "bot_not_found")); return; }
+
+        auto resp = drogon::HttpResponse::newHttpResponse();
+        resp->setStatusCode(drogon::k204NoContent);
+        cb(resp);
+      },
+      {drogon::Delete});
+
+  // GET /api/v1/bots/{botId}
+  drogon::app().registerHandler(
+      "/api/v1/bots/{1}",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string botId) {
+        const auto result = quizCore.getBotStatus(resolveUserId(req, conf), botId);
+        if (!result.bot) {
+          cb(jsonError(mapRpcStatusToHttp(result.status), "bot_get_failed"));
+          return;
+        }
+
+        Json::Value r;
+        r["bot"] = botToJson(*result.bot);
+        cb(jsonOk(r));
+      },
+      {drogon::Get});
 
   // POST /logout (CSRF required)
   drogon::app().registerHandler(
