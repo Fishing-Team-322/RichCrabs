@@ -40,3 +40,5 @@ compile_commands.json
 
 # --- VSCode (если не хочешь коммитить настройки) ---
 .vscode/
+
+*.env
