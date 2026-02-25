@@ -24,12 +24,13 @@ message CreateRoomRequest {
 message CreateRoomResponse {
   RoomId room_id = 1;
   string pin = 2;
-  google.protobuf.Timestamp created_at = 3;
-  optional Error error = 4;
+  string invite_token = 3;
+  google.protobuf.Timestamp created_at = 4;
+  optional Error error = 5;
 }
 
 message JoinRoomRequest {
-  RoomId room_id = 1;
+  string join_ticket = 1;
   UserId user_id = 2;
   string display_name = 3;
 }

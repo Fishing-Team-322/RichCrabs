@@ -12,6 +12,8 @@ message RoomEvent {
     AnswerSubmittedEvent answer_submitted = 3;
     RoomStateChangedEvent room_state_changed = 4;
     ErrorEvent error = 5;
+    AnswerLockedEvent answer_locked = 6;
+    ScoreUpdatedEvent score_updated = 7;
   }
   google.protobuf.Timestamp emitted_at = 10;
 }
@@ -33,6 +35,19 @@ message AnswerSubmittedEvent {
   string question_id = 3;
   string answer = 4;
   bool accepted = 5;
+}
+
+message AnswerLockedEvent {
+  RoomId room_id = 1;
+  PlayerId player_id = 2;
+  string question_id = 3;
+}
+
+message ScoreUpdatedEvent {
+  RoomId room_id = 1;
+  PlayerId player_id = 2;
+  uint32 score = 3;
+  uint32 delta = 4;
 }
 
 message RoomStateChangedEvent {
