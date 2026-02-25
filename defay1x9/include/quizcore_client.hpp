@@ -48,7 +48,13 @@ public:
 
 class QuizCoreClientGrpc final : public QuizCoreClient {
 public:
-  explicit QuizCoreClientGrpc(const std::string& target);
+  QuizCoreClientGrpc(const std::string& gameAddr,
+                     const std::string& joinAddr,
+                     int deadlineMsCreateRoom,
+                     int deadlineMsIssueJoinTicket,
+                     int deadlineMsJoinRoom,
+                     int deadlineMsStartGame,
+                     int deadlineMsGetRoomState);
   ~QuizCoreClientGrpc() override;
 
   QuizCoreClientGrpc(const QuizCoreClientGrpc&) = delete;

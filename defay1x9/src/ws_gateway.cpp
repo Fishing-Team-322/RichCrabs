@@ -70,7 +70,7 @@ std::unordered_map<const void*, ConnSession> g_conn_sessions;
 
 std::shared_ptr<grpc::Channel> MakeChannel() {
   const auto conf = Config::LoadFromEnv();
-  return grpc::CreateChannel(conf.quizcore_grpc_target, grpc::InsecureChannelCredentials());
+  return grpc::CreateChannel(conf.grpc_game_addr, grpc::InsecureChannelCredentials());
 }
 
 std::string JsonString(const Json::Value& value) {

@@ -2,6 +2,8 @@
 
 #include <grpcpp/grpcpp.h>
 
+#include <chrono>
+
 #include "common.pb.h"
 #include "game.grpc.pb.h"
 #include "join.grpc.pb.h"
@@ -22,18 +24,47 @@ using richcrab::v1::StartGameResponse;
 
 class QuizCoreClientGrpc::Impl final {
 public:
-  explicit Impl(const std::string& target) {
-    auto channel = grpc::CreateChannel(target, grpc::InsecureChannelCredentials());
-    game = GameService::NewStub(channel);
-    join = JoinService::NewStub(channel);
+  Impl(const std::string& gameAddr,
+       const std::string& joinAddr,
+       int deadlineMsCreateRoom,
+       int deadlineMsIssueJoinTicket,
+       int deadlineMsJoinRoom,
+       int deadlineMsStartGame,
+       int deadlineMsGetRoomState)
+      : deadline_ms_create_room(deadlineMsCreateRoom),
+        deadline_ms_issue_join_ticket(deadlineMsIssueJoinTicket),
+        deadline_ms_join_room(deadlineMsJoinRoom),
+        deadline_ms_start_game(deadlineMsStartGame),
+        deadline_ms_get_room_state(deadlineMsGetRoomState) {
+    auto gameChannel = grpc::CreateChannel(gameAddr, grpc::InsecureChannelCredentials());
+    auto joinChannel = grpc::CreateChannel(joinAddr, grpc::InsecureChannelCredentials());
+    game = GameService::NewStub(gameChannel);
+    join = JoinService::NewStub(joinChannel);
   }
 
   std::unique_ptr<GameService::Stub> game;
   std::unique_ptr<JoinService::Stub> join;
+  int deadline_ms_create_room;
+  int deadline_ms_issue_join_ticket;
+  int deadline_ms_join_room;
+  int deadline_ms_start_game;
+  int deadline_ms_get_room_state;
 };
 
-QuizCoreClientGrpc::QuizCoreClientGrpc(const std::string& target)
-    : impl_(std::make_unique<Impl>(target)) {}
+QuizCoreClientGrpc::QuizCoreClientGrpc(const std::string& gameAddr,
+                                       const std::string& joinAddr,
+                                       int deadlineMsCreateRoom,
+                                       int deadlineMsIssueJoinTicket,
+                                       int deadlineMsJoinRoom,
+                                       int deadlineMsStartGame,
+                                       int deadlineMsGetRoomState)
+    : impl_(std::make_unique<Impl>(gameAddr,
+                                   joinAddr,
+                                   deadlineMsCreateRoom,
+                                   deadlineMsIssueJoinTicket,
+                                   deadlineMsJoinRoom,
+                                   deadlineMsStartGame,
+                                   deadlineMsGetRoomState)) {}
 
 QuizCoreClientGrpc::~QuizCoreClientGrpc() = default;
 
@@ -41,6 +72,8 @@ std::optional<QuizCoreCreateRoomResult> QuizCoreClientGrpc::createRoom(const std
                                                                         const std::string& quizId,
                                                                         const std::string& title) {
   grpc::ClientContext ctx;
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_create_room));
   CreateRoomRequest req;
   req.mutable_owner_user_id()->set_value(ownerUserId);
   req.mutable_quiz_id()->set_value(quizId);
@@ -60,6 +93,8 @@ std::optional<QuizCoreCreateRoomResult> QuizCoreClientGrpc::createRoom(const std
 std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByPin(const std::string& pin,
                                                                          const std::string& displayName) {
   grpc::ClientContext ticketCtx;
+  ticketCtx.set_deadline(std::chrono::system_clock::now() +
+                         std::chrono::milliseconds(impl_->deadline_ms_issue_join_ticket));
   IssueJoinTicketByPinRequest ticketReq;
   ticketReq.set_pin(pin);
   ticketReq.set_display_name(displayName);
@@ -69,6 +104,8 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByPin(const st
   if (!ticketStatus.ok() || ticketResp.has_error() || !ticketResp.has_ticket()) return std::nullopt;
 
   grpc::ClientContext joinCtx;
+  joinCtx.set_deadline(std::chrono::system_clock::now() +
+                       std::chrono::milliseconds(impl_->deadline_ms_join_room));
   JoinRoomRequest joinReq;
   joinReq.set_join_ticket(ticketResp.ticket().token());
 
@@ -87,6 +124,8 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByPin(const st
 std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByInvite(const std::string& inviteToken,
                                                                             const std::string& displayName) {
   grpc::ClientContext ticketCtx;
+  ticketCtx.set_deadline(std::chrono::system_clock::now() +
+                         std::chrono::milliseconds(impl_->deadline_ms_issue_join_ticket));
   IssueJoinTicketByInviteRequest ticketReq;
   ticketReq.set_invite_token(inviteToken);
   ticketReq.set_display_name(displayName);
@@ -96,6 +135,8 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByInvite(const
   if (!ticketStatus.ok() || ticketResp.has_error() || !ticketResp.has_ticket()) return std::nullopt;
 
   grpc::ClientContext joinCtx;
+  joinCtx.set_deadline(std::chrono::system_clock::now() +
+                       std::chrono::milliseconds(impl_->deadline_ms_join_room));
   JoinRoomRequest joinReq;
   joinReq.set_join_ticket(ticketResp.ticket().token());
 
@@ -112,6 +153,8 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByInvite(const
 
 bool QuizCoreClientGrpc::startGame(const std::string& roomId, const std::string& requestedByUserId) {
   grpc::ClientContext ctx;
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_start_game));
   StartGameRequest req;
   req.mutable_room_id()->set_value(roomId);
   req.mutable_requested_by()->set_value(requestedByUserId);
@@ -124,6 +167,8 @@ bool QuizCoreClientGrpc::startGame(const std::string& roomId, const std::string&
 
 std::optional<QuizCoreRoomState> QuizCoreClientGrpc::getRoomState(const std::string& roomId) {
   grpc::ClientContext ctx;
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_get_room_state));
   GetRoomStateRequest req;
   req.mutable_room_id()->set_value(roomId);
 
