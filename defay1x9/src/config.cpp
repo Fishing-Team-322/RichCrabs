@@ -39,5 +39,10 @@ Config Config::LoadFromEnv() {
   c.csrf.cookie_http_only = envBool("GW_CSRF_COOKIE_HTTPONLY", c.csrf.cookie_http_only);
   c.csrf.cookie_path = envStr("GW_CSRF_COOKIE_PATH", c.csrf.cookie_path);
 
+  c.session.cookie_name = envStr("GW_SESSION_COOKIE_NAME", c.session.cookie_name);
+  c.session.cookie_secure = envBool("GW_SESSION_COOKIE_SECURE", c.session.cookie_secure);
+  c.session.cookie_http_only = envBool("GW_SESSION_COOKIE_HTTPONLY", c.session.cookie_http_only);
+  c.session.cookie_path = envStr("GW_SESSION_COOKIE_PATH", c.session.cookie_path);
+  c.session.ttl_seconds = envInt("GW_SESSION_TTL_SECONDS", c.session.ttl_seconds);
   return c;
 }

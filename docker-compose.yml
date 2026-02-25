@@ -1,0 +1,37 @@
+services:
+  gateway:
+    build:
+      context: ./defay1x9
+      dockerfile: Dockerfile
+    image: devhack/gateway:local
+    ports:
+      - "8080:8080"
+    environment:
+      GW_LISTEN_HOST: "0.0.0.0"
+      GW_LISTEN_PORT: "8080"
+      GW_PUBLIC_BASE_URL: "http://localhost:8080"
+      GW_OPENAPI_PATH: "./api/openapi.yaml"
+
+      # CSRF cookie (доступен JS, чтобы положить в header)
+      GW_CSRF_COOKIE_NAME: "XSRF-TOKEN"
+      GW_CSRF_HEADER_NAME: "X-XSRF-TOKEN"
+      GW_CSRF_COOKIE_SECURE: "false"
+      GW_CSRF_COOKIE_HTTPONLY: "false"
+      GW_CSRF_COOKIE_PATH: "/"
+
+      # Session cookie (HttpOnly)
+      GW_SESSION_COOKIE_NAME: "QB-SESSION"
+      GW_SESSION_COOKIE_SECURE: "false"
+      GW_SESSION_COOKIE_HTTPONLY: "true"
+      GW_SESSION_COOKIE_PATH: "/"
+      GW_SESSION_TTL_SECONDS: "86400"
+    restart: unless-stopped
+
+  # Заглушка под будущий Rust-core контейнер.
+  # Потом просто раскомментируешь и добавишь build/context.
+  # rust_core:
+  #   build: ./rust-core
+  #   image: devhack/rust-core:local
+  #   expose:
+  #     - "50051"
+  #   restart: unless-stopped

@@ -1,0 +1,14 @@
+build/
+.vs/
+.vscode/
+.git/
+**/vcpkg_installed/
+**/vcpkg-buildtrees/
+**/vcpkg-packages/
+**/vcpkg_downloads/
+*.exe
+*.pdb
+*.ilk
+*.obj
+*.lib
+*.dll

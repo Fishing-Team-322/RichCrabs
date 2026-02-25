@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.22)
 project(defay1x9 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -14,6 +14,7 @@ add_executable(defay1x9
   src/game_manager.cpp
   src/ws_gateway.cpp
   src/csrf.cpp
+  src/session.cpp
 )
 
 target_include_directories(defay1x9 PRIVATE include)
