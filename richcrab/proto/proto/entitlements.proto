@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package richcrab.v1;
+
+import "common.proto";
+
+service EntitlementsService {
+  rpc CheckEntitlement(CheckEntitlementRequest) returns (CheckEntitlementResponse);
+  rpc ReportUsage(ReportUsageRequest) returns (ReportUsageResponse);
+}
+
+message CheckEntitlementRequest {
+  UserId user_id = 1;
+  string feature = 2;
+}
+
+message CheckEntitlementResponse {
+  bool allowed = 1;
+  string reason = 2;
+  optional Error error = 3;
+}
+
+message ReportUsageRequest {
+  UserId user_id = 1;
+  string feature = 2;
+  uint64 units = 3;
+}
+
+message ReportUsageResponse {
+  bool accepted = 1;
+  optional Error error = 2;
+}

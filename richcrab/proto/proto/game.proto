@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package richcrab.v1;
+
+import "common.proto";
+import "events.proto";
+import "google/protobuf/timestamp.proto";
+
+service GameService {
+  rpc CreateRoom(CreateRoomRequest) returns (CreateRoomResponse);
+  rpc JoinRoom(JoinRoomRequest) returns (JoinRoomResponse);
+  rpc StartGame(StartGameRequest) returns (StartGameResponse);
+  rpc SubmitAnswer(SubmitAnswerRequest) returns (SubmitAnswerResponse);
+  rpc SubscribeRoomEvents(SubscribeRoomEventsRequest) returns (stream RoomEvent);
+  rpc GetRoomState(GetRoomStateRequest) returns (GetRoomStateResponse);
+}
+
+message CreateRoomRequest {
+  UserId owner_user_id = 1;
+  QuizId quiz_id = 2;
+  string title = 3;
+}
+
+message CreateRoomResponse {
+  RoomId room_id = 1;
+  string pin = 2;
+  google.protobuf.Timestamp created_at = 3;
+  optional Error error = 4;
+}
+
+message JoinRoomRequest {
+  RoomId room_id = 1;
+  UserId user_id = 2;
+  string display_name = 3;
+}
+
+message JoinRoomResponse {
+  PlayerId player_id = 1;
+  google.protobuf.Timestamp joined_at = 2;
+  optional Error error = 3;
+}
+
+message StartGameRequest {
+  RoomId room_id = 1;
+  UserId requested_by = 2;
+}
+
+message StartGameResponse {
+  bool started = 1;
+  google.protobuf.Timestamp started_at = 2;
+  optional Error error = 3;
+}
+
+message SubmitAnswerRequest {
+  RoomId room_id = 1;
+  PlayerId player_id = 2;
+  string question_id = 3;
+  string answer = 4;
+  google.protobuf.Timestamp submitted_at = 5;
+}
+
+message SubmitAnswerResponse {
+  bool accepted = 1;
+  uint32 score_delta = 2;
+  optional Error error = 3;
+}
+
+message SubscribeRoomEventsRequest {
+  RoomId room_id = 1;
+  PlayerId subscriber_player_id = 2;
+}
+
+message GetRoomStateRequest {
+  RoomId room_id = 1;
+}
+
+message PlayerState {
+  PlayerId player_id = 1;
+  string display_name = 2;
+  uint32 score = 3;
+}
+
+message GetRoomStateResponse {
+  RoomId room_id = 1;
+  string state = 2;
+  repeated PlayerState players = 3;
+  optional string current_question_id = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  optional Error error = 6;
+}

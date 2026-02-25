@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package richcrab.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+
+message RoomEvent {
+  oneof payload {
+    PlayerJoinedEvent player_joined = 1;
+    GameStartedEvent game_started = 2;
+    AnswerSubmittedEvent answer_submitted = 3;
+    RoomStateChangedEvent room_state_changed = 4;
+    ErrorEvent error = 5;
+  }
+  google.protobuf.Timestamp emitted_at = 10;
+}
+
+message PlayerJoinedEvent {
+  RoomId room_id = 1;
+  PlayerId player_id = 2;
+  string display_name = 3;
+}
+
+message GameStartedEvent {
+  RoomId room_id = 1;
+  QuizId quiz_id = 2;
+}
+
+message AnswerSubmittedEvent {
+  RoomId room_id = 1;
+  PlayerId player_id = 2;
+  string question_id = 3;
+  string answer = 4;
+  bool accepted = 5;
+}
+
+message RoomStateChangedEvent {
+  RoomId room_id = 1;
+  string state = 2;
+}
+
+message ErrorEvent {
+  RoomId room_id = 1;
+  Error error = 2;
+}

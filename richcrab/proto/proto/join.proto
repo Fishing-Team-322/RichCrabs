@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package richcrab.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+
+service JoinService {
+  rpc IssueJoinTicketByPin(IssueJoinTicketByPinRequest) returns (IssueJoinTicketResponse);
+  rpc IssueJoinTicketByInvite(IssueJoinTicketByInviteRequest) returns (IssueJoinTicketResponse);
+}
+
+message JoinTicket {
+  string token = 1;
+  RoomId room_id = 2;
+  UserId user_id = 3;
+  google.protobuf.Timestamp issued_at = 4;
+  google.protobuf.Timestamp expires_at = 5;
+}
+
+message IssueJoinTicketByPinRequest {
+  string pin = 1;
+  UserId user_id = 2;
+}
+
+message IssueJoinTicketByInviteRequest {
+  string invite_code = 1;
+  UserId user_id = 2;
+}
+
+message IssueJoinTicketResponse {
+  optional JoinTicket ticket = 1;
+  optional Error error = 2;
+}

@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package richcrab.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+
+service QuizService {
+  rpc CreateQuiz(CreateQuizRequest) returns (CreateQuizResponse);
+  rpc GetQuiz(GetQuizRequest) returns (GetQuizResponse);
+  rpc UpdateQuiz(UpdateQuizRequest) returns (UpdateQuizResponse);
+  rpc DeleteQuiz(DeleteQuizRequest) returns (DeleteQuizResponse);
+  rpc ListQuizzes(ListQuizzesRequest) returns (ListQuizzesResponse);
+
+  rpc StartAiQuizJob(StartAiQuizJobRequest) returns (StartAiQuizJobResponse);
+  rpc GetAiQuizJob(GetAiQuizJobRequest) returns (GetAiQuizJobResponse);
+}
+
+message QuizQuestion {
+  string id = 1;
+  string text = 2;
+  repeated string options = 3;
+  optional uint32 correct_option_index = 4;
+}
+
+message Quiz {
+  QuizId quiz_id = 1;
+  UserId owner_user_id = 2;
+  string title = 3;
+  string description = 4;
+  repeated QuizQuestion questions = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message CreateQuizRequest {
+  UserId owner_user_id = 1;
+  string title = 2;
+  string description = 3;
+  repeated QuizQuestion questions = 4;
+}
+
+message CreateQuizResponse {
+  optional Quiz quiz = 1;
+  optional Error error = 2;
+}
+
+message GetQuizRequest {
+  QuizId quiz_id = 1;
+}
+
+message GetQuizResponse {
+  optional Quiz quiz = 1;
+  optional Error error = 2;
+}
+
+message UpdateQuizRequest {
+  Quiz quiz = 1;
+}
+
+message UpdateQuizResponse {
+  optional Quiz quiz = 1;
+  optional Error error = 2;
+}
+
+message DeleteQuizRequest {
+  QuizId quiz_id = 1;
+}
+
+message DeleteQuizResponse {
+  bool deleted = 1;
+  optional Error error = 2;
+}
+
+message ListQuizzesRequest {
+  optional UserId owner_user_id = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListQuizzesResponse {
+  repeated Quiz quizzes = 1;
+  string next_page_token = 2;
+  optional Error error = 3;
+}
+
+message StartAiQuizJobRequest {
+  UserId requested_by = 1;
+  string prompt = 2;
+  optional uint32 desired_question_count = 3;
+}
+
+message StartAiQuizJobResponse {
+  string job_id = 1;
+  string status = 2;
+  optional Error error = 3;
+}
+
+message GetAiQuizJobRequest {
+  string job_id = 1;
+}
+
+message GetAiQuizJobResponse {
+  string job_id = 1;
+  string status = 2;
+  optional Quiz quiz = 3;
+  optional Error error = 4;
+}
