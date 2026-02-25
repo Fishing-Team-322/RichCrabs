@@ -43,6 +43,7 @@ static drogon::HttpResponsePtr jsonOk(const Json::Value& j) {
 
 int main() {
   auto conf = Config::LoadFromEnv();
+  security::SetSessionSigningKey(conf.session_signing_key);
 
   spdlog::info("listen {}:{}", conf.listen_host, conf.listen_port);
   spdlog::info("public_base_url={}", conf.public_base_url);
@@ -122,8 +123,10 @@ int main() {
         Json::Value r;
         r["pin"] = s->pin;
         r["role"] = s->role;
-        r["subject"] = s->subject;
         r["roomId"] = s->room_id;
+        r["playerId"] = s->player_id;
+        r["userId"] = s->user_id;
+        r["exp"] = static_cast<Json::Int64>(s->exp);
         cb(jsonOk(r));
       },
       {drogon::Get});
@@ -147,10 +150,10 @@ int main() {
 
         // выдаём сессию host в HttpOnly cookie
         security::SessionClaims claims;
-        claims.pin = out->pin;
         claims.role = "host";
-        claims.subject = "gw-owner";
+        claims.pin = out->pin;
         claims.room_id = out->room_id;
+        claims.user_id = "gw-owner";
 
         const std::string sessionToken = security::IssueSessionToken(claims, conf.session.ttl_seconds);
 
@@ -182,10 +185,10 @@ int main() {
         if (!out) { cb(jsonError(404, "game_not_found_or_closed")); return; }
 
         security::SessionClaims claims;
-        claims.pin = pin;
         claims.role = "player";
-        claims.subject = out->player_id;
+        claims.pin = pin;
         claims.room_id = out->room_id;
+        claims.player_id = out->player_id;
 
         const std::string sessionToken = security::IssueSessionToken(claims, conf.session.ttl_seconds);
         const std::string csrfToken = security::IssueCsrfToken();
@@ -219,13 +222,13 @@ int main() {
         // 3) CSRF check
         if (!security::VerifyCsrf(req, conf.csrf)) { cb(jsonError(403, "csrf_failed")); return; }
 
-        // 4) perform action using host_id (subject)
+        // 4) perform action using host user_id
         if (s->room_id.empty()) { cb(jsonError(403, "room_missing")); return; }
 
         auto roomState = quizCore.getRoomState(s->room_id);
         if (!roomState) { cb(jsonError(404, "room_not_found")); return; }
 
-        if (!quizCore.startGame(s->room_id, s->subject)) { cb(jsonError(409, "cannot_start")); return; }
+        if (!quizCore.startGame(s->room_id, s->user_id)) { cb(jsonError(409, "cannot_start")); return; }
 
         auto resp = drogon::HttpResponse::newHttpResponse();
         resp->setStatusCode(drogon::k204NoContent);
