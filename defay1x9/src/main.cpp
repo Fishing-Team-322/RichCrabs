@@ -49,7 +49,13 @@ int main() {
   spdlog::info("public_base_url={}", conf.public_base_url);
   spdlog::info("openapi_path={}", conf.openapi_path);
 
-  QuizCoreClientGrpc quizCore(conf.quizcore_grpc_target);
+  QuizCoreClientGrpc quizCore(conf.grpc_game_addr,
+                              conf.grpc_join_addr,
+                              conf.grpc_deadline_ms_create_room,
+                              conf.grpc_deadline_ms_issue_join_ticket,
+                              conf.grpc_deadline_ms_join_room,
+                              conf.grpc_deadline_ms_start_game,
+                              conf.grpc_deadline_ms_get_room_state);
 
   // -------- basics --------
 
@@ -141,10 +147,9 @@ int main() {
         if (!jptr) { cb(jsonError(400, "invalid_json")); return; }
 
         const auto& body = *jptr;
-        const std::string ownerUserId = body.get("ownerUserId", "").asString();
+        const std::string ownerUserId = body.get("ownerUserId", conf.default_user_id).asString();
         const std::string quizId = body.get("quizId", "").asString();
         const std::string title = body.get("title", "").asString();
-        if (ownerUserId.empty()) { cb(jsonError(400, "owner_user_id_required")); return; }
         if (quizId.empty()) { cb(jsonError(400, "quiz_id_required")); return; }
         if (title.empty()) { cb(jsonError(400, "title_required")); return; }
 
