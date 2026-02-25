@@ -1,19 +1,18 @@
-INSERT INTO plans (id, code, name, monthly_quota, created_at, updated_at)
+INSERT INTO plans (id, code, title, monthly_quota, created_at)
 VALUES
-  ('00000000-0000-0000-0000-000000000101', 'free', 'Free', 1000, now(), now()),
-  ('00000000-0000-0000-0000-000000000102', 'pro', 'Pro', 100000, now(), now())
+  ('00000000-0000-0000-0000-000000000101', 'free', 'Free', 1000, now()),
+  ('00000000-0000-0000-0000-000000000102', 'pro', 'Pro', 100000, now())
 ON CONFLICT (code) DO NOTHING;
 
-INSERT INTO users (id, email, password_hash, plan_code, created_at, updated_at)
+INSERT INTO users (id, telegram_user_id, display_name, created_at, updated_at)
 VALUES (
   '00000000-0000-0000-0000-000000000001',
-  'test@richcrab.local',
-  'test-hash',
-  'free',
+  123456789,
+  'Local Test User',
   now(),
   now()
 )
-ON CONFLICT (email) DO NOTHING;
+ON CONFLICT (telegram_user_id) DO NOTHING;
 
 INSERT INTO quizzes (id, owner_user_id, title, description, status, published_version, questions_json, created_at, updated_at)
 VALUES (
