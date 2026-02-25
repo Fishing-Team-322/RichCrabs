@@ -22,8 +22,11 @@ public:
 
   void setPublicBaseUrl(std::string baseUrl);
 
-  std::optional<CreateGameOut> createGame(const std::string& topic, int questionsPerTeam);
+  std::optional<CreateGameOut> createGame(const std::string& ownerUserId,
+                                           const std::string& quizId,
+                                           const std::string& title);
   std::optional<JoinGameOut> joinGame(const std::string& pin, const std::string& name);
+  std::optional<JoinGameOut> joinGameByInvite(const std::string& inviteToken, const std::string& name);
 
   bool startGame(const std::string& roomId, const std::string& requestedByUserId);
 

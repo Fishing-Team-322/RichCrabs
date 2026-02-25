@@ -7,10 +7,42 @@ servers:
 
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: QB-SESSION
+  schemas:
+    JoinRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 32
+    CreateGameRequest:
+      type: object
+      required: [ownerUserId, quizId, title]
+      properties:
+        ownerUserId: { type: string, minLength: 1, maxLength: 120 }
+        quizId: { type: string, minLength: 1, maxLength: 120 }
+        title: { type: string, minLength: 1, maxLength: 200 }
+    CreateGameResponse:
+      type: object
+      required: [pin, inviteToken, inviteUrl, wsUrl]
+      properties:
+        pin: { type: string, pattern: "^[A-Z0-9]{6}$" }
+        inviteToken: { type: string }
+        inviteUrl: { type: string }
+        wsUrl: { type: string }
+    JoinResponse:
+      type: object
+      required: [playerId, team, role, wsUrl]
+      properties:
+        playerId: { type: string }
+        team: { type: string, enum: [A, B] }
+        role: { type: string, enum: [player] }
+        wsUrl: { type: string }
 
 paths:
   /health:
@@ -33,29 +65,20 @@ paths:
 
   /api/v1/games:
     post:
-      summary: Create game
+      summary: Create game room and host session
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [topic, questionsPerTeam]
-              properties:
-                topic: { type: string, minLength: 1, maxLength: 120 }
-                questionsPerTeam: { type: integer, enum: [5,6,7] }
+              $ref: '#/components/schemas/CreateGameRequest'
       responses:
         "200":
           description: Created
           content:
             application/json:
               schema:
-                type: object
-                required: [pin, hostToken, wsUrl]
-                properties:
-                  pin: { type: string, pattern: "^[A-Z0-9]{6}$" }
-                  hostToken: { type: string }
-                  wsUrl: { type: string }
+                $ref: '#/components/schemas/CreateGameResponse'
 
   /api/v1/games/{pin}/join:
     post:
@@ -70,29 +93,42 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [name]
-              properties:
-                name: { type: string, minLength: 1, maxLength: 32 }
+              $ref: '#/components/schemas/JoinRequest'
       responses:
         "200":
           description: Joined
           content:
             application/json:
               schema:
-                type: object
-                required: [playerId, team, playerToken, wsUrl]
-                properties:
-                  playerId: { type: string }
-                  team: { type: string, enum: [A,B] }
-                  playerToken: { type: string }
-                  wsUrl: { type: string }
+                $ref: '#/components/schemas/JoinResponse'
+
+  /api/v1/invites/{inviteToken}/join:
+    post:
+      summary: Join by invite token
+      parameters:
+        - name: inviteToken
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinRequest'
+      responses:
+        "200":
+          description: Joined
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinResponse'
 
   /api/v1/games/{pin}/start:
     post:
       summary: Start game (host only)
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: pin
           in: path
