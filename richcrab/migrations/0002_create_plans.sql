@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS plans (
+    id UUID PRIMARY KEY,
+    code TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    monthly_quota INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
