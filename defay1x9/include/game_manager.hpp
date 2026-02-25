@@ -1,49 +1,37 @@
 #pragma once
 #include <optional>
-#include <shared_mutex>
 #include <string>
-#include <unordered_map>
 
-#include "model.hpp"
-
-struct TokenClaims final {
-  std::string pin;
-  std::string role;    // "host" | "player"
-  std::string subject; // host_id | player_id
-};
+#include "quizcore_client.hpp"
 
 struct CreateGameOut final {
-  Game game;
-  std::string host_token;   // opaque
+  std::string room_id;
+  std::string pin;
+  std::string invite_token;
 };
 
 struct JoinGameOut final {
-  Player player;
-  std::string player_token; // opaque
+  std::string room_id;
+  std::string player_id;
+  std::string join_ticket;
 };
 
 class GameManager final {
 public:
-  static GameManager& instance();
+  explicit GameManager(QuizCoreClient& client);
 
   void setPublicBaseUrl(std::string baseUrl);
 
-  CreateGameOut createGame(const std::string& topic, int questionsPerTeam);
+  std::optional<CreateGameOut> createGame(const std::string& topic, int questionsPerTeam);
   std::optional<JoinGameOut> joinGame(const std::string& pin, const std::string& name);
 
-  bool startGame(const std::string& pin, const std::string& hostToken);
+  bool startGame(const std::string& roomId, const std::string& requestedByUserId);
 
-  std::optional<Game> getState(const std::string& pin) const;
+  std::optional<QuizCoreRoomState> getState(const std::string& roomId) const;
 
-  std::string makeWsUrl(const std::string& token) const;
-  std::optional<TokenClaims> verifyToken(const std::string& token) const;
+  std::string makeWsUrl() const;
 
 private:
-  GameManager() = default;
-
-  mutable std::shared_mutex mu_;
-  std::unordered_map<std::string, Game> games_;
-  std::unordered_map<std::string, TokenClaims> tokens_;
-
+  QuizCoreClient& client_;
   std::string public_base_url_ = "http://localhost:8080";
 };

@@ -32,6 +32,7 @@ Config Config::LoadFromEnv() {
 
   c.public_base_url = envStr("GW_PUBLIC_BASE_URL", c.public_base_url);
   c.openapi_path = envStr("GW_OPENAPI_PATH", c.openapi_path);
+  c.quizcore_grpc_target = envStr("GW_QUIZCORE_GRPC_TARGET", c.quizcore_grpc_target);
 
   c.csrf.cookie_name = envStr("GW_CSRF_COOKIE_NAME", c.csrf.cookie_name);
   c.csrf.header_name = envStr("GW_CSRF_HEADER_NAME", c.csrf.header_name);

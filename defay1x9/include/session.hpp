@@ -17,7 +17,8 @@ struct SessionCookieConfig final {
 struct SessionClaims final {
   std::string pin;
   std::string role;     // "host" | "player"
-  std::string subject;  // host_id | player_id
+  std::string subject;  // host_user_id | player_id
+  std::string room_id;
 };
 
 std::string IssueSessionToken(const SessionClaims& c, int ttl_seconds);
