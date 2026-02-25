@@ -2,19 +2,20 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: richcrab
-      POSTGRES_USER: richcrab
-      POSTGRES_PASSWORD: richcrab
+      POSTGRES_DB: ${POSTGRES_DB:-richcrab}
+      POSTGRES_USER: ${POSTGRES_USER:-richcrab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-richcrab}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./docker/postgres-init:/docker-entrypoint-initdb.d
+      - ./richcrab/migrations:/migrations:ro
 
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
 
   # gateway:
   #   build:
@@ -45,23 +46,28 @@ services:
   #   restart: unless-stopped
 
   entitlements:
-    image: rust:1.84
+    build: &rust_build
+      context: .
+      dockerfile: docker/rust-backend.Dockerfile
     working_dir: /app/richcrab
-    volumes:
+    volumes: &rust_volumes
       - ./:/app
+      - cargo_target:/app/richcrab/target
+      - cargo_registry:/usr/local/cargo/registry
+      - cargo_git:/usr/local/cargo/git
     command: bash -lc "cargo run -p entitlements"
     environment: &service_env
-      DATABASE_URL: postgres://richcrab:richcrab@postgres:5432/richcrab
-      REDIS_URL: redis://redis:6379
-      ENCRYPTION_KEY: local-dev-encryption-key
-      TELEGRAM_WEBHOOK_BASE_URL: http://bot_ingress:8090
-      LOG_LEVEL: info
-      SERVICE_ADDR_GAME: 0.0.0.0:50051
-      SERVICE_ADDR_JOIN: 0.0.0.0:50052
-      SERVICE_ADDR_QUIZ: 0.0.0.0:50053
-      SERVICE_ADDR_ENTITLEMENTS: 0.0.0.0:50054
-      SERVICE_ADDR_BOT: 0.0.0.0:50055
-      SERVICE_ADDR_BOT_INGRESS: 0.0.0.0:8090
+      DATABASE_URL: ${DATABASE_URL:-postgres://richcrab:richcrab@postgres:5432/richcrab}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-local-dev-encryption-key-change-me}
+      TELEGRAM_WEBHOOK_BASE_URL: ${TELEGRAM_WEBHOOK_BASE_URL:-http://bot_ingress:8090}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SERVICE_ADDR_GAME: ${SERVICE_ADDR_GAME:-0.0.0.0:50051}
+      SERVICE_ADDR_JOIN: ${SERVICE_ADDR_JOIN:-0.0.0.0:50052}
+      SERVICE_ADDR_QUIZ: ${SERVICE_ADDR_QUIZ:-0.0.0.0:50053}
+      SERVICE_ADDR_ENTITLEMENTS: ${SERVICE_ADDR_ENTITLEMENTS:-0.0.0.0:50054}
+      SERVICE_ADDR_BOT: ${SERVICE_ADDR_BOT:-0.0.0.0:50055}
+      SERVICE_ADDR_BOT_INGRESS: ${SERVICE_ADDR_BOT_INGRESS:-0.0.0.0:8090}
     depends_on:
       - postgres
       - redis
@@ -69,10 +75,9 @@ services:
       - "50054:50054"
 
   game:
-    image: rust:1.84
+    build: *rust_build
     working_dir: /app/richcrab
-    volumes:
-      - ./:/app
+    volumes: *rust_volumes
     command: bash -lc "cargo run -p game"
     environment: *service_env
     depends_on:
@@ -82,10 +87,9 @@ services:
       - "50051:50051"
 
   join:
-    image: rust:1.84
+    build: *rust_build
     working_dir: /app/richcrab
-    volumes:
-      - ./:/app
+    volumes: *rust_volumes
     command: bash -lc "cargo run -p join"
     environment: *service_env
     depends_on:
@@ -94,10 +98,9 @@ services:
       - "50052:50052"
 
   quiz:
-    image: rust:1.84
+    build: *rust_build
     working_dir: /app/richcrab
-    volumes:
-      - ./:/app
+    volumes: *rust_volumes
     command: bash -lc "cargo run -p quiz"
     environment: *service_env
     depends_on:
@@ -107,10 +110,9 @@ services:
       - "50053:50053"
 
   bot:
-    image: rust:1.84
+    build: *rust_build
     working_dir: /app/richcrab
-    volumes:
-      - ./:/app
+    volumes: *rust_volumes
     command: bash -lc "cargo run -p bot"
     environment: *service_env
     depends_on:
@@ -120,10 +122,9 @@ services:
       - "50055:50055"
 
   bot_ingress:
-    image: rust:1.84
+    build: *rust_build
     working_dir: /app/richcrab
-    volumes:
-      - ./:/app
+    volumes: *rust_volumes
     command: bash -lc "cargo run -p bot_ingress"
     environment: *service_env
     depends_on:
@@ -134,3 +135,6 @@ services:
 
 volumes:
   pg_data:
+  cargo_target:
+  cargo_registry:
+  cargo_git:
