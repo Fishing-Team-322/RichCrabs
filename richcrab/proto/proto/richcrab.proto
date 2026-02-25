@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package richcrab.v1;
+
+service Health {
+  rpc Ping (PingRequest) returns (PingResponse);
+}
+
+message PingRequest {}
+
+message PingResponse {
+  string message = 1;
+}
