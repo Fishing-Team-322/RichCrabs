@@ -14,6 +14,7 @@ add_executable(defay1x9
   src/game_manager.cpp
   src/ws_gateway.cpp
   src/csrf.cpp
+  src/session.cpp
 )
 
 target_include_directories(defay1x9 PRIVATE include)

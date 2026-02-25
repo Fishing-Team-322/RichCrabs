@@ -10,6 +10,7 @@
 #include "config.hpp"
 #include "csrf.hpp"
 #include "game_manager.hpp"
+#include "session.hpp"
 #include "ws_gateway.hpp"
 
 static std::string readFile(const std::string& path) {
@@ -36,12 +37,8 @@ static drogon::HttpResponsePtr jsonError(int code, const std::string& msg) {
   return resp;
 }
 
-static std::string bearerToken(const drogon::HttpRequestPtr& req) {
-  auto h = req->getHeader("Authorization");
-  if (h.empty()) h = req->getHeader("authorization");
-  const std::string p = "Bearer ";
-  if (h.rfind(p, 0) == 0) return h.substr(p.size());
-  return {};
+static drogon::HttpResponsePtr jsonOk(const Json::Value& j) {
+  return drogon::HttpResponse::newHttpJsonResponse(j);
 }
 
 int main() {
@@ -54,7 +51,7 @@ int main() {
   auto& gm = GameManager::instance();
   gm.setPublicBaseUrl(conf.public_base_url);
 
-  // -------- basic --------
+  // -------- basics --------
 
   drogon::app().registerHandler(
       "/health",
@@ -67,15 +64,11 @@ int main() {
       "/openapi.yaml",
       [conf](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         auto y = readFile(conf.openapi_path);
-        if (y.empty()) {
-          cb(jsonError(404, "openapi_not_found"));
-          return;
-        }
+        if (y.empty()) { cb(jsonError(404, "openapi_not_found")); return; }
         cb(textResp(y, drogon::CT_TEXT_PLAIN));
       },
       {drogon::Get});
 
-  // Swagger UI через CDN (без папки web/)
   drogon::app().registerHandler(
       "/docs",
       [](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
@@ -92,10 +85,7 @@ int main() {
   <div id="swagger-ui"></div>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
   <script>
-    window.onload = () => SwaggerUIBundle({
-      url: "/openapi.yaml",
-      dom_id: "#swagger-ui"
-    });
+    window.onload = () => SwaggerUIBundle({ url: "/openapi.yaml", dom_id: "#swagger-ui" });
   </script>
 </body>
 </html>
@@ -105,110 +95,150 @@ int main() {
       {drogon::Get});
 
   // -------- CSRF --------
-  // фронт делает GET /csrf -> получает cookie XSRF-TOKEN и токен в JSON,
-  // потом на защищенные POST шлет header X-XSRF-TOKEN: <token> + cookie автоматически
+  // Для cookie-сессии:
+  // - сервер ставит cookie XSRF-TOKEN
+  // - фронт шлет header X-XSRF-TOKEN с тем же значением
 
   drogon::app().registerHandler(
       "/csrf",
       [conf](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         const auto token = security::IssueCsrfToken();
+
         Json::Value r;
         r["token"] = token;
 
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(r);
+        auto resp = jsonOk(r);
         security::SetCsrfCookie(resp, conf.csrf, token);
         cb(resp);
       },
       {drogon::Get});
 
+  // -------- Session debug (очень полезно для фронта) --------
+  drogon::app().registerHandler(
+      "/me",
+      [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+        auto s = security::VerifySessionFromRequest(req, conf.session);
+        if (!s) { cb(jsonError(401, "no_session")); return; }
+
+        Json::Value r;
+        r["pin"] = s->pin;
+        r["role"] = s->role;
+        r["subject"] = s->subject;
+        cb(jsonOk(r));
+      },
+      {drogon::Get});
+
   // -------- API --------
 
-  // POST /api/v1/games (public)
+  // POST /api/v1/games  (создать игру = логин host)
   drogon::app().registerHandler(
       "/api/v1/games",
-      [&gm](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+      [&gm, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         auto jptr = req->getJsonObject();
-        if (!jptr) {
-          cb(jsonError(400, "invalid_json"));
-          return;
-        }
+        if (!jptr) { cb(jsonError(400, "invalid_json")); return; }
 
         const auto& body = *jptr;
         const std::string topic = body.get("topic", "").asString();
         const int qpt = body.get("questionsPerTeam", 0).asInt();
-
-        if (topic.empty()) {
-          cb(jsonError(400, "topic_required"));
-          return;
-        }
+        if (topic.empty()) { cb(jsonError(400, "topic_required")); return; }
 
         auto out = gm.createGame(topic, qpt);
 
+        // выдаём сессию host в HttpOnly cookie
+        security::SessionClaims claims;
+        claims.pin = out.game.pin;
+        claims.role = "host";
+        claims.subject = out.game.host_id;
+
+        const std::string sessionToken = security::IssueSessionToken(claims, conf.session.ttl_seconds);
+
+        // выдаём CSRF сразу (удобно, чтобы host мог сразу /start дернуть)
+        const std::string csrfToken = security::IssueCsrfToken();
+
         Json::Value r;
         r["pin"] = out.game.pin;
-        r["hostToken"] = out.host_token;
-        r["wsUrl"] = gm.makeWsUrl(out.host_token);
+        r["role"] = "host";
+        r["wsUrl"] = conf.public_base_url + "/ws";
+        r["csrfToken"] = csrfToken;
 
-        cb(drogon::HttpResponse::newHttpJsonResponse(r));
+        auto resp = jsonOk(r);
+        security::SetSessionCookie(resp, conf.session, sessionToken);
+        security::SetCsrfCookie(resp, conf.csrf, csrfToken);
+        cb(resp);
       },
       {drogon::Post});
 
-  // POST /api/v1/games/{pin}/join (public)
+  // POST /api/v1/games/{pin}/join (join = логин player)
   drogon::app().registerHandler(
       "/api/v1/games/{1}/join",
-      [&gm](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb,
-            std::string pin) {
+      [&gm, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string pin) {
         auto jptr = req->getJsonObject();
-        if (!jptr) {
-          cb(jsonError(400, "invalid_json"));
-          return;
-        }
+        if (!jptr) { cb(jsonError(400, "invalid_json")); return; }
 
         const std::string name = (*jptr).get("name", "").asString();
         auto outOpt = gm.joinGame(pin, name);
-        if (!outOpt) {
-          cb(jsonError(404, "game_not_found_or_closed"));
-          return;
-        }
+        if (!outOpt) { cb(jsonError(404, "game_not_found_or_closed")); return; }
 
         const auto& out = *outOpt;
+
+        security::SessionClaims claims;
+        claims.pin = pin;
+        claims.role = "player";
+        claims.subject = out.player.player_id;
+
+        const std::string sessionToken = security::IssueSessionToken(claims, conf.session.ttl_seconds);
+        const std::string csrfToken = security::IssueCsrfToken();
 
         Json::Value r;
         r["playerId"] = out.player.player_id;
         r["team"] = std::string(1, out.player.team);
-        r["playerToken"] = out.player_token;
-        r["wsUrl"] = gm.makeWsUrl(out.player_token);
+        r["role"] = "player";
+        r["wsUrl"] = conf.public_base_url + "/ws";
+        r["csrfToken"] = csrfToken;
 
-        cb(drogon::HttpResponse::newHttpJsonResponse(r));
+        auto resp = jsonOk(r);
+        security::SetSessionCookie(resp, conf.session, sessionToken);
+        security::SetCsrfCookie(resp, conf.csrf, csrfToken);
+        cb(resp);
       },
       {drogon::Post});
 
-  // POST /api/v1/games/{pin}/start (host-only + CSRF)
+  // POST /api/v1/games/{pin}/start  (host-only + CSRF)
   drogon::app().registerHandler(
       "/api/v1/games/{1}/start",
-      [&gm, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb,
-                  std::string pin) {
-        // CSRF check (только для host-only)
-        if (!security::VerifyCsrf(req, conf.csrf)) {
-          cb(jsonError(403, "csrf_failed"));
-          return;
-        }
+      [&gm, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string pin) {
+        // 1) session must exist
+        auto s = security::VerifySessionFromRequest(req, conf.session);
+        if (!s) { cb(jsonError(401, "no_session")); return; }
 
-        // host token
-        auto token = bearerToken(req);
-        if (token.empty()) {
-          cb(jsonError(401, "missing_token"));
-          return;
-        }
+        // 2) host-only
+        if (s->role != "host") { cb(jsonError(403, "host_only")); return; }
+        if (s->pin != pin) { cb(jsonError(403, "pin_mismatch")); return; }
 
-        if (!gm.startGame(pin, token)) {
-          cb(jsonError(409, "cannot_start"));
-          return;
-        }
+        // 3) CSRF check
+        if (!security::VerifyCsrf(req, conf.csrf)) { cb(jsonError(403, "csrf_failed")); return; }
 
-        auto r = drogon::HttpResponse::newHttpResponse();
-        r->setStatusCode(drogon::k204NoContent);
-        cb(r);
+        // 4) perform action using host_id (subject)
+        if (!gm.startGame(pin, s->subject)) { cb(jsonError(409, "cannot_start")); return; }
+
+        auto resp = drogon::HttpResponse::newHttpResponse();
+        resp->setStatusCode(drogon::k204NoContent);
+        cb(resp);
+      },
+      {drogon::Post});
+
+  // POST /logout (CSRF required)
+  drogon::app().registerHandler(
+      "/logout",
+      [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+        if (!security::VerifyCsrf(req, conf.csrf)) { cb(jsonError(403, "csrf_failed")); return; }
+
+        Json::Value r;
+        r["ok"] = true;
+
+        auto resp = jsonOk(r);
+        security::ClearSessionCookie(resp, conf.session);
+        cb(resp);
       },
       {drogon::Post});
 
