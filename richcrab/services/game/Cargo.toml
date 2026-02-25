@@ -18,3 +18,4 @@ tonic = { version = "0.12", features = ["transport"] }
 prost-types = "0.13"
 rand = "0.8"
 futures = "0.3"
+serde = { version = "1", features = ["derive"] }

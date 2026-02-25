@@ -31,8 +31,6 @@ message CreateRoomResponse {
 
 message JoinRoomRequest {
   string join_ticket = 1;
-  UserId user_id = 2;
-  string display_name = 3;
 }
 
 message JoinRoomResponse {

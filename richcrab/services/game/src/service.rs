@@ -3,6 +3,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use chrono::Utc;
 use futures::Stream;
 use rand::{distributions::Alphanumeric, Rng};
+use serde::Deserialize;
 use shared::{redis_client::RedisClient, redis_keys};
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
@@ -13,7 +14,13 @@ use crate::{
     room_actor::{spawn_room_actor, RoomCommand, RoomRegistry},
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Deserialize)]
+struct JoinTicketPayload {
+    room_id: String,
+    display_name: String,
+    issued_at_unix: i64,
+}
+
 pub struct GameServiceImpl {
     redis: RedisClient,
     rooms: RoomRegistry,
@@ -156,19 +163,28 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             return Err(Status::invalid_argument("join_ticket is required"));
         }
 
-        let room_id = self
+        let payload_raw = self
             .redis
             .consume_join_ticket(&redis_keys::ticket_key(&ticket))
             .await
             .map_err(|e| Status::internal(format!("failed to consume ticket: {e}")))?
             .ok_or_else(|| Status::permission_denied("join ticket is invalid or expired"))?;
+        let payload: JoinTicketPayload = serde_json::from_str(&payload_raw)
+            .map_err(|_| Status::permission_denied("join ticket payload is invalid"))?;
+        let issued_at = chrono::DateTime::from_timestamp(payload.issued_at_unix, 0)
+            .ok_or_else(|| Status::permission_denied("join ticket issued_at is invalid"))?;
+        let max_ticket_age = chrono::Duration::from_std(redis_keys::TICKET_TTL)
+            .map_err(|_| Status::internal("ticket ttl misconfigured"))?;
+        if (Utc::now() - issued_at) > max_ticket_age {
+            return Err(Status::permission_denied("join ticket is expired"));
+        }
 
-        let room = self.resolve_room(&room_id).await?;
+        let room = self.resolve_room(&payload.room_id).await?;
         let (tx, rx) = oneshot::channel();
         room.tx
             .send(RoomCommand::Join {
-                user_id: req.user_id.map(|v| v.value).unwrap_or_default(),
-                display_name: req.display_name,
+                user_id: String::new(),
+                display_name: payload.display_name,
                 response: tx,
             })
             .await
