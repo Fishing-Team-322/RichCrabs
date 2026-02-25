@@ -48,6 +48,7 @@ endforeach()
 add_executable(defay1x9
   src/main.cpp
   src/config.cpp
+  src/quizcore_client_grpc.cpp
   src/game_manager.cpp
   src/ws_gateway.cpp
   src/csrf.cpp

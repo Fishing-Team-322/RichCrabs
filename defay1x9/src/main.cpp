@@ -9,7 +9,7 @@
 
 #include "config.hpp"
 #include "csrf.hpp"
-#include "game_manager.hpp"
+#include "quizcore_client.hpp"
 #include "session.hpp"
 #include "ws_gateway.hpp"
 
@@ -48,8 +48,7 @@ int main() {
   spdlog::info("public_base_url={}", conf.public_base_url);
   spdlog::info("openapi_path={}", conf.openapi_path);
 
-  auto& gm = GameManager::instance();
-  gm.setPublicBaseUrl(conf.public_base_url);
+  QuizCoreClientGrpc quizCore(conf.quizcore_grpc_target);
 
   // -------- basics --------
 
@@ -124,6 +123,7 @@ int main() {
         r["pin"] = s->pin;
         r["role"] = s->role;
         r["subject"] = s->subject;
+        r["roomId"] = s->room_id;
         cb(jsonOk(r));
       },
       {drogon::Get});
@@ -133,7 +133,7 @@ int main() {
   // POST /api/v1/games  (создать игру = логин host)
   drogon::app().registerHandler(
       "/api/v1/games",
-      [&gm, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         auto jptr = req->getJsonObject();
         if (!jptr) { cb(jsonError(400, "invalid_json")); return; }
 
@@ -142,13 +142,15 @@ int main() {
         const int qpt = body.get("questionsPerTeam", 0).asInt();
         if (topic.empty()) { cb(jsonError(400, "topic_required")); return; }
 
-        auto out = gm.createGame(topic, qpt);
+        auto out = quizCore.createRoom(topic, qpt);
+        if (!out) { cb(jsonError(502, "quizcore_create_failed")); return; }
 
         // выдаём сессию host в HttpOnly cookie
         security::SessionClaims claims;
-        claims.pin = out.game.pin;
+        claims.pin = out->pin;
         claims.role = "host";
-        claims.subject = out.game.host_id;
+        claims.subject = "gw-owner";
+        claims.room_id = out->room_id;
 
         const std::string sessionToken = security::IssueSessionToken(claims, conf.session.ttl_seconds);
 
@@ -156,7 +158,7 @@ int main() {
         const std::string csrfToken = security::IssueCsrfToken();
 
         Json::Value r;
-        r["pin"] = out.game.pin;
+        r["pin"] = out->pin;
         r["role"] = "host";
         r["wsUrl"] = conf.public_base_url + "/ws";
         r["csrfToken"] = csrfToken;
@@ -171,27 +173,26 @@ int main() {
   // POST /api/v1/games/{pin}/join (join = логин player)
   drogon::app().registerHandler(
       "/api/v1/games/{1}/join",
-      [&gm, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string pin) {
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string pin) {
         auto jptr = req->getJsonObject();
         if (!jptr) { cb(jsonError(400, "invalid_json")); return; }
 
         const std::string name = (*jptr).get("name", "").asString();
-        auto outOpt = gm.joinGame(pin, name);
-        if (!outOpt) { cb(jsonError(404, "game_not_found_or_closed")); return; }
-
-        const auto& out = *outOpt;
+        auto out = quizCore.joinRoomByPin(pin, name);
+        if (!out) { cb(jsonError(404, "game_not_found_or_closed")); return; }
 
         security::SessionClaims claims;
         claims.pin = pin;
         claims.role = "player";
-        claims.subject = out.player.player_id;
+        claims.subject = out->player_id;
+        claims.room_id = out->room_id;
 
         const std::string sessionToken = security::IssueSessionToken(claims, conf.session.ttl_seconds);
         const std::string csrfToken = security::IssueCsrfToken();
 
         Json::Value r;
-        r["playerId"] = out.player.player_id;
-        r["team"] = std::string(1, out.player.team);
+        r["playerId"] = out->player_id;
+        r["team"] = "A";
         r["role"] = "player";
         r["wsUrl"] = conf.public_base_url + "/ws";
         r["csrfToken"] = csrfToken;
@@ -206,7 +207,7 @@ int main() {
   // POST /api/v1/games/{pin}/start  (host-only + CSRF)
   drogon::app().registerHandler(
       "/api/v1/games/{1}/start",
-      [&gm, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string pin) {
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string pin) {
         // 1) session must exist
         auto s = security::VerifySessionFromRequest(req, conf.session);
         if (!s) { cb(jsonError(401, "no_session")); return; }
@@ -219,7 +220,12 @@ int main() {
         if (!security::VerifyCsrf(req, conf.csrf)) { cb(jsonError(403, "csrf_failed")); return; }
 
         // 4) perform action using host_id (subject)
-        if (!gm.startGame(pin, s->subject)) { cb(jsonError(409, "cannot_start")); return; }
+        if (s->room_id.empty()) { cb(jsonError(403, "room_missing")); return; }
+
+        auto roomState = quizCore.getRoomState(s->room_id);
+        if (!roomState) { cb(jsonError(404, "room_not_found")); return; }
+
+        if (!quizCore.startGame(s->room_id, s->subject)) { cb(jsonError(409, "cannot_start")); return; }
 
         auto resp = drogon::HttpResponse::newHttpResponse();
         resp->setStatusCode(drogon::k204NoContent);

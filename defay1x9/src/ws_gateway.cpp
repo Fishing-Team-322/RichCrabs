@@ -1,16 +1,16 @@
 #include "ws_gateway.hpp"
-#include "game_manager.hpp"
 
-#include <json/value.h>
+#include "config.hpp"
+#include "session.hpp"
+
 #include <json/reader.h>
+#include <json/value.h>
 #include <sstream>
 
 void WsGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
                                     const drogon::WebSocketConnectionPtr& conn) {
-  const auto token = req->getParameter("token");
-  if (token.empty()) { conn->shutdown(); return; }
-
-  auto claims = GameManager::instance().verifyToken(token);
+  const auto conf = Config::LoadFromEnv();
+  auto claims = security::VerifySessionFromRequest(req, conf.session);
   if (!claims) { conn->shutdown(); return; }
 
   conn->send(R"({"type":"hello"})");
