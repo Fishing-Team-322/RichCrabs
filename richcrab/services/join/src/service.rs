@@ -3,6 +3,7 @@ use std::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
 use shared::{redis_client::RedisClient, redis_keys};
 use tonic::{Request, Response, Status};
+use tracing::info;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -136,8 +137,10 @@ impl proto::richcrab::v1::join_service_server::JoinService for JoinServiceImpl {
         &self,
         request: Request<proto::richcrab::v1::IssueJoinTicketByPinRequest>,
     ) -> Result<Response<proto::richcrab::v1::IssueJoinTicketResponse>, Status> {
+        let metrics = shared::observability::init_metrics();
         let metadata = request.metadata().clone();
         let req = request.into_inner();
+        info!(request_id = %uuid::Uuid::new_v4(), room_id = "", user_id = "", bot_id = "", "issue_join_ticket_by_pin");
         if req.pin.is_empty() {
             return Err(Status::invalid_argument("pin is required"));
         }
@@ -151,6 +154,10 @@ impl proto::richcrab::v1::join_service_server::JoinService for JoinServiceImpl {
         let token = self
             .issue_ticket(room_id.clone(), req.display_name.clone())
             .await?;
+        metrics
+            .join_ticket_issued_total
+            .with_label_values(&["pin"])
+            .inc();
 
         Ok(Response::new(
             proto::richcrab::v1::IssueJoinTicketResponse {
@@ -170,8 +177,10 @@ impl proto::richcrab::v1::join_service_server::JoinService for JoinServiceImpl {
         &self,
         request: Request<proto::richcrab::v1::IssueJoinTicketByInviteRequest>,
     ) -> Result<Response<proto::richcrab::v1::IssueJoinTicketResponse>, Status> {
+        let metrics = shared::observability::init_metrics();
         let metadata = request.metadata().clone();
         let req = request.into_inner();
+        info!(request_id = %uuid::Uuid::new_v4(), room_id = "", user_id = "", bot_id = "", "issue_join_ticket_by_invite");
         if req.invite_token.is_empty() {
             return Err(Status::invalid_argument("invite_token is required"));
         }
@@ -191,6 +200,10 @@ impl proto::richcrab::v1::join_service_server::JoinService for JoinServiceImpl {
         let token = self
             .issue_ticket(room_id.clone(), req.display_name.clone())
             .await?;
+        metrics
+            .join_ticket_issued_total
+            .with_label_values(&["invite"])
+            .inc();
 
         Ok(Response::new(
             proto::richcrab::v1::IssueJoinTicketResponse {

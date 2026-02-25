@@ -14,3 +14,8 @@ uuid.workspace = true
 tonic = { version = "0.12", features = ["transport"] }
 prost-types = "0.13"
 serde = { version = "1", features = ["derive"] }
+
+anyhow.workspace = true
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tonic-health = "0.12"
+tracing = "0.1"

@@ -220,6 +220,7 @@ name = "bot"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
+ "anyhow",
  "base64",
  "chrono",
  "hex",
@@ -231,7 +232,10 @@ dependencies = [
  "serde_json",
  "shared",
  "sqlx",
+ "tokio",
  "tonic",
+ "tonic-health",
+ "tracing",
  "uuid",
 ]
 
@@ -249,6 +253,8 @@ dependencies = [
  "sqlx",
  "tokio",
  "tonic",
+ "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
@@ -493,12 +499,16 @@ dependencies = [
 name = "entitlements"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "proto",
  "serde_json",
  "shared",
  "sqlx",
+ "tokio",
  "tonic",
+ "tonic-health",
+ "tracing",
  "uuid",
 ]
 
@@ -693,6 +703,7 @@ dependencies = [
 name = "game"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "futures",
  "prost-types",
@@ -706,6 +717,8 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic",
+ "tonic-health",
+ "tracing",
  "uuid",
 ]
 
@@ -1193,6 +1206,7 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 name = "join"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "prost-types",
  "proto",
@@ -1200,7 +1214,10 @@ dependencies = [
  "serde_json",
  "shared",
  "sqlx",
+ "tokio",
  "tonic",
+ "tonic-health",
+ "tracing",
  "uuid",
 ]
 
@@ -1296,6 +1313,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
+name = "matchers"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
+dependencies = [
+ "regex-automata",
+]
+
+[[package]]
 name = "matchit"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1339,6 +1365,15 @@ name = "multimap"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
+
+[[package]]
+name = "nu-ansi-term"
+version = "0.50.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
+dependencies = [
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "num-bigint"
@@ -1581,6 +1616,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "prometheus"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d33c28a30771f7f96db69893f78b857f7450d7e0237e9c8fc6427a81bae7ed1"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "memchr",
+ "parking_lot",
+ "protobuf",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "prost"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1642,6 +1692,12 @@ dependencies = [
  "tonic",
  "tonic-build",
 ]
+
+[[package]]
+name = "protobuf"
+version = "2.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "protoc-bin-vendored"
@@ -1766,6 +1822,7 @@ dependencies = [
 name = "quiz"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "prost-types",
  "proto",
@@ -1773,7 +1830,10 @@ dependencies = [
  "serde_json",
  "shared",
  "sqlx",
+ "tokio",
  "tonic",
+ "tonic-health",
+ "tracing",
  "uuid",
 ]
 
@@ -2159,14 +2219,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sharded-slab"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
+dependencies = [
+ "lazy_static",
+]
+
+[[package]]
 name = "shared"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "chrono",
  "deadpool-redis",
+ "prometheus",
  "sha2",
  "thiserror 1.0.69",
  "tokio",
+ "tonic",
+ "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
@@ -2199,6 +2273,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "smoke_load"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "proto",
+ "tokio",
+ "tonic",
+ "uuid",
 ]
 
 [[package]]
@@ -2546,6 +2631,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "thread_local"
+version = "1.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f60246a4944f24f6e018aa17cdeffb7818b76356965d03b07d6a9886e8962185"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "tinystr"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2675,6 +2769,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tonic-health"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1eaf34ddb812120f5c601162d5429933c9b527d901ab0e7f930d3147e33a09b2"
+dependencies = [
+ "async-stream",
+ "prost",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+]
+
+[[package]]
 name = "tower"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2770,6 +2877,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
+ "valuable",
+]
+
+[[package]]
+name = "tracing-log"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
+dependencies = [
+ "log",
+ "once_cell",
+ "tracing-core",
+]
+
+[[package]]
+name = "tracing-subscriber"
+version = "0.3.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f30143827ddab0d256fd843b7a66d164e9f271cfa0dde49142c5ca0ca291f1e"
+dependencies = [
+ "matchers",
+ "nu-ansi-term",
+ "once_cell",
+ "regex-automata",
+ "sharded-slab",
+ "smallvec",
+ "thread_local",
+ "tracing",
+ "tracing-core",
+ "tracing-log",
 ]
 
 [[package]]
@@ -2862,6 +2999,12 @@ dependencies = [
  "serde_core",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "valuable"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
 name = "vcpkg"

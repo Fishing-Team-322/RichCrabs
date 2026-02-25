@@ -6,13 +6,14 @@ use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
-    routing::post,
+    routing::{get, post},
     Json, Router,
 };
 use repository::BotIngressRepository;
 use serde::Deserialize;
 use sqlx::postgres::PgPoolOptions;
 use tokio::sync::RwLock;
+use tracing::info;
 
 #[derive(Clone)]
 struct AppState {
@@ -53,6 +54,9 @@ struct SimpleResponse {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    shared::observability::init_tracing("bot_ingress");
+    shared::observability::init_metrics();
+
     let database_url = env::var(shared::config::DATABASE_URL)?;
     let game_addr = env::var(shared::config::SERVICE_ADDR_GAME)?;
     let ingress_addr = env::var(shared::config::SERVICE_ADDR_BOT_INGRESS)
@@ -62,8 +66,13 @@ async fn main() -> anyhow::Result<()> {
         .max_connections(5)
         .connect(&database_url)
         .await?;
+    let game_endpoint = if game_addr.starts_with("http://") || game_addr.starts_with("https://") {
+        game_addr
+    } else {
+        format!("http://{game_addr}")
+    };
     let game_client =
-        proto::richcrab::v1::game_service_client::GameServiceClient::connect(game_addr).await?;
+        proto::richcrab::v1::game_service_client::GameServiceClient::connect(game_endpoint).await?;
 
     let state = AppState {
         repository: BotIngressRepository::new(pool),
@@ -73,6 +82,8 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/tg/:telegram_bot_id/:webhook_secret", post(handle_webhook))
+        .route("/health", get(health))
+        .route("/metrics", get(shared::observability::metrics_handler))
         .with_state(state);
 
     let addr: SocketAddr = ingress_addr.parse()?;
@@ -87,6 +98,11 @@ async fn handle_webhook(
     headers: HeaderMap,
     Json(update): Json<TelegramUpdate>,
 ) -> impl IntoResponse {
+    let metrics = shared::observability::init_metrics();
+    metrics
+        .tg_updates_total
+        .with_label_values(&["received"])
+        .inc();
     let Some(bot) = state
         .repository
         .find_secret(telegram_bot_id)
@@ -145,6 +161,7 @@ async fn handle_webhook(
     };
 
     let mut game_client = state.game_client.clone();
+    info!(request_id = %uuid::Uuid::new_v4(), room_id = "", user_id = %bot.user_id, bot_id = %bot.id, "telegram webhook update");
     let response_message = if text.starts_with("/newgame") {
         match game_client
             .create_room(proto::richcrab::v1::CreateRoomRequest {
@@ -216,6 +233,16 @@ async fn handle_webhook(
         Json(SimpleResponse {
             ok: true,
             message: response_message,
+        }),
+    )
+}
+
+async fn health() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        Json(SimpleResponse {
+            ok: true,
+            message: "ok".to_string(),
         }),
     )
 }

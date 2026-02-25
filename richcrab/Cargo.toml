@@ -9,6 +9,7 @@ members = [
   "services/bot",
   "services/bot_ingress",
   "proto",
+  "tools/smoke_load",
 ]
 
 [workspace.package]
