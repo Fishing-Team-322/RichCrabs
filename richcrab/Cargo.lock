@@ -612,6 +612,7 @@ dependencies = [
  "prost-types",
  "proto",
  "rand",
+ "serde",
  "serde_json",
  "shared",
  "sqlx",
@@ -1036,9 +1037,13 @@ name = "join"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "prost-types",
+ "proto",
+ "serde",
  "serde_json",
  "shared",
  "sqlx",
+ "tonic",
  "uuid",
 ]
 

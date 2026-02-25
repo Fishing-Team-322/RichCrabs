@@ -13,19 +13,19 @@ service JoinService {
 message JoinTicket {
   string token = 1;
   RoomId room_id = 2;
-  UserId user_id = 3;
+  string display_name = 3;
   google.protobuf.Timestamp issued_at = 4;
   google.protobuf.Timestamp expires_at = 5;
 }
 
 message IssueJoinTicketByPinRequest {
   string pin = 1;
-  UserId user_id = 2;
+  string display_name = 2;
 }
 
 message IssueJoinTicketByInviteRequest {
-  string invite_code = 1;
-  UserId user_id = 2;
+  string invite_token = 1;
+  string display_name = 2;
 }
 
 message IssueJoinTicketResponse {

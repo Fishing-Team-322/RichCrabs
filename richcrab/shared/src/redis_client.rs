@@ -12,6 +12,14 @@ end
 return value
 "#;
 
+const INCR_WITH_TTL_LUA: &str = r#"
+local value = redis.call('INCR', KEYS[1])
+if value == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return value
+"#;
+
 #[derive(Debug, Clone)]
 pub struct RedisClient {
     pool: Pool,
@@ -106,6 +114,66 @@ impl RedisClient {
 
             match timeout(self.command_timeout, command).await {
                 Ok(Ok(())) => return Ok(()),
+                Ok(Err(err)) if attempt < self.max_retries => {
+                    attempt += 1;
+                    let _ = err;
+                    tokio::time::sleep(self.retry_backoff).await;
+                }
+                Ok(Err(err)) => return Err(RedisClientError::Redis(err)),
+                Err(_) if attempt < self.max_retries => {
+                    attempt += 1;
+                    tokio::time::sleep(self.retry_backoff).await;
+                }
+                Err(_) => return Err(RedisClientError::Timeout(self.command_timeout)),
+            }
+        }
+    }
+
+    pub async fn get_value(&self, key: &str) -> Result<Option<String>, RedisClientError> {
+        let mut attempt = 0;
+        loop {
+            let mut conn = self.get_connection().await?;
+            let mut command = redis::cmd("GET");
+            command.arg(key);
+            let command = command.query_async::<Option<String>>(&mut conn);
+
+            match timeout(self.command_timeout, command).await {
+                Ok(Ok(value)) => return Ok(value),
+                Ok(Err(err)) if attempt < self.max_retries => {
+                    attempt += 1;
+                    let _ = err;
+                    tokio::time::sleep(self.retry_backoff).await;
+                }
+                Ok(Err(err)) => return Err(RedisClientError::Redis(err)),
+                Err(_) if attempt < self.max_retries => {
+                    attempt += 1;
+                    tokio::time::sleep(self.retry_backoff).await;
+                }
+                Err(_) => return Err(RedisClientError::Timeout(self.command_timeout)),
+            }
+        }
+    }
+
+    pub async fn increment_with_ttl(
+        &self,
+        key: &str,
+        ttl: Duration,
+    ) -> Result<u64, RedisClientError> {
+        let ttl_seconds = ttl.as_secs().max(1);
+
+        let mut attempt = 0;
+        loop {
+            let mut conn = self.get_connection().await?;
+            let mut command = redis::cmd("EVAL");
+            command
+                .arg(INCR_WITH_TTL_LUA)
+                .arg(1)
+                .arg(key)
+                .arg(ttl_seconds);
+            let command = command.query_async::<u64>(&mut conn);
+
+            match timeout(self.command_timeout, command).await {
+                Ok(Ok(value)) => return Ok(value),
                 Ok(Err(err)) if attempt < self.max_retries => {
                     attempt += 1;
                     let _ = err;

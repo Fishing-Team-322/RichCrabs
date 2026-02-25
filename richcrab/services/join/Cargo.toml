@@ -6,6 +6,10 @@ license.workspace = true
 
 [dependencies]
 shared = { path = "../../shared" }
+proto = { path = "../../proto" }
+tonic = { version = "0.12", features = ["transport"] }
+prost-types = "0.13"
+serde = { version = "1", features = ["derive"] }
 chrono.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
