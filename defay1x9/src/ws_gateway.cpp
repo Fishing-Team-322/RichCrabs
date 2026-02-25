@@ -1,6 +1,5 @@
 #include "ws_gateway.hpp"
-#include "config.hpp"
-#include "jwt.hpp"
+#include "game_manager.hpp"
 
 #include <json/value.h>
 #include <json/reader.h>
@@ -11,16 +10,15 @@ void WsGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
   const auto token = req->getParameter("token");
   if (token.empty()) { conn->shutdown(); return; }
 
-  auto conf = Config::LoadFromEnv();
-  auto claimsOpt = security::Verify(conf.jwt_secret, token);
-  if (!claimsOpt) { conn->shutdown(); return; }
+  auto claims = GameManager::instance().verifyToken(token);
+  if (!claims) { conn->shutdown(); return; }
 
   conn->send(R"({"type":"hello"})");
 }
 
 void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
-                              std::string&& message,
-                              const drogon::WebSocketMessageType& type) {
+                                 std::string&& message,
+                                 const drogon::WebSocketMessageType& type) {
   if (type != drogon::WebSocketMessageType::Text) return;
 
   Json::Value j;
@@ -41,6 +39,4 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
   conn->send(R"({"type":"ack"})");
 }
 
-void WsGateway::handleConnectionClosed(const drogon::WebSocketConnectionPtr&) {
-  // позже
-}
+void WsGateway::handleConnectionClosed(const drogon::WebSocketConnectionPtr&) {}

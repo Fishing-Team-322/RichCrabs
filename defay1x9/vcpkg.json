@@ -3,9 +3,6 @@
   "version-string": "0.1.0",
   "dependencies": [
     "drogon",
-    "nlohmann-json",
-    "spdlog",
-    "jwt-cpp",
-    "openssl"
+    "spdlog"
   ]
 }
