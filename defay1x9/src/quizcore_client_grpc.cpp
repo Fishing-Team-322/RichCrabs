@@ -11,6 +11,7 @@ using richcrab::v1::CreateRoomResponse;
 using richcrab::v1::GameService;
 using richcrab::v1::GetRoomStateRequest;
 using richcrab::v1::GetRoomStateResponse;
+using richcrab::v1::IssueJoinTicketByInviteRequest;
 using richcrab::v1::IssueJoinTicketByPinRequest;
 using richcrab::v1::IssueJoinTicketResponse;
 using richcrab::v1::JoinRoomRequest;
@@ -36,13 +37,14 @@ QuizCoreClientGrpc::QuizCoreClientGrpc(const std::string& target)
 
 QuizCoreClientGrpc::~QuizCoreClientGrpc() = default;
 
-std::optional<QuizCoreCreateRoomResult> QuizCoreClientGrpc::createRoom(const std::string& topic,
-                                                                        int questionsPerTeam) {
+std::optional<QuizCoreCreateRoomResult> QuizCoreClientGrpc::createRoom(const std::string& ownerUserId,
+                                                                        const std::string& quizId,
+                                                                        const std::string& title) {
   grpc::ClientContext ctx;
   CreateRoomRequest req;
-  req.mutable_owner_user_id()->set_value("gw-owner");
-  req.mutable_quiz_id()->set_value(topic);
-  req.set_title(topic + " (qpt=" + std::to_string(questionsPerTeam) + ")");
+  req.mutable_owner_user_id()->set_value(ownerUserId);
+  req.mutable_quiz_id()->set_value(quizId);
+  req.set_title(title);
 
   CreateRoomResponse resp;
   const auto status = impl_->game->CreateRoom(&ctx, req, &resp);
@@ -64,6 +66,33 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByPin(const st
 
   IssueJoinTicketResponse ticketResp;
   const auto ticketStatus = impl_->join->IssueJoinTicketByPin(&ticketCtx, ticketReq, &ticketResp);
+  if (!ticketStatus.ok() || ticketResp.has_error() || !ticketResp.has_ticket()) return std::nullopt;
+
+  grpc::ClientContext joinCtx;
+  JoinRoomRequest joinReq;
+  joinReq.set_join_ticket(ticketResp.ticket().token());
+
+  JoinRoomResponse joinResp;
+  const auto joinStatus = impl_->game->JoinRoom(&joinCtx, joinReq, &joinResp);
+  if (!joinStatus.ok() || joinResp.has_error()) return std::nullopt;
+
+  QuizCoreJoinRoomResult out;
+  out.room_id = ticketResp.ticket().room_id().value();
+  out.join_ticket = ticketResp.ticket().token();
+  out.player_id = joinResp.player_id().value();
+  return out;
+}
+
+
+std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByInvite(const std::string& inviteToken,
+                                                                            const std::string& displayName) {
+  grpc::ClientContext ticketCtx;
+  IssueJoinTicketByInviteRequest ticketReq;
+  ticketReq.set_invite_token(inviteToken);
+  ticketReq.set_display_name(displayName);
+
+  IssueJoinTicketResponse ticketResp;
+  const auto ticketStatus = impl_->join->IssueJoinTicketByInvite(&ticketCtx, ticketReq, &ticketResp);
   if (!ticketStatus.ok() || ticketResp.has_error() || !ticketResp.has_ticket()) return std::nullopt;
 
   grpc::ClientContext joinCtx;

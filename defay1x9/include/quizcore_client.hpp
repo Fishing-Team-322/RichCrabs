@@ -35,10 +35,13 @@ class QuizCoreClient {
 public:
   virtual ~QuizCoreClient() = default;
 
-  virtual std::optional<QuizCoreCreateRoomResult> createRoom(const std::string& topic,
-                                                              int questionsPerTeam) = 0;
+  virtual std::optional<QuizCoreCreateRoomResult> createRoom(const std::string& ownerUserId,
+                                                              const std::string& quizId,
+                                                              const std::string& title) = 0;
   virtual std::optional<QuizCoreJoinRoomResult> joinRoomByPin(const std::string& pin,
                                                               const std::string& displayName) = 0;
+  virtual std::optional<QuizCoreJoinRoomResult> joinRoomByInvite(const std::string& inviteToken,
+                                                                 const std::string& displayName) = 0;
   virtual bool startGame(const std::string& roomId, const std::string& requestedByUserId) = 0;
   virtual std::optional<QuizCoreRoomState> getRoomState(const std::string& roomId) = 0;
 };
@@ -51,10 +54,13 @@ public:
   QuizCoreClientGrpc(const QuizCoreClientGrpc&) = delete;
   QuizCoreClientGrpc& operator=(const QuizCoreClientGrpc&) = delete;
 
-  std::optional<QuizCoreCreateRoomResult> createRoom(const std::string& topic,
-                                                      int questionsPerTeam) override;
+  std::optional<QuizCoreCreateRoomResult> createRoom(const std::string& ownerUserId,
+                                                      const std::string& quizId,
+                                                      const std::string& title) override;
   std::optional<QuizCoreJoinRoomResult> joinRoomByPin(const std::string& pin,
                                                       const std::string& displayName) override;
+  std::optional<QuizCoreJoinRoomResult> joinRoomByInvite(const std::string& inviteToken,
+                                                         const std::string& displayName) override;
   bool startGame(const std::string& roomId, const std::string& requestedByUserId) override;
   std::optional<QuizCoreRoomState> getRoomState(const std::string& roomId) override;
 

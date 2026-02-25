@@ -7,8 +7,10 @@ void GameManager::setPublicBaseUrl(std::string baseUrl) {
   public_base_url_ = std::move(baseUrl);
 }
 
-std::optional<CreateGameOut> GameManager::createGame(const std::string& topic, int questionsPerTeam) {
-  auto out = client_.createRoom(topic, questionsPerTeam);
+std::optional<CreateGameOut> GameManager::createGame(const std::string& ownerUserId,
+                                                      const std::string& quizId,
+                                                      const std::string& title) {
+  auto out = client_.createRoom(ownerUserId, quizId, title);
   if (!out) return std::nullopt;
 
   return CreateGameOut{out->room_id, out->pin, out->invite_token};
@@ -16,6 +18,13 @@ std::optional<CreateGameOut> GameManager::createGame(const std::string& topic, i
 
 std::optional<JoinGameOut> GameManager::joinGame(const std::string& pin, const std::string& name) {
   auto out = client_.joinRoomByPin(pin, name);
+  if (!out) return std::nullopt;
+
+  return JoinGameOut{out->room_id, out->player_id, out->join_ticket};
+}
+
+std::optional<JoinGameOut> GameManager::joinGameByInvite(const std::string& inviteToken, const std::string& name) {
+  auto out = client_.joinRoomByInvite(inviteToken, name);
   if (!out) return std::nullopt;
 
   return JoinGameOut{out->room_id, out->player_id, out->join_ticket};

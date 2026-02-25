@@ -141,11 +141,14 @@ int main() {
         if (!jptr) { cb(jsonError(400, "invalid_json")); return; }
 
         const auto& body = *jptr;
-        const std::string topic = body.get("topic", "").asString();
-        const int qpt = body.get("questionsPerTeam", 0).asInt();
-        if (topic.empty()) { cb(jsonError(400, "topic_required")); return; }
+        const std::string ownerUserId = body.get("ownerUserId", "").asString();
+        const std::string quizId = body.get("quizId", "").asString();
+        const std::string title = body.get("title", "").asString();
+        if (ownerUserId.empty()) { cb(jsonError(400, "owner_user_id_required")); return; }
+        if (quizId.empty()) { cb(jsonError(400, "quiz_id_required")); return; }
+        if (title.empty()) { cb(jsonError(400, "title_required")); return; }
 
-        auto out = quizCore.createRoom(topic, qpt);
+        auto out = quizCore.createRoom(ownerUserId, quizId, title);
         if (!out) { cb(jsonError(502, "quizcore_create_failed")); return; }
 
         // выдаём сессию host в HttpOnly cookie
@@ -153,7 +156,7 @@ int main() {
         claims.role = "host";
         claims.pin = out->pin;
         claims.room_id = out->room_id;
-        claims.user_id = "gw-owner";
+        claims.user_id = ownerUserId;
 
         const std::string sessionToken = security::IssueSessionToken(claims, conf.session.ttl_seconds);
 
@@ -162,9 +165,9 @@ int main() {
 
         Json::Value r;
         r["pin"] = out->pin;
-        r["role"] = "host";
+        r["inviteToken"] = out->invite_token;
+        r["inviteUrl"] = conf.public_base_url + "/invite/" + out->invite_token;
         r["wsUrl"] = conf.public_base_url + "/ws";
-        r["csrfToken"] = csrfToken;
 
         auto resp = jsonOk(r);
         security::SetSessionCookie(resp, conf.session, sessionToken);
@@ -207,26 +210,54 @@ int main() {
       },
       {drogon::Post});
 
+  // POST /api/v1/invites/{inviteToken}/join (join = login player by invite token)
+  drogon::app().registerHandler(
+      "/api/v1/invites/{1}/join",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string inviteToken) {
+        auto jptr = req->getJsonObject();
+        if (!jptr) { cb(jsonError(400, "invalid_json")); return; }
+
+        const std::string name = (*jptr).get("name", "").asString();
+        auto out = quizCore.joinRoomByInvite(inviteToken, name);
+        if (!out) { cb(jsonError(404, "game_not_found_or_closed")); return; }
+
+        security::SessionClaims claims;
+        claims.role = "player";
+        claims.room_id = out->room_id;
+        claims.player_id = out->player_id;
+
+        const std::string sessionToken = security::IssueSessionToken(claims, conf.session.ttl_seconds);
+        const std::string csrfToken = security::IssueCsrfToken();
+
+        Json::Value r;
+        r["playerId"] = out->player_id;
+        r["team"] = "A";
+        r["role"] = "player";
+        r["wsUrl"] = conf.public_base_url + "/ws";
+
+        auto resp = jsonOk(r);
+        security::SetSessionCookie(resp, conf.session, sessionToken);
+        security::SetCsrfCookie(resp, conf.csrf, csrfToken);
+        cb(resp);
+      },
+      {drogon::Post});
+
   // POST /api/v1/games/{pin}/start  (host-only + CSRF)
   drogon::app().registerHandler(
       "/api/v1/games/{1}/start",
-      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string pin) {
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string /*pin*/) {
         // 1) session must exist
         auto s = security::VerifySessionFromRequest(req, conf.session);
         if (!s) { cb(jsonError(401, "no_session")); return; }
 
         // 2) host-only
         if (s->role != "host") { cb(jsonError(403, "host_only")); return; }
-        if (s->pin != pin) { cb(jsonError(403, "pin_mismatch")); return; }
 
         // 3) CSRF check
         if (!security::VerifyCsrf(req, conf.csrf)) { cb(jsonError(403, "csrf_failed")); return; }
 
         // 4) perform action using host user_id
         if (s->room_id.empty()) { cb(jsonError(403, "room_missing")); return; }
-
-        auto roomState = quizCore.getRoomState(s->room_id);
-        if (!roomState) { cb(jsonError(404, "room_not_found")); return; }
 
         if (!quizCore.startGame(s->room_id, s->user_id)) { cb(jsonError(409, "cannot_start")); return; }
 
