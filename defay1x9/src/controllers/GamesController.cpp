@@ -17,7 +17,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
         std::string parseError;
         auto body = api::parseJsonBody(req, parseError);
         if (!body) {
-          cb(api::jsonErrorResponse(400, "invalid_json", parseError));
+          cb(api::jsonErrorResponse(400, api::ErrorCode::kInvalidJson, parseError));
           return;
         }
 
@@ -79,7 +79,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
         std::string parseError;
         auto body = api::parseJsonBody(req, parseError);
         if (!body) {
-          cb(api::jsonErrorResponse(400, "invalid_json", parseError));
+          cb(api::jsonErrorResponse(400, api::ErrorCode::kInvalidJson, parseError));
           return;
         }
 
@@ -133,7 +133,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
         std::string parseError;
         auto body = api::parseJsonBody(req, parseError);
         if (!body) {
-          cb(api::jsonErrorResponse(400, "invalid_json", parseError));
+          cb(api::jsonErrorResponse(400, api::ErrorCode::kInvalidJson, parseError));
           return;
         }
 
@@ -185,25 +185,25 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
         const auto requestId = requestIdFromRequest(req);
         auto session = security::VerifySessionFromRequest(req, conf.session);
         if (!session) {
-          cb(api::jsonErrorResponse(401, "no_session", "session cookie is missing or invalid"));
+          cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
           return;
         }
         if (session->role != "host") {
-          cb(api::jsonErrorResponse(403, "host_only", "only host can start game"));
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "only host can start game"));
           return;
         }
         if (!security::VerifyCsrf(req, conf.csrf)) {
-          cb(api::jsonErrorResponse(403, "csrf_failed", "csrf token mismatch"));
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kCsrfRequired, "csrf token mismatch"));
           return;
         }
         if (session->room_id.empty()) {
-          cb(api::jsonErrorResponse(403, "room_missing", "room_id is not present in session"));
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "room_id is not present in session"));
           return;
         }
 
         spdlog::info("start_game request_id={} pin={} room_id={} player_id=-", requestId, session->pin, session->room_id);
         if (!quizCore.startGame(session->room_id, session->user_id, requestId)) {
-          cb(api::jsonErrorResponse(409, "cannot_start", "game cannot be started in current state"));
+          cb(api::jsonErrorResponse(409, api::ErrorCode::kValidationError, "game cannot be started in current state"));
           return;
         }
 
@@ -220,11 +220,11 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
                         std::string pin) {
         auto session = security::VerifySessionFromRequest(req, conf.session);
         if (!session) {
-          cb(api::jsonErrorResponse(401, "no_session", "session cookie is missing or invalid"));
+          cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
           return;
         }
         if (session->room_id.empty()) {
-          cb(api::jsonErrorResponse(403, "room_missing", "room_id is not present in session"));
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "room_id is not present in session"));
           return;
         }
 

@@ -51,7 +51,7 @@ Json::Value botToJson(const QuizCoreBot& bot) {
 }
 
 drogon::HttpResponsePtr notImplemented(const std::string& endpoint) {
-  return api::jsonErrorResponse(501, "not_implemented", endpoint + " is not implemented");
+  return api::jsonErrorResponse(501, api::ErrorCode::kNotImplemented, endpoint + " is not implemented");
 }
 
 }  // namespace controllers

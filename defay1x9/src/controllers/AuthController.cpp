@@ -41,7 +41,7 @@ void RegisterAuthRoutes(const Config& conf) {
       "/api/v1/auth/logout",
       [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         if (!security::VerifyCsrf(req, conf.csrf)) {
-          cb(api::jsonErrorResponse(403, "csrf_failed", "csrf token mismatch"));
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kCsrfRequired, "csrf token mismatch"));
           return;
         }
 
