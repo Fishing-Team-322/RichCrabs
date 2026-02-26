@@ -7,7 +7,7 @@
 
 namespace controllers {
 
-void RegisterProfileRoutes(const Config&) {
+void RegisterProfileRoutes(const Config& conf) {
   drogon::app().registerHandler(
       "/api/v1/me",
       [](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
@@ -17,14 +17,16 @@ void RegisterProfileRoutes(const Config&) {
 
   drogon::app().registerHandler(
       "/api/v1/me",
-      [](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+      [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+        if (!RequireCsrf(req, conf, cb)) return;
         cb(notImplemented("PATCH /api/v1/me"));
       },
       {drogon::Patch});
 
   drogon::app().registerHandler(
       "/api/v1/me/password",
-      [](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+      [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+        if (!RequireCsrf(req, conf, cb)) return;
         cb(notImplemented("POST /api/v1/me/password"));
       },
       {drogon::Post});

@@ -2,6 +2,7 @@
 
 #include <drogon/drogon.h>
 
+#include <functional>
 #include <string>
 
 #include "config.hpp"
@@ -13,5 +14,9 @@ std::string requestIdFromRequest(const drogon::HttpRequestPtr& req);
 std::string resolveUserId(const drogon::HttpRequestPtr& req, const Config& conf);
 Json::Value botToJson(const QuizCoreBot& bot);
 drogon::HttpResponsePtr notImplemented(const std::string& endpoint);
+bool RequireCsrf(const drogon::HttpRequestPtr& req,
+                 const Config& conf,
+                 const std::function<void(const drogon::HttpResponsePtr&)>& cb);
+drogon::HttpResponsePtr CsrfTokenResponse(const Config& conf);
 
 }  // namespace controllers
