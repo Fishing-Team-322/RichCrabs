@@ -64,36 +64,28 @@ impl QuizServiceImpl {
             .collect())
     }
 
-    fn validate_questions(questions: &[proto::richcrab::v1::QuizQuestion]) -> Result<(), Status> {
+    fn validate_questions(questions: &[proto::richcrab::v1::QuizQuestion]) -> Result<(), String> {
         if questions.is_empty() {
-            return Err(Status::invalid_argument(
-                "quiz must contain at least one question",
-            ));
+            return Err("quiz must contain at least one question".to_string());
         }
 
         for (idx, q) in questions.iter().enumerate() {
             if q.text.trim().is_empty() {
-                return Err(Status::invalid_argument(format!(
-                    "question[{idx}] text must not be empty"
-                )));
+                return Err(format!("question[{idx}] text must not be empty"));
             }
             if q.options.len() < 2 {
-                return Err(Status::invalid_argument(format!(
-                    "question[{idx}] must contain at least two options"
-                )));
+                return Err(format!("question[{idx}] must contain at least two options"));
             }
             for (opt_idx, option) in q.options.iter().enumerate() {
                 if option.trim().is_empty() {
-                    return Err(Status::invalid_argument(format!(
+                    return Err(format!(
                         "question[{idx}] option[{opt_idx}] must not be empty"
-                    )));
+                    ));
                 }
             }
             if let Some(correct_idx) = q.correct_option_index {
                 if (correct_idx as usize) >= q.options.len() {
-                    return Err(Status::invalid_argument(format!(
-                        "question[{idx}] has invalid correct_option_index"
-                    )));
+                    return Err(format!("question[{idx}] has invalid correct_option_index"));
                 }
             }
         }
@@ -231,7 +223,7 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
         if questions.is_empty() {
             questions = self.fallback_questions.clone();
         }
-        Self::validate_questions(&questions)?;
+        Self::validate_questions(&questions).map_err(Status::invalid_argument)?;
 
         let now = Utc::now();
         let quiz = Quiz {
@@ -326,7 +318,7 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
         let parsed_id =
             Uuid::parse_str(&id).map_err(|_| Status::invalid_argument("quiz_id must be uuid"))?;
 
-        Self::validate_questions(&quiz.questions)?;
+        Self::validate_questions(&quiz.questions).map_err(Status::invalid_argument)?;
 
         let existing = self
             .repository
