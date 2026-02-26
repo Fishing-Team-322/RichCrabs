@@ -264,7 +264,6 @@ std::optional<ConnSession> SessionForConn(const drogon::WebSocketConnectionPtr& 
 void WsGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
                                     const drogon::WebSocketConnectionPtr& conn) {
   auto conf = Config::LoadFromEnv();
-  conf.session.cookie_name = "QB-SESSION";
 
   auto claims = security::VerifySessionFromRequest(req, conf.session);
   if (!claims || claims->room_id.empty()) {

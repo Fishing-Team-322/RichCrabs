@@ -54,4 +54,23 @@ drogon::HttpResponsePtr notImplemented(const std::string& endpoint) {
   return api::jsonErrorResponse(501, api::ErrorCode::kNotImplemented, endpoint + " is not implemented");
 }
 
+
+bool RequireCsrf(const drogon::HttpRequestPtr& req,
+                 const Config& conf,
+                 const std::function<void(const drogon::HttpResponsePtr&)>& cb) {
+  if (security::VerifyCsrf(req, conf.csrf)) return true;
+  cb(api::jsonErrorResponse(403, api::ErrorCode::kCsrfRequired, "csrf token mismatch"));
+  return false;
+}
+
+drogon::HttpResponsePtr CsrfTokenResponse(const Config& conf) {
+  const auto token = security::IssueCsrfToken();
+  Json::Value body;
+  body["token"] = token;
+
+  auto response = drogon::HttpResponse::newHttpJsonResponse(body);
+  security::SetCsrfCookie(response, conf.csrf, token);
+  return response;
+}
+
 }  // namespace controllers

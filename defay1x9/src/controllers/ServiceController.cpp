@@ -101,29 +101,19 @@ void RegisterServiceRoutes(const Config& conf, QuizCoreClient& quizCore) {
   drogon::app().registerHandler(
       "/csrf",
       [conf](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
-        const auto token = security::IssueCsrfToken();
-        Json::Value body;
-        body["token"] = token;
-
-        auto response = drogon::HttpResponse::newHttpJsonResponse(body);
-        security::SetCsrfCookie(response, conf.csrf, token);
-        cb(response);
+        cb(CsrfTokenResponse(conf));
       },
       {drogon::Get});
 
   drogon::app().registerHandler(
       "/logout",
       [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
-        if (!security::VerifyCsrf(req, conf.csrf)) {
-          cb(api::jsonErrorResponse(403, api::ErrorCode::kCsrfRequired, "csrf token mismatch"));
-          return;
-        }
+        if (!RequireCsrf(req, conf, cb)) return;
 
-        Json::Value body;
-        body["ok"] = true;
-
-        auto response = drogon::HttpResponse::newHttpJsonResponse(body);
+        auto response = drogon::HttpResponse::newHttpResponse();
+        response->setStatusCode(drogon::k204NoContent);
         security::ClearSessionCookie(response, conf.session);
+        security::ClearCsrfCookie(response, conf.csrf);
         cb(response);
       },
       {drogon::Post});

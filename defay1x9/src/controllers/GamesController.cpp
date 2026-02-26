@@ -14,6 +14,8 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
   drogon::app().registerHandler(
       "/api/v1/games",
       [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+        if (!RequireCsrf(req, conf, cb)) return;
+
         std::string parseError;
         auto body = api::parseJsonBody(req, parseError);
         if (!body) {
@@ -76,6 +78,8 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
       [&quizCore, conf](const drogon::HttpRequestPtr& req,
                         std::function<void(const drogon::HttpResponsePtr&)>&& cb,
                         std::string pin) {
+        if (!RequireCsrf(req, conf, cb)) return;
+
         std::string parseError;
         auto body = api::parseJsonBody(req, parseError);
         if (!body) {
@@ -130,6 +134,8 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
       [&quizCore, conf](const drogon::HttpRequestPtr& req,
                         std::function<void(const drogon::HttpResponsePtr&)>&& cb,
                         std::string inviteToken) {
+        if (!RequireCsrf(req, conf, cb)) return;
+
         std::string parseError;
         auto body = api::parseJsonBody(req, parseError);
         if (!body) {
@@ -192,10 +198,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
           cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "only host can start game"));
           return;
         }
-        if (!security::VerifyCsrf(req, conf.csrf)) {
-          cb(api::jsonErrorResponse(403, api::ErrorCode::kCsrfRequired, "csrf token mismatch"));
-          return;
-        }
+        if (!RequireCsrf(req, conf, cb)) return;
         if (session->room_id.empty()) {
           cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "room_id is not present in session"));
           return;
@@ -251,14 +254,16 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
 
   drogon::app().registerHandler(
       "/api/v1/games/{1}/leave",
-      [](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string) {
+      [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string) {
+        if (!RequireCsrf(req, conf, cb)) return;
         cb(notImplemented("POST /api/v1/games/{pin}/leave"));
       },
       {drogon::Post});
 
   drogon::app().registerHandler(
       "/api/v1/games/{1}/kick",
-      [](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string) {
+      [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string) {
+        if (!RequireCsrf(req, conf, cb)) return;
         cb(notImplemented("POST /api/v1/games/{pin}/kick"));
       },
       {drogon::Post});

@@ -538,13 +538,8 @@ paths:
         - sessionCookie: []
         - csrfHeader: []
       responses:
-        '200':
-          description: Logged out
-          content:
-            application/json:
-              examples:
-                ok:
-                  value: { ok: true }
+        '204':
+          description: Logged out and cookies cleared
         '403':
           description: CSRF token mismatch
           content:
@@ -675,8 +670,8 @@ paths:
         - sessionCookie: []
         - csrfHeader: []
       responses:
-        '200':
-          description: Logged out
+        '204':
+          description: Logged out and cookies cleared
 
   /api/v1/auth/csrf:
     get:

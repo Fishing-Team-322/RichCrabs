@@ -11,6 +11,8 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
   drogon::app().registerHandler(
       "/api/v1/bots",
       [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+        if (!RequireCsrf(req, conf, cb)) return;
+
         std::string parseError;
         auto body = api::parseJsonBody(req, parseError);
         if (!body) {
@@ -28,7 +30,6 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
           cb(response);
           return;
         }
-
         const auto requestId = requestIdFromRequest(req);
         auto result = quizCore.registerBot(resolveUserId(req, conf), *name, *version, *endpoint, requestId);
         if (!result.bot) {
@@ -80,7 +81,8 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
 
   drogon::app().registerHandler(
       "/api/v1/bots/{1}",
-      [](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string) {
+      [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string) {
+        if (!RequireCsrf(req, conf, cb)) return;
         cb(notImplemented("PATCH /api/v1/bots/{botId}"));
       },
       {drogon::Patch});
@@ -90,6 +92,8 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
       [&quizCore, conf](const drogon::HttpRequestPtr& req,
                         std::function<void(const drogon::HttpResponsePtr&)>&& cb,
                         std::string botId) {
+        if (!RequireCsrf(req, conf, cb)) return;
+
         const auto requestId = requestIdFromRequest(req);
         auto result = quizCore.removeBot(resolveUserId(req, conf), botId, requestId);
         if (result.status != QuizCoreRpcStatus::kOk) {

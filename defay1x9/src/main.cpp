@@ -34,7 +34,7 @@ int main() {
   controllers::RegisterProfileRoutes(conf);
   controllers::RegisterGamesRoutes(conf, quizCore);
   controllers::RegisterBotsRoutes(conf, quizCore);
-  controllers::RegisterAdminRoutes();
+  controllers::RegisterAdminRoutes(conf);
 
   drogon::app().addListener(conf.listen_host, conf.listen_port).run();
   return 0;
