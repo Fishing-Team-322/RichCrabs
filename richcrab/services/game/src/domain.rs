@@ -30,6 +30,7 @@ pub struct Team {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Player {
     pub player_id: String,
     pub user_id: String,
@@ -47,6 +48,7 @@ pub struct GameQuestion {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct QuestionRound {
     pub question_index: usize,
     pub question_id: String,
@@ -59,12 +61,14 @@ pub struct QuestionRound {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RoundTimer {
     pub started_at: DateTime<Utc>,
     pub duration_secs: u32,
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct GameResult {
     pub winner_player_id: Option<String>,
     pub winner_team_id: Option<String>,
