@@ -24,30 +24,25 @@ export function mockSecurityOverview(): SecurityOverview {
     wsQueueDrops: rnd(0, 8),
   };
 }
-
 export function mockSecurityEvents(limit = 40): SecurityEventsResponse {
-  const events: SecurityEvent[] = Array.from({ length: limit }).map((_, i) => {
-    const type = sample(TYPES);
-    const severity = sample(["low", "med", "high"] as const);
+  const type = sample(TYPES);
+  const severity = sample(['low', 'med', 'high'] as const);
+  return Array.from({ length: limit }).map(() => {
     return {
-      ts: isoNowMinusSec(rnd(5, 300)),
       type,
       severity,
-      roomId: sample([undefined, "RM-1001-42", "RM-1003-19", "RM-1010-88"]),
-      ip: sample([undefined, "10.0.0.12", "10.0.1.5", "192.168.0.22"]),
-      deviceKey: sample([undefined, "devk_8f12", "devk_19aa", "devk_zz31"]),
-      message:
-        type === "rate_limit"
-          ? "Join throttled (too many attempts)"
-          : type === "invalid_ticket"
-          ? "Join ticket invalid/expired"
-          : type === "replay"
-          ? "Replay attempt (ticket already used)"
-          : type === "suspicious_burst"
-          ? "Burst join pattern detected"
-          : "WS outbound queue drop (backpressure)",
+      roomid: sample([undefined, 'RM-1001-42', 'RM-1003-19', 'RM-1010-88']) as string | undefined,
+      deviceKey: sample([undefined, 'devk_8f12', 'devk_19ad', 'devk_z231']) as string | undefined,
+      message: sample([
+        'Join throttled (too many attempts)',
+        'Invalid ticket',
+        'Replay attempt (ticket already used)',
+        'Suspicious burst join pattern detected',
+        'WS outbound queue drop (backpressure)',
+      ]) as string,
     };
   });
+}
 
   // сортируем по времени, свежие сверху
   events.sort((a, b) => (a.ts < b.ts ? 1 : -1));

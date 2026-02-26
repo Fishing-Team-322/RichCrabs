@@ -1,7 +1,6 @@
 {
-  "name": "quizbattle-react",
+  "name": "quizultimate-react",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,12 +11,12 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0",
-    "socket.io-client": "^4.7.2"
+    "socket.io-client": "^4.2.1"
   },
   "devDependencies": {
-    "@types/react": "^18.2.43",
-    "@types/react-dom": "^18.2.17",
+    "@types/react": "^19.2.14",
     "@vitejs/plugin-react": "^4.2.1",
-    "vite": "^5.0.8"
+    "typescript": "^4.9.4",
+    "vite": "^5.0.0"
   }
 }

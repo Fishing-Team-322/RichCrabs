@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from 'react';
 import { IconX } from "./Icons";
 
 export function TokenModal(props: {
