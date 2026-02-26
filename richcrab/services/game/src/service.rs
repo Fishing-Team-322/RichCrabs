@@ -283,7 +283,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         request: Request<proto::richcrab::v1::SubmitAnswerRequest>,
     ) -> Result<Response<proto::richcrab::v1::SubmitAnswerResponse>, Status> {
         let req = request.into_inner();
-        info!(request_id = %uuid::Uuid::new_v4(), room_id = req.room_id.as_ref().map(|v| v.value.as_str()).unwrap_or(""), user_id = req.player_id.as_ref().map(|v| v.value.as_str()).unwrap_or(""), bot_id = "", "submit_answer");
+        info!(request_id = %uuid::Uuid::new_v4(), room_id = req.room_id.as_ref().map(|v| v.value.as_str()).unwrap_or(""), user_id = "", bot_id = "", "submit_answer");
         let room_id = req
             .room_id
             .map(|v| v.value)
@@ -303,14 +303,9 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         let state = state_rx
             .await
             .map_err(|_| Status::internal("room actor response dropped"))?;
-        let user_id = state
-            .players
-            .get(&player_id)
-            .map(|p| p.user_id.clone())
-            .ok_or_else(|| Status::not_found("player not found"))?;
-
-        self.check_entitlement(&user_id, "game.submit_answer")
-            .await?;
+        if !state.players.contains_key(&player_id) {
+            return Err(Status::not_found("player not found"));
+        }
 
         let (tx, rx) = oneshot::channel();
         room.tx
