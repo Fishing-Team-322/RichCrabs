@@ -1,0 +1,7 @@
+* text=auto
+
+# Runtime scripts must stay Unix-compatible for Alpine images
+*.sh text eol=lf
+
+# SQL files are mounted into Linux containers during init
+*.sql text eol=lf
