@@ -1,9 +1,22 @@
 openapi: 3.1.0
 info:
   title: QuizBattle Gateway API
-  version: 0.1.0
+  version: 0.2.0
+  description: Drogon gateway contract for RichCrabs Rust gRPC services.
 servers:
   - url: http://localhost:8080
+
+tags:
+  - name: Auth / Session
+    description: Session and CSRF operations.
+  - name: Games
+    description: Create and start game sessions.
+  - name: Rooms / Invites
+    description: Join flows by PIN or invite.
+  - name: Bots
+    description: Bot integration management endpoints.
+  - name: System
+    description: Gateway health and docs endpoints.
 
 components:
   securitySchemes:
@@ -12,6 +25,27 @@ components:
       in: cookie
       name: QB-SESSION
   schemas:
+    ErrorResponse:
+      type: object
+      required: [error, details]
+      properties:
+        error:
+          type: string
+        details:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                $ref: '#/components/schemas/ValidationIssue'
+    ValidationIssue:
+      type: object
+      required: [field, reason]
+      properties:
+        field:
+          type: string
+        reason:
+          type: string
+          enum: [required, type_mismatch, invalid_uuid, invalid_enum]
     JoinRequest:
       type: object
       required: [name]
@@ -20,29 +54,58 @@ components:
           type: string
           minLength: 1
           maxLength: 32
+        displayName:
+          type: string
+          deprecated: true
+          description: Deprecated alias for backward compatibility.
     CreateGameRequest:
       type: object
       required: [ownerUserId, quizId, title]
       properties:
-        ownerUserId: { type: string, minLength: 1, maxLength: 120 }
-        quizId: { type: string, minLength: 1, maxLength: 120 }
-        title: { type: string, minLength: 1, maxLength: 200 }
+        ownerUserId:
+          type: string
+          format: uuid
+        quizId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        roomTitle:
+          type: string
+          deprecated: true
+          description: Deprecated alias for backward compatibility.
     CreateGameResponse:
       type: object
       required: [pin, inviteToken, inviteUrl, wsUrl]
       properties:
-        pin: { type: string, pattern: "^[A-Z0-9]{6}$" }
-        inviteToken: { type: string }
-        inviteUrl: { type: string }
-        wsUrl: { type: string }
+        pin:
+          type: string
+          pattern: "^[A-Z0-9]{6}$"
+        inviteToken:
+          type: string
+        inviteUrl:
+          type: string
+        wsUrl:
+          type: string
     JoinResponse:
       type: object
       required: [playerId, team, role, wsUrl]
       properties:
-        playerId: { type: string }
-        team: { type: string, enum: [A, B] }
-        role: { type: string, enum: [player] }
-        wsUrl: { type: string }
+        playerId:
+          type: string
+        team:
+          type: string
+          enum: [A, B]
+        role:
+          type: string
+          enum: [player]
+        wsUrl:
+          type: string
+        csrfToken:
+          type: string
     RegisterBotRequest:
       type: object
       required: [name, version, endpoint]
@@ -85,42 +148,126 @@ components:
 paths:
   /health:
     get:
-      summary: Healthcheck
+      tags: [System]
+      summary: Gateway health check.
+      description: Returns gateway status and optionally gRPC dependency health.
       responses:
-        "200": { description: OK }
+        "200":
+          description: Healthy.
+          content:
+            application/json:
+              examples:
+                ok:
+                  value:
+                    status: ok
+                    gateway: ok
+                    requestId: 0123456789abcdef0123456789abcdef
+        "503":
+          description: Degraded when grpc=true and upstream is down.
 
   /openapi.yaml:
     get:
-      summary: OpenAPI schema
+      tags: [System]
+      summary: OpenAPI document.
+      description: Serves the gateway API contract.
       responses:
-        "200": { description: OK }
+        "200": { description: OpenAPI YAML }
 
   /docs:
     get:
-      summary: Swagger UI
+      tags: [System]
+      summary: Swagger UI page.
+      description: Interactive API documentation.
       responses:
-        "200": { description: OK }
+        "200": { description: HTML page }
+
+  /csrf:
+    get:
+      tags: [Auth / Session]
+      summary: Issue CSRF token.
+      description: Returns token and sets XSRF-TOKEN cookie.
+      responses:
+        "200":
+          description: Token issued.
+          content:
+            application/json:
+              examples:
+                csrf:
+                  value:
+                    token: csrf-token
+
+  /me:
+    get:
+      tags: [Auth / Session]
+      summary: Session debug profile.
+      description: Returns claims extracted from current session.
+      responses:
+        "200": { description: Session data }
+        "401":
+          description: Missing session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /logout:
+    post:
+      tags: [Auth / Session]
+      summary: Logout current session.
+      description: Clears session cookie and requires CSRF header.
+      responses:
+        "200":
+          description: Logged out.
+          content:
+            application/json:
+              examples:
+                ok:
+                  value:
+                    ok: true
 
   /api/v1/games:
     post:
-      summary: Create game room and host session
+      tags: [Games]
+      summary: Create game room and host session.
+      description: Creates room, returns invite data, sets host session cookie.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateGameRequest'
+            examples:
+              create:
+                value:
+                  ownerUserId: 00000000-0000-0000-0000-000000000001
+                  quizId: demo-quiz
+                  title: Friday Quiz
       responses:
         "200":
-          description: Created
+          description: Room created.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreateGameResponse'
+              examples:
+                created:
+                  value:
+                    pin: ABC123
+                    inviteToken: token123
+                    inviteUrl: http://localhost:8080/invite/token123
+                    wsUrl: http://localhost:8080/ws
+        "400":
+          description: Invalid JSON or validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/games/{pin}/join:
     post:
-      summary: Join by PIN
+      tags: [Rooms / Invites]
+      summary: Join by PIN.
+      description: Issues join ticket and authenticates player session.
       parameters:
         - name: pin
           in: path
@@ -132,17 +279,31 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/JoinRequest'
+            examples:
+              byPin:
+                value:
+                  name: Alice
       responses:
         "200":
-          description: Joined
+          description: Joined.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JoinResponse'
+              examples:
+                joined:
+                  value:
+                    playerId: 123e4567-e89b-12d3-a456-426614174000
+                    team: A
+                    role: player
+                    wsUrl: http://localhost:8080/ws
+                    csrfToken: csrf-token
 
   /api/v1/invites/{inviteToken}/join:
     post:
-      summary: Join by invite token
+      tags: [Rooms / Invites]
+      summary: Join by invite token.
+      description: Joins game using invite token and player name.
       parameters:
         - name: inviteToken
           in: path
@@ -154,9 +315,13 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/JoinRequest'
+            examples:
+              byInvite:
+                value:
+                  name: Bob
       responses:
         "200":
-          description: Joined
+          description: Joined.
           content:
             application/json:
               schema:
@@ -164,7 +329,9 @@ paths:
 
   /api/v1/games/{pin}/start:
     post:
-      summary: Start game (host only)
+      tags: [Games]
+      summary: Start game.
+      description: Host-only operation protected by session and CSRF token.
       security:
         - cookieAuth: []
       parameters:
@@ -174,42 +341,67 @@ paths:
           schema: { type: string, pattern: "^[A-Z0-9]{6}$" }
       responses:
         "204": { description: Started }
+        "403":
+          description: Forbidden (host-only or CSRF mismatch).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/bots:
     post:
-      summary: Register bot
+      tags: [Bots]
+      summary: Register bot.
+      description: Registers a bot endpoint for current user.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RegisterBotRequest'
+            examples:
+              register:
+                value:
+                  name: Demo Bot
+                  version: 1.0.0
+                  endpoint: https://bot.example.com/webhook
       responses:
         "200":
-          description: Bot registered
+          description: Bot registered.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisterBotResponse'
-        "400": { description: Invalid argument }
-        "403": { description: Permission denied }
-        "409": { description: Failed precondition }
-        "503": { description: Bot service unavailable }
+              examples:
+                registered:
+                  value:
+                    bot:
+                      botId: bot_1
+                      name: Demo Bot
+                      version: 1.0.0
+                      status: active
+                      registeredAt: 1730000000
     get:
-      summary: List bots
+      tags: [Bots]
+      summary: List bots.
+      description: Returns all bots available to current user.
       responses:
         "200":
-          description: Bots list
+          description: Bots list.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListBotsResponse'
-        "403": { description: Permission denied }
-        "503": { description: Bot service unavailable }
+              examples:
+                list:
+                  value:
+                    bots: []
 
   /api/v1/bots/{botId}:
     get:
-      summary: Get bot status
+      tags: [Bots]
+      summary: Get bot status.
+      description: Returns details for one bot.
       parameters:
         - name: botId
           in: path
@@ -217,17 +409,24 @@ paths:
           schema: { type: string, minLength: 1 }
       responses:
         "200":
-          description: Bot details
+          description: Bot details.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/GetBotResponse'
-        "400": { description: Invalid argument }
-        "403": { description: Permission denied }
-        "409": { description: Failed precondition }
-        "503": { description: Bot service unavailable }
+              examples:
+                bot:
+                  value:
+                    bot:
+                      botId: bot_1
+                      name: Demo Bot
+                      version: 1.0.0
+                      status: active
+                      registeredAt: 1730000000
     delete:
-      summary: Remove bot
+      tags: [Bots]
+      summary: Remove bot.
+      description: Deletes bot registration.
       parameters:
         - name: botId
           in: path
@@ -235,7 +434,3 @@ paths:
           schema: { type: string, minLength: 1 }
       responses:
         "204": { description: Bot removed }
-        "400": { description: Invalid argument }
-        "403": { description: Permission denied }
-        "409": { description: Failed precondition }
-        "503": { description: Bot service unavailable }

@@ -43,7 +43,9 @@ QuizCoreRpcStatus mapStatus(const grpc::Status& status) {
   switch (status.error_code()) {
     case grpc::StatusCode::PERMISSION_DENIED: return QuizCoreRpcStatus::kPermissionDenied;
     case grpc::StatusCode::INVALID_ARGUMENT: return QuizCoreRpcStatus::kInvalidArgument;
+    case grpc::StatusCode::NOT_FOUND: return QuizCoreRpcStatus::kNotFound;
     case grpc::StatusCode::FAILED_PRECONDITION: return QuizCoreRpcStatus::kFailedPrecondition;
+    case grpc::StatusCode::DEADLINE_EXCEEDED: return QuizCoreRpcStatus::kDeadlineExceeded;
     case grpc::StatusCode::UNAVAILABLE: return QuizCoreRpcStatus::kUnavailable;
     default: return QuizCoreRpcStatus::kUnknown;
   }
@@ -137,9 +139,11 @@ std::optional<QuizCoreCreateRoomResult> QuizCoreClientGrpc::createRoom(const std
 
   CreateRoomResponse resp;
   const auto status = impl_->game->CreateRoom(&ctx, req, &resp);
-  if (!status.ok() || resp.has_error()) return std::nullopt;
-
   QuizCoreCreateRoomResult out;
+  out.status = mapStatus(status);
+  if (!status.ok() || resp.has_error()) return out;
+
+  out.status = QuizCoreRpcStatus::kOk;
   out.room_id = resp.room_id().value();
   out.pin = resp.pin();
   out.invite_token = resp.invite_token();
@@ -159,7 +163,11 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByPin(const st
 
   IssueJoinTicketResponse ticketResp;
   const auto ticketStatus = impl_->join->IssueJoinTicketByPin(&ticketCtx, ticketReq, &ticketResp);
-  if (!ticketStatus.ok() || ticketResp.has_error() || !ticketResp.has_ticket()) return std::nullopt;
+  if (!ticketStatus.ok() || ticketResp.has_error() || !ticketResp.has_ticket()) {
+    QuizCoreJoinRoomResult out;
+    out.status = mapStatus(ticketStatus);
+    return out;
+  }
 
   grpc::ClientContext joinCtx;
   attachRequestId(joinCtx, requestId);
@@ -170,9 +178,11 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByPin(const st
 
   JoinRoomResponse joinResp;
   const auto joinStatus = impl_->game->JoinRoom(&joinCtx, joinReq, &joinResp);
-  if (!joinStatus.ok() || joinResp.has_error()) return std::nullopt;
-
   QuizCoreJoinRoomResult out;
+  out.status = mapStatus(joinStatus);
+  if (!joinStatus.ok() || joinResp.has_error()) return out;
+
+  out.status = QuizCoreRpcStatus::kOk;
   out.room_id = ticketResp.ticket().room_id().value();
   out.join_ticket = ticketResp.ticket().token();
   out.player_id = joinResp.player_id().value();
@@ -192,7 +202,11 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByInvite(const
 
   IssueJoinTicketResponse ticketResp;
   const auto ticketStatus = impl_->join->IssueJoinTicketByInvite(&ticketCtx, ticketReq, &ticketResp);
-  if (!ticketStatus.ok() || ticketResp.has_error() || !ticketResp.has_ticket()) return std::nullopt;
+  if (!ticketStatus.ok() || ticketResp.has_error() || !ticketResp.has_ticket()) {
+    QuizCoreJoinRoomResult out;
+    out.status = mapStatus(ticketStatus);
+    return out;
+  }
 
   grpc::ClientContext joinCtx;
   attachRequestId(joinCtx, requestId);
@@ -203,9 +217,11 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByInvite(const
 
   JoinRoomResponse joinResp;
   const auto joinStatus = impl_->game->JoinRoom(&joinCtx, joinReq, &joinResp);
-  if (!joinStatus.ok() || joinResp.has_error()) return std::nullopt;
-
   QuizCoreJoinRoomResult out;
+  out.status = mapStatus(joinStatus);
+  if (!joinStatus.ok() || joinResp.has_error()) return out;
+
+  out.status = QuizCoreRpcStatus::kOk;
   out.room_id = ticketResp.ticket().room_id().value();
   out.join_ticket = ticketResp.ticket().token();
   out.player_id = joinResp.player_id().value();

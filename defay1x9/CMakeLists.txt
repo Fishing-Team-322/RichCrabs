@@ -54,6 +54,7 @@ add_executable(defay1x9
   src/ws_gateway.cpp
   src/csrf.cpp
   src/session.cpp
+  src/http_api_utils.cpp
   ${PROTO_SRCS}
   ${GRPC_SRCS}
   ${GRPC_HDRS}
