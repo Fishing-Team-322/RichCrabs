@@ -47,3 +47,24 @@ docker compose logs -f
 # остановить
 docker compose down
 ```
+
+## Запуск фронтенда (обновляйте этот раздел при изменениях)
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Frontend будет доступен на `http://localhost:5173`.
+
+Дополнительно:
+
+```bash
+# production build
+cd frontend
+npm run build
+
+# локальный предпросмотр production-сборки
+npm run preview
+```
