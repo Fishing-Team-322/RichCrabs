@@ -111,11 +111,40 @@ void EnqueueRoomMessage(const std::shared_ptr<RoomHubEntry>& entry, std::string 
   entry->cv.notify_one();
 }
 
-void BroadcastError(const std::shared_ptr<RoomHubEntry>& entry, const std::string& err) {
+Json::Value EncodeWsError(const std::string& error,
+                         const std::string& message,
+                         const std::optional<Json::Value>& details = std::nullopt) {
   Json::Value j;
-  j["type"] = "error";
-  j["error"] = err;
-  EnqueueRoomMessage(entry, JsonString(j));
+  j["type"] = WsGateway::Protocol::kServerError;
+  j["error"] = error;
+  j["message"] = message;
+  if (details.has_value()) j["details"] = *details;
+  return j;
+}
+
+std::string EncodeRoomEvent(const RoomEvent& event) {
+  std::string eventJson;
+  google::protobuf::util::MessageToJsonString(event, &eventJson);
+
+  Json::Value wrapped;
+  wrapped["type"] = WsGateway::Protocol::kServerRoomEvent;
+  Json::Value parsedEvent;
+  Json::CharReaderBuilder b;
+  std::string errs;
+  std::istringstream iss(eventJson);
+  if (Json::parseFromStream(b, iss, &parsedEvent, &errs)) {
+    wrapped["event"] = parsedEvent;
+  } else {
+    wrapped["event_raw"] = eventJson;
+  }
+  return JsonString(wrapped);
+}
+
+void BroadcastError(const std::shared_ptr<RoomHubEntry>& entry,
+                    const std::string& error,
+                    const std::string& message,
+                    const std::optional<Json::Value>& details = std::nullopt) {
+  EnqueueRoomMessage(entry, JsonString(EncodeWsError(error, message, details)));
 }
 
 void RunDispatchLoop(const std::shared_ptr<RoomHubEntry>& entry) {
@@ -135,7 +164,42 @@ void RunDispatchLoop(const std::shared_ptr<RoomHubEntry>& entry) {
   }
 }
 
+
+bool RunMockStreamLoop(const std::shared_ptr<RoomHubEntry>& entry, const std::string& reason) {
+  spdlog::warn("ws mock stream enabled for room_id={} reason={}", entry->room_id, reason);
+
+  for (int seq = 1; seq <= 3; ++seq) {
+    {
+      std::lock_guard<std::mutex> lock(entry->mu);
+      if (entry->stream_stop) return true;
+    }
+
+    Json::Value payload;
+    payload["kind"] = "mock_event";
+    payload["room_id"] = entry->room_id;
+    payload["sequence"] = seq;
+    payload["reason"] = reason;
+
+    Json::Value wrapped;
+    wrapped["type"] = WsGateway::Protocol::kServerRoomEvent;
+    wrapped["event"] = payload;
+    EnqueueRoomMessage(entry, JsonString(wrapped));
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+  }
+
+  return true;
+}
+
 void RunStreamLoop(const std::shared_ptr<RoomHubEntry>& entry) {
+  const auto conf = Config::LoadFromEnv();
+
+  if (conf.ws_mock_stream_enabled) {
+    RunMockStreamLoop(entry, "forced_by_config");
+    std::lock_guard<std::mutex> lock(entry->mu);
+    entry->stream_finished = true;
+    return;
+  }
+
   for (int attempt = 1; attempt <= kStreamMaxRetries; ++attempt) {
     {
       std::lock_guard<std::mutex> lock(entry->mu);
@@ -156,22 +220,7 @@ void RunStreamLoop(const std::shared_ptr<RoomHubEntry>& entry) {
     auto reader = entry->game_stub->SubscribeRoomEvents(&ctx, req);
     RoomEvent event;
     while (reader->Read(&event)) {
-      std::string eventJson;
-      google::protobuf::util::MessageToJsonString(event, &eventJson);
-
-      Json::Value wrapped;
-      wrapped["type"] = "room_event";
-      Json::Value parsedEvent;
-      Json::CharReaderBuilder b;
-      std::string errs;
-      std::istringstream iss(eventJson);
-      if (Json::parseFromStream(b, iss, &parsedEvent, &errs)) {
-        wrapped["event"] = parsedEvent;
-      } else {
-        wrapped["event_raw"] = eventJson;
-      }
-
-      EnqueueRoomMessage(entry, JsonString(wrapped));
+      EnqueueRoomMessage(entry, EncodeRoomEvent(event));
 
       std::lock_guard<std::mutex> lock(entry->mu);
       if (entry->stream_stop) {
@@ -187,11 +236,26 @@ void RunStreamLoop(const std::shared_ptr<RoomHubEntry>& entry) {
     }
 
     if (status.ok()) {
-      BroadcastError(entry, "room_event_stream_closed");
-    } else {
       BroadcastError(entry,
-                     "room_event_stream_failed: " + status.error_message() +
-                         " (attempt " + std::to_string(attempt) + "/" + std::to_string(kStreamMaxRetries) + ")");
+                     "room_event_stream_closed",
+                     "room events stream closed by upstream");
+    } else {
+      Json::Value details;
+      details["grpc_code"] = status.error_code();
+      details["grpc_message"] = status.error_message();
+      details["attempt"] = attempt;
+      details["max_attempts"] = kStreamMaxRetries;
+
+      const bool grpcUnavailable = status.error_code() == grpc::StatusCode::UNAVAILABLE;
+      if (grpcUnavailable && conf.ws_mock_stream_auto_on_unavailable) {
+        RunMockStreamLoop(entry, "grpc_unavailable");
+        break;
+      }
+
+      BroadcastError(entry,
+                     "room_event_stream_failed",
+                     "failed to subscribe room events stream",
+                     details);
     }
 
     if (attempt < kStreamMaxRetries) {
@@ -245,11 +309,27 @@ void StopRoomIfEmpty(const std::string& room_id) {
   if (entry->dispatch_thread.joinable()) entry->dispatch_thread.join();
 }
 
-void SendError(const drogon::WebSocketConnectionPtr& conn, const std::string& err) {
-  Json::Value j;
-  j["type"] = "error";
-  j["error"] = err;
-  conn->send(JsonString(j));
+void SendError(const drogon::WebSocketConnectionPtr& conn,
+               const std::string& error,
+               const std::string& message,
+               const std::optional<Json::Value>& details = std::nullopt) {
+  conn->send(JsonString(EncodeWsError(error, message, details)));
+}
+
+
+void SendRpcFailure(const drogon::WebSocketConnectionPtr& conn,
+                    const std::string& error,
+                    const std::string& message,
+                    const grpc::Status& status,
+                    bool hasUpstreamError) {
+  Json::Value details;
+  details["grpc_ok"] = status.ok();
+  if (!status.ok()) {
+    details["grpc_code"] = status.error_code();
+    details["grpc_message"] = status.error_message();
+  }
+  details["upstream_error"] = hasUpstreamError;
+  SendError(conn, error, message, details);
 }
 
 std::optional<ConnSession> SessionForConn(const drogon::WebSocketConnectionPtr& conn) {
@@ -264,7 +344,6 @@ std::optional<ConnSession> SessionForConn(const drogon::WebSocketConnectionPtr& 
 void WsGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
                                     const drogon::WebSocketConnectionPtr& conn) {
   auto conf = Config::LoadFromEnv();
-  conf.session.cookie_name = "QB-SESSION";
 
   auto claims = security::VerifySessionFromRequest(req, conf.session);
   if (!claims || claims->room_id.empty()) {
@@ -295,7 +374,7 @@ void WsGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
   EnsureRoomThreads(roomEntry);
 
   Json::Value hello;
-  hello["type"] = "hello";
+  hello["type"] = WsGateway::Protocol::kServerHello;
   hello["roomId"] = cs.room_id;
   hello["role"] = cs.role;
   conn->send(JsonString(hello));
@@ -308,7 +387,7 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
 
   auto connSession = SessionForConn(conn);
   if (!connSession) {
-    SendError(conn, "session_not_found");
+    SendError(conn, "session_not_found", "session for this websocket connection was not found");
     return;
   }
 
@@ -317,23 +396,25 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
   std::string errs;
   std::istringstream iss(message);
   if (!Json::parseFromStream(b, iss, &j, &errs)) {
-    SendError(conn, "invalid_json");
+    SendError(conn, "invalid_json", "payload is not valid json");
     return;
   }
 
   const std::string requestId = j.get("request_id", "").asString().empty() ? GenerateRequestId() : j.get("request_id", "").asString();
   const std::string t = j.get("type", "").asString();
-  if (t == "ping") {
-    conn->send(R"({"type":"pong"})");
+  if (t == WsGateway::Protocol::kClientPing) {
+    Json::Value out;
+    out["type"] = WsGateway::Protocol::kServerPong;
+    conn->send(JsonString(out));
     return;
   }
 
   auto channel = MakeChannel();
   auto gameStub = GameService::NewStub(channel);
 
-  if (t == "start_game") {
+  if (t == WsGateway::Protocol::kClientStartGame) {
     if (connSession->role != "host") {
-      SendError(conn, "forbidden_not_host");
+      SendError(conn, "forbidden_not_host", "only host can start game");
       return;
     }
 
@@ -347,27 +428,27 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
     spdlog::info("ws_start_game request_id={} pin=- room_id={} player_id=-", requestId, connSession->room_id);
     const auto status = gameStub->StartGame(&ctx, req, &resp);
     if (!status.ok() || resp.has_error()) {
-      SendError(conn, "start_game_failed");
+      SendRpcFailure(conn, "start_game_failed", "start_game rpc failed", status, resp.has_error());
       return;
     }
 
     Json::Value out;
-    out["type"] = "start_game_result";
+    out["type"] = WsGateway::Protocol::kServerStartGameResult;
     out["started"] = resp.started();
     conn->send(JsonString(out));
     return;
   }
 
-  if (t == "submit_answer") {
+  if (t == WsGateway::Protocol::kClientSubmitAnswer) {
     if (connSession->role != "player" || connSession->player_id.empty()) {
-      SendError(conn, "forbidden_not_player");
+      SendError(conn, "forbidden_not_player", "only player can submit answer");
       return;
     }
 
     const std::string questionId = j.get("question_id", "").asString();
     const std::string answer = j.get("answer", "").asString();
     if (questionId.empty() || answer.empty()) {
-      SendError(conn, "question_id_and_answer_required");
+      SendError(conn, "question_id_and_answer_required", "question_id and answer are required");
       return;
     }
 
@@ -383,19 +464,19 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
     spdlog::info("ws_submit_answer request_id={} pin=- room_id={} player_id={}", requestId, connSession->room_id, connSession->player_id);
     const auto status = gameStub->SubmitAnswer(&ctx, req, &resp);
     if (!status.ok() || resp.has_error()) {
-      SendError(conn, "submit_answer_failed");
+      SendRpcFailure(conn, "submit_answer_failed", "submit_answer rpc failed", status, resp.has_error());
       return;
     }
 
     Json::Value out;
-    out["type"] = "submit_answer_result";
+    out["type"] = WsGateway::Protocol::kServerSubmitAnswerResult;
     out["accepted"] = resp.accepted();
     out["score_delta"] = resp.score_delta();
     conn->send(JsonString(out));
     return;
   }
 
-  if (t == "get_state") {
+  if (t == WsGateway::Protocol::kClientGetState) {
     grpc::ClientContext ctx;
     AttachRequestId(ctx, requestId);
     GetRoomStateRequest req;
@@ -404,12 +485,12 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
     GetRoomStateResponse resp;
     const auto status = gameStub->GetRoomState(&ctx, req, &resp);
     if (!status.ok() || resp.has_error()) {
-      SendError(conn, "get_state_failed");
+      SendRpcFailure(conn, "get_state_failed", "get_state rpc failed", status, resp.has_error());
       return;
     }
 
     Json::Value out;
-    out["type"] = "room_state";
+    out["type"] = WsGateway::Protocol::kServerRoomState;
     out["room_id"] = resp.room_id().value();
     out["state"] = resp.state();
     Json::Value players(Json::arrayValue);
@@ -426,7 +507,7 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
     return;
   }
 
-  SendError(conn, "unsupported_message_type");
+  SendError(conn, "unsupported_message_type", "unsupported client message type");
 }
 
 void WsGateway::handleConnectionClosed(const drogon::WebSocketConnectionPtr& conn) {
