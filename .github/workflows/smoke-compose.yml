@@ -1,0 +1,56 @@
+name: Smoke (docker compose)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # каждый день в 03:00 UTC (можно убрать, если не нужно)
+    - cron: '0 3 * * *'
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install deps (jq)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Install websocat
+        run: cargo install --locked websocat
+
+      - name: Compose up (build)
+        run: docker compose up -d --build
+
+      - name: Wait gateway health
+        run: |
+          set -e
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8080/health >/dev/null; then
+              echo "gateway is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "gateway did not become healthy" >&2
+          docker compose ps
+          docker compose logs --no-color --tail=200 gateway
+          exit 1
+
+      - name: Run smoke scenario
+        run: bash defay1x9/scripts/smoke_scenario.sh
+
+      - name: Compose logs (on failure)
+        if: failure()
+        run: docker compose logs --no-color --tail=400
+
+      - name: Compose down
+        if: always()
+        run: docker compose down -v

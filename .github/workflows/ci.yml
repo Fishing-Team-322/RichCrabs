@@ -1,13 +1,20 @@
-name: richcrab-ci
+name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
-  workflow_dispatch:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  rust:
+    name: Rust (fmt/clippy/test)
     runs-on: ubuntu-latest
+
     services:
       postgres:
         image: postgres:16
@@ -15,7 +22,7 @@ jobs:
           POSTGRES_USER: richcrab
           POSTGRES_PASSWORD: richcrab
           POSTGRES_DB: richcrab
-        ports: ['5432:5432']
+        ports: ["5432:5432"]
         options: >-
           --health-cmd="pg_isready -U richcrab"
           --health-interval=10s
@@ -23,47 +30,106 @@ jobs:
           --health-retries=5
       redis:
         image: redis:7
-        ports: ['6379:6379']
+        ports: ["6379:6379"]
         options: >-
           --health-cmd="redis-cli ping"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+
     env:
       DATABASE_URL: postgres://richcrab:richcrab@localhost:5432/richcrab
       REDIS_URL: redis://localhost:6379
       ENCRYPTION_KEY: ci-encryption-key
       TELEGRAM_WEBHOOK_BASE_URL: http://localhost:8090
       LOG_LEVEL: info
+
       SERVICE_ADDR_GAME: 127.0.0.1:50051
       SERVICE_ADDR_JOIN: 127.0.0.1:50052
       SERVICE_ADDR_QUIZ: 127.0.0.1:50053
       SERVICE_ADDR_ENTITLEMENTS: 127.0.0.1:50054
       SERVICE_ADDR_BOT: 127.0.0.1:50055
       SERVICE_ADDR_BOT_INGRESS: 127.0.0.1:8090
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            richcrab -> target
+
       - name: Install sqlx-cli
-        run: cargo install sqlx-cli --no-default-features --features rustls,postgres
+        run: cargo install --locked sqlx-cli --no-default-features --features rustls,postgres
+
       - name: Run migrations
         run: sqlx migrate run --source richcrab/migrations
+
       - name: Format check
         run: cargo fmt --manifest-path richcrab/Cargo.toml --all -- --check
+
       - name: Clippy
         run: cargo clippy --manifest-path richcrab/Cargo.toml --workspace --all-targets -- -D warnings
-      - name: Unit + integration tests
+
+      - name: Tests
         run: cargo test --manifest-path richcrab/Cargo.toml --workspace --all-targets
-      - name: Smoke-load binary check
+
+      - name: Check smoke_load compiles
         run: cargo check --manifest-path richcrab/Cargo.toml -p smoke_load
 
+  admin_frontend:
+    name: Admin frontend (lint/build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: front_adm
 
-  load_test:
-    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: front_adm/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+  docker_build:
+    name: Docker build (gateway + rust-backend)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Run load test placeholder
-        run: cargo test --manifest-path richcrab/Cargo.toml -p smoke_load --test load_smoke -- --ignored
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build rust-backend image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/rust-backend.Dockerfile
+          push: false
+          tags: richcrabs/rust-backend:ci
+          cache-from: type=gha,scope=rust-backend
+          cache-to: type=gha,mode=max,scope=rust-backend
+
+      - name: Build gateway image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: defay1x9/Dockerfile
+          push: false
+          tags: richcrabs/gateway:ci
+          cache-from: type=gha,scope=gateway
+          cache-to: type=gha,mode=max,scope=gateway
