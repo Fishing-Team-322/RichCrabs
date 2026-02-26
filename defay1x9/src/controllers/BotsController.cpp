@@ -25,9 +25,7 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
         auto version = validator.requiredString("version");
         auto endpoint = validator.requiredString("endpoint");
         if (!validator.ok()) {
-          auto response = drogon::HttpResponse::newHttpJsonResponse(validator.errorResponse());
-          response->setStatusCode(drogon::k400BadRequest);
-          cb(response);
+          cb(api::validationErrorResponse(validator.issues()));
           return;
         }
         const auto requestId = requestIdFromRequest(req);

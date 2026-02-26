@@ -29,7 +29,30 @@ std::optional<std::string> JsonValidator::requiredUuid(const std::string& field,
   return readString(field, legacyField, true, true);
 }
 
+std::optional<std::string> JsonValidator::optionalString(const std::string& field,
+                                                         const std::string& legacyField) {
+  return readString(field, legacyField, false, false);
+}
+
+std::optional<std::string> JsonValidator::optionalUuid(const std::string& field,
+                                                       const std::string& legacyField) {
+  return readString(field, legacyField, false, true);
+}
+
+void JsonValidator::requireAtLeastOne(const std::vector<std::string>& fields, const std::string& reason) {
+  for (const auto& field : fields) {
+    if (body_.isMember(field)) return;
+  }
+  if (!fields.empty()) issues_.push_back({fields.front(), reason});
+}
+
+void JsonValidator::addIssue(const std::string& field, const std::string& reason) {
+  issues_.push_back({field, reason});
+}
+
 bool JsonValidator::ok() const { return issues_.empty(); }
+
+const std::vector<ValidationIssue>& JsonValidator::issues() const { return issues_; }
 
 Json::Value JsonValidator::errorResponse() const {
   Json::Value details(Json::arrayValue);

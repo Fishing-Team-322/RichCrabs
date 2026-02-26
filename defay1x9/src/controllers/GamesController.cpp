@@ -28,9 +28,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
         auto quizId = validator.requiredString("quizId");
         auto title = validator.requiredString("title", "roomTitle");
         if (!validator.ok()) {
-          auto response = drogon::HttpResponse::newHttpJsonResponse(validator.errorResponse());
-          response->setStatusCode(drogon::k400BadRequest);
-          cb(response);
+          cb(api::validationErrorResponse(validator.issues()));
           return;
         }
 
@@ -90,9 +88,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
         api::JsonValidator validator(*body);
         auto name = validator.requiredString("name", "displayName");
         if (!validator.ok()) {
-          auto response = drogon::HttpResponse::newHttpJsonResponse(validator.errorResponse());
-          response->setStatusCode(drogon::k400BadRequest);
-          cb(response);
+          cb(api::validationErrorResponse(validator.issues()));
           return;
         }
 
@@ -146,9 +142,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
         api::JsonValidator validator(*body);
         auto name = validator.requiredString("name", "displayName");
         if (!validator.ok()) {
-          auto response = drogon::HttpResponse::newHttpJsonResponse(validator.errorResponse());
-          response->setStatusCode(drogon::k400BadRequest);
-          cb(response);
+          cb(api::validationErrorResponse(validator.issues()));
           return;
         }
 

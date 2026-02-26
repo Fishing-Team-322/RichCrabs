@@ -42,9 +42,16 @@ public:
                                             const std::string& legacyField = "");
   std::optional<std::string> requiredUuid(const std::string& field,
                                           const std::string& legacyField = "");
+  std::optional<std::string> optionalString(const std::string& field,
+                                            const std::string& legacyField = "");
+  std::optional<std::string> optionalUuid(const std::string& field,
+                                          const std::string& legacyField = "");
+  void requireAtLeastOne(const std::vector<std::string>& fields, const std::string& reason = "required");
+  void addIssue(const std::string& field, const std::string& reason);
 
   [[nodiscard]] bool ok() const;
   [[nodiscard]] Json::Value errorResponse() const;
+  [[nodiscard]] const std::vector<ValidationIssue>& issues() const;
 
 private:
   const Json::Value& body_;

@@ -94,7 +94,7 @@ components:
         grpcUnavailable:
           value:
             error: grpc_unavailable
-            message: grpc unavailable: get_room_state
+            message: "grpc unavailable: get_room_state"
         notFound:
           value:
             error: not_found
@@ -168,6 +168,9 @@ components:
 
     UpdateProfileRequest:
       type: object
+      anyOf:
+        - required: [displayName]
+        - required: [avatarUrl]
       properties:
         displayName:
           type: string
@@ -618,6 +621,11 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ChangePasswordRequest'
+            examples:
+              default:
+                value:
+                  currentPassword: oldPass123
+                  newPassword: newPass123!
       responses:
         '204':
           description: Password changed
@@ -634,6 +642,12 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              default:
+                value:
+                  email: alice@example.com
+                  password: Passw0rd!
+                  displayName: Alice
       responses:
         '200':
           description: Registered and authenticated
@@ -654,6 +668,11 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/LoginRequest'
+            examples:
+              default:
+                value:
+                  email: alice@example.com
+                  password: Passw0rd!
       responses:
         '200':
           description: Authenticated
@@ -697,6 +716,17 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateGameRequest'
+            examples:
+              canonical:
+                value:
+                  ownerUserId: 00000000-0000-0000-0000-000000000001
+                  quizId: demo-quiz
+                  title: Friday Quiz
+              aliasTitle:
+                value:
+                  ownerUserId: 00000000-0000-0000-0000-000000000001
+                  quizId: demo-quiz
+                  roomTitle: Friday Quiz
       responses:
         '200':
           description: Room created
@@ -749,6 +779,13 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/JoinRequest'
+            examples:
+              canonical:
+                value:
+                  name: Alice
+              aliasDisplayName:
+                value:
+                  displayName: Alice
       responses:
         '200':
           description: Joined
@@ -775,6 +812,13 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/JoinRequest'
+            examples:
+              canonical:
+                value:
+                  name: Alice
+              aliasDisplayName:
+                value:
+                  displayName: Alice
       responses:
         '200':
           description: Joined
@@ -894,6 +938,12 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RegisterBotRequest'
+            examples:
+              default:
+                value:
+                  name: Demo Bot
+                  version: 1.0.0
+                  endpoint: https://bot.example.com/webhook
       responses:
         '200':
           description: Bot created

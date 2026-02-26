@@ -19,6 +19,23 @@ void RegisterProfileRoutes(const Config& conf) {
       "/api/v1/me",
       [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         if (!RequireCsrf(req, conf, cb)) return;
+
+        std::string parseError;
+        auto body = api::parseJsonBody(req, parseError);
+        if (!body) {
+          cb(api::jsonErrorResponse(400, api::ErrorCode::kInvalidJson, parseError));
+          return;
+        }
+
+        api::JsonValidator validator(*body);
+        validator.optionalString("displayName");
+        validator.optionalString("avatarUrl");
+        validator.requireAtLeastOne({"displayName", "avatarUrl"}, "required");
+        if (!validator.ok()) {
+          cb(api::validationErrorResponse(validator.issues()));
+          return;
+        }
+
         cb(notImplemented("PATCH /api/v1/me"));
       },
       {drogon::Patch});
@@ -27,6 +44,22 @@ void RegisterProfileRoutes(const Config& conf) {
       "/api/v1/me/password",
       [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         if (!RequireCsrf(req, conf, cb)) return;
+
+        std::string parseError;
+        auto body = api::parseJsonBody(req, parseError);
+        if (!body) {
+          cb(api::jsonErrorResponse(400, api::ErrorCode::kInvalidJson, parseError));
+          return;
+        }
+
+        api::JsonValidator validator(*body);
+        validator.requiredString("currentPassword");
+        validator.requiredString("newPassword");
+        if (!validator.ok()) {
+          cb(api::validationErrorResponse(validator.issues()));
+          return;
+        }
+
         cb(notImplemented("POST /api/v1/me/password"));
       },
       {drogon::Post});
