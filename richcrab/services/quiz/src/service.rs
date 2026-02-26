@@ -64,6 +64,35 @@ impl QuizServiceImpl {
             .collect())
     }
 
+    fn validate_questions(questions: &[proto::richcrab::v1::QuizQuestion]) -> Result<(), String> {
+        if questions.is_empty() {
+            return Err("quiz must contain at least one question".to_string());
+        }
+
+        for (idx, q) in questions.iter().enumerate() {
+            if q.text.trim().is_empty() {
+                return Err(format!("question[{idx}] text must not be empty"));
+            }
+            if q.options.len() < 2 {
+                return Err(format!("question[{idx}] must contain at least two options"));
+            }
+            for (opt_idx, option) in q.options.iter().enumerate() {
+                if option.trim().is_empty() {
+                    return Err(format!(
+                        "question[{idx}] option[{opt_idx}] must not be empty"
+                    ));
+                }
+            }
+            if let Some(correct_idx) = q.correct_option_index {
+                if (correct_idx as usize) >= q.options.len() {
+                    return Err(format!("question[{idx}] has invalid correct_option_index"));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn questions_to_json(questions: &[proto::richcrab::v1::QuizQuestion]) -> Value {
         Value::Array(
             questions
@@ -156,6 +185,21 @@ impl QuizServiceImpl {
             Err(Status::permission_denied(response.reason))
         }
     }
+
+    async fn report_usage(&self, user_id: &str, feature: &str) -> Result<(), Status> {
+        let mut client = self.entitlements.clone();
+        client
+            .report_usage(proto::richcrab::v1::ReportUsageRequest {
+                user_id: Some(proto::richcrab::v1::UserId {
+                    value: user_id.to_string(),
+                }),
+                feature: feature.to_string(),
+                units: 1,
+            })
+            .await
+            .map_err(|e| Status::unavailable(format!("usage reporting failed: {e}")))?;
+        Ok(())
+    }
 }
 
 #[tonic::async_trait]
@@ -169,18 +213,22 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
             .owner_user_id
             .map(|v| v.value)
             .ok_or_else(|| Status::invalid_argument("owner_user_id is required"))?;
-        let owner_id = Uuid::parse_str(&owner_user_id)
+        let owner_uuid = Uuid::parse_str(&owner_user_id)
             .map_err(|_| Status::invalid_argument("owner_user_id must be uuid"))?;
-        let questions = if req.questions.is_empty() {
-            self.fallback_questions.clone()
-        } else {
-            req.questions
-        };
+
+        self.check_entitlement(&owner_user_id, "CREATE_QUIZ")
+            .await?;
+
+        let mut questions = req.questions;
+        if questions.is_empty() {
+            questions = self.fallback_questions.clone();
+        }
+        Self::validate_questions(&questions).map_err(Status::invalid_argument)?;
 
         let now = Utc::now();
         let quiz = Quiz {
             id: Uuid::new_v4(),
-            owner_user_id: owner_id,
+            owner_user_id: owner_uuid,
             title: req.title,
             description: req.description,
             status: "draft".to_string(),
@@ -189,10 +237,12 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
             created_at: now,
             updated_at: now,
         };
+
         self.repository
             .create(&quiz)
             .await
             .map_err(|e| Status::internal(format!("create failed: {e}")))?;
+        self.report_usage(&owner_user_id, "CREATE_QUIZ").await?;
 
         Ok(Response::new(proto::richcrab::v1::CreateQuizResponse {
             quiz: Some(Self::to_proto(&quiz)),
@@ -204,16 +254,17 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
         &self,
         request: Request<proto::richcrab::v1::GetQuizRequest>,
     ) -> Result<Response<proto::richcrab::v1::GetQuizResponse>, Status> {
-        let id = request
+        let quiz_id = request
             .into_inner()
             .quiz_id
             .map(|v| v.value)
             .ok_or_else(|| Status::invalid_argument("quiz_id is required"))?;
-        let quiz_id =
-            Uuid::parse_str(&id).map_err(|_| Status::invalid_argument("quiz_id must be uuid"))?;
+        let quiz_uuid = Uuid::parse_str(&quiz_id)
+            .map_err(|_| Status::invalid_argument("quiz_id must be uuid"))?;
+
         let quiz = self
             .repository
-            .find_by_id(quiz_id)
+            .find_by_id(quiz_uuid)
             .await
             .map_err(|e| Status::internal(format!("read failed: {e}")))?
             .ok_or_else(|| Status::not_found("quiz not found"))?;
@@ -224,24 +275,54 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
         }))
     }
 
+    async fn get_published_quiz(
+        &self,
+        request: Request<proto::richcrab::v1::GetPublishedQuizRequest>,
+    ) -> Result<Response<proto::richcrab::v1::GetPublishedQuizResponse>, Status> {
+        let req = request.into_inner();
+        let quiz_id = req
+            .quiz_id
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("quiz_id is required"))?;
+        let quiz_uuid = Uuid::parse_str(&quiz_id)
+            .map_err(|_| Status::invalid_argument("quiz_id must be uuid"))?;
+
+        let published = self
+            .repository
+            .find_published(quiz_uuid, req.version.map(|v| v as i32))
+            .await
+            .map_err(|e| Status::internal(format!("read failed: {e}")))?
+            .ok_or_else(|| Status::not_found("published quiz version not found"))?;
+
+        Ok(Response::new(
+            proto::richcrab::v1::GetPublishedQuizResponse {
+                quiz: Some(Self::to_proto(&published)),
+                published_version: published.published_version as u32,
+                error: None,
+            },
+        ))
+    }
+
     async fn update_quiz(
         &self,
         request: Request<proto::richcrab::v1::UpdateQuizRequest>,
     ) -> Result<Response<proto::richcrab::v1::UpdateQuizResponse>, Status> {
-        let req = request.into_inner();
-        let quiz = req
+        let quiz = request
+            .into_inner()
             .quiz
-            .ok_or_else(|| Status::invalid_argument("quiz payload is required"))?;
-        let quiz_id = quiz
+            .ok_or_else(|| Status::invalid_argument("quiz is required"))?;
+        let id = quiz
             .quiz_id
             .map(|v| v.value)
-            .ok_or_else(|| Status::invalid_argument("quiz_id is required"))?;
-        let quiz_id = Uuid::parse_str(&quiz_id)
-            .map_err(|_| Status::invalid_argument("quiz_id must be uuid"))?;
+            .ok_or_else(|| Status::invalid_argument("quiz.quiz_id is required"))?;
+        let parsed_id =
+            Uuid::parse_str(&id).map_err(|_| Status::invalid_argument("quiz_id must be uuid"))?;
+
+        Self::validate_questions(&quiz.questions).map_err(Status::invalid_argument)?;
 
         let existing = self
             .repository
-            .find_by_id(quiz_id)
+            .find_by_id(parsed_id)
             .await
             .map_err(|e| Status::internal(format!("read failed: {e}")))?
             .ok_or_else(|| Status::not_found("quiz not found"))?;
@@ -270,9 +351,40 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
 
     async fn delete_quiz(
         &self,
-        _request: Request<proto::richcrab::v1::DeleteQuizRequest>,
+        request: Request<proto::richcrab::v1::DeleteQuizRequest>,
     ) -> Result<Response<proto::richcrab::v1::DeleteQuizResponse>, Status> {
-        Err(Status::unimplemented("delete_quiz is not implemented"))
+        let req = request.into_inner();
+        let quiz_id = req
+            .quiz_id
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("quiz_id is required"))?;
+        let requested_by = req
+            .requested_by
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("requested_by is required"))?;
+
+        let quiz_uuid = Uuid::parse_str(&quiz_id)
+            .map_err(|_| Status::invalid_argument("quiz_id must be uuid"))?;
+        let quiz = self
+            .repository
+            .find_by_id(quiz_uuid)
+            .await
+            .map_err(|e| Status::internal(format!("read failed: {e}")))?
+            .ok_or_else(|| Status::not_found("quiz not found"))?;
+        if quiz.owner_user_id.to_string() != requested_by {
+            return Err(Status::permission_denied("only owner can delete quiz"));
+        }
+
+        let deleted = self
+            .repository
+            .delete(quiz_uuid)
+            .await
+            .map_err(|e| Status::internal(format!("delete failed: {e}")))?;
+
+        Ok(Response::new(proto::richcrab::v1::DeleteQuizResponse {
+            deleted,
+            error: None,
+        }))
     }
 
     async fn list_quizzes(
@@ -364,6 +476,8 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
             .map(|v| v.value)
             .ok_or_else(|| Status::invalid_argument("requested_by is required"))?;
         self.check_entitlement(&requester, "AI_GENERATE").await?;
+        self.report_usage(&requester, "AI_GENERATE").await?;
+
         Ok(Response::new(proto::richcrab::v1::StartAiQuizJobResponse {
             job_id: Uuid::new_v4().to_string(),
             status: "accepted".to_string(),
@@ -381,5 +495,43 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
             quiz: None,
             error: None,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::QuizServiceImpl;
+
+    fn q(text: &str, options: &[&str], correct: Option<u32>) -> proto::richcrab::v1::QuizQuestion {
+        proto::richcrab::v1::QuizQuestion {
+            id: "q1".to_string(),
+            text: text.to_string(),
+            options: options.iter().map(|s| s.to_string()).collect(),
+            correct_option_index: correct,
+        }
+    }
+
+    #[test]
+    fn validate_questions_rejects_empty_list() {
+        let result = QuizServiceImpl::validate_questions(&[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_questions_rejects_too_few_options() {
+        let result = QuizServiceImpl::validate_questions(&[q("Q", &["only"], Some(0))]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_questions_rejects_invalid_correct_index() {
+        let result = QuizServiceImpl::validate_questions(&[q("Q", &["a", "b"], Some(2))]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_questions_accepts_valid_payload() {
+        let result = QuizServiceImpl::validate_questions(&[q("Q", &["a", "b"], Some(1))]);
+        assert!(result.is_ok());
     }
 }

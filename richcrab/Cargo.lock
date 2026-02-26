@@ -1831,6 +1831,7 @@ dependencies = [
  "shared",
  "sqlx",
  "tokio",
+ "tokio-stream",
  "tonic",
  "tonic-health",
  "tracing",

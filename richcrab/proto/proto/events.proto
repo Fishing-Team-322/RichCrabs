@@ -5,17 +5,35 @@ package richcrab.v1;
 import "common.proto";
 import "google/protobuf/timestamp.proto";
 
+message TeamScore {
+  string team_id = 1;
+  uint32 score = 2;
+}
+
 message RoomEvent {
   oneof payload {
-    PlayerJoinedEvent player_joined = 1;
-    GameStartedEvent game_started = 2;
-    AnswerSubmittedEvent answer_submitted = 3;
-    RoomStateChangedEvent room_state_changed = 4;
-    ErrorEvent error = 5;
-    AnswerLockedEvent answer_locked = 6;
-    ScoreUpdatedEvent score_updated = 7;
+    RoomCreatedEvent room_created = 1;
+    PlayerJoinedEvent player_joined = 2;
+    PlayerLeftEvent player_left = 3;
+    TeamsAssignedEvent teams_assigned = 4;
+    GameStartedEvent game_started = 5;
+    QuestionStartedEvent question_started = 6;
+    AnswerSubmittedEvent answer_submitted = 7;
+    RoomStateChangedEvent room_state_changed = 8;
+    RoundEndedEvent round_ended = 9;
+    GameEndedEvent game_ended = 10;
+    RoomClosedEvent room_closed = 11;
+    ErrorEvent error = 12;
+    AnswerLockedEvent answer_locked = 13;
+    ScoreUpdatedEvent score_updated = 14;
   }
-  google.protobuf.Timestamp emitted_at = 10;
+  google.protobuf.Timestamp emitted_at = 20;
+}
+
+message RoomCreatedEvent {
+  RoomId room_id = 1;
+  QuizId quiz_id = 2;
+  string title = 3;
 }
 
 message PlayerJoinedEvent {
@@ -24,9 +42,29 @@ message PlayerJoinedEvent {
   string display_name = 3;
 }
 
+message PlayerLeftEvent {
+  RoomId room_id = 1;
+  PlayerId player_id = 2;
+}
+
+message TeamsAssignedEvent {
+  RoomId room_id = 1;
+  PlayerId player_id = 2;
+  string team_id = 3;
+  repeated TeamScore team_scores = 4;
+}
+
 message GameStartedEvent {
   RoomId room_id = 1;
   QuizId quiz_id = 2;
+}
+
+message QuestionStartedEvent {
+  RoomId room_id = 1;
+  string question_id = 2;
+  string question_text = 3;
+  repeated string options = 4;
+  google.protobuf.Timestamp ends_at = 5;
 }
 
 message AnswerSubmittedEvent {
@@ -48,6 +86,23 @@ message ScoreUpdatedEvent {
   PlayerId player_id = 2;
   uint32 score = 3;
   uint32 delta = 4;
+}
+
+message RoundEndedEvent {
+  RoomId room_id = 1;
+  string question_id = 2;
+  repeated TeamScore team_scores = 3;
+}
+
+message GameEndedEvent {
+  RoomId room_id = 1;
+  optional PlayerId winner_player_id = 2;
+  repeated TeamScore team_scores = 3;
+}
+
+message RoomClosedEvent {
+  RoomId room_id = 1;
+  string reason = 2;
 }
 
 message RoomStateChangedEvent {

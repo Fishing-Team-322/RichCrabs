@@ -9,7 +9,12 @@ import "google/protobuf/timestamp.proto";
 service GameService {
   rpc CreateRoom(CreateRoomRequest) returns (CreateRoomResponse);
   rpc JoinRoom(JoinRoomRequest) returns (JoinRoomResponse);
+  rpc LeaveRoom(LeaveRoomRequest) returns (LeaveRoomResponse);
+  rpc KickPlayer(KickPlayerRequest) returns (KickPlayerResponse);
   rpc StartGame(StartGameRequest) returns (StartGameResponse);
+  rpc PauseGame(PauseGameRequest) returns (PauseGameResponse);
+  rpc ResumeGame(ResumeGameRequest) returns (ResumeGameResponse);
+  rpc NextQuestion(NextQuestionRequest) returns (NextQuestionResponse);
   rpc SubmitAnswer(SubmitAnswerRequest) returns (SubmitAnswerResponse);
   rpc SubscribeRoomEvents(SubscribeRoomEventsRequest) returns (stream RoomEvent);
   rpc GetRoomState(GetRoomStateRequest) returns (GetRoomStateResponse);
@@ -39,6 +44,27 @@ message JoinRoomResponse {
   optional Error error = 3;
 }
 
+message LeaveRoomRequest {
+  RoomId room_id = 1;
+  PlayerId player_id = 2;
+}
+
+message LeaveRoomResponse {
+  bool left = 1;
+  optional Error error = 2;
+}
+
+message KickPlayerRequest {
+  RoomId room_id = 1;
+  UserId requested_by = 2;
+  PlayerId player_id = 3;
+}
+
+message KickPlayerResponse {
+  bool kicked = 1;
+  optional Error error = 2;
+}
+
 message StartGameRequest {
   RoomId room_id = 1;
   UserId requested_by = 2;
@@ -48,6 +74,36 @@ message StartGameResponse {
   bool started = 1;
   google.protobuf.Timestamp started_at = 2;
   optional Error error = 3;
+}
+
+message PauseGameRequest {
+  RoomId room_id = 1;
+  UserId requested_by = 2;
+}
+
+message PauseGameResponse {
+  bool paused = 1;
+  optional Error error = 2;
+}
+
+message ResumeGameRequest {
+  RoomId room_id = 1;
+  UserId requested_by = 2;
+}
+
+message ResumeGameResponse {
+  bool resumed = 1;
+  optional Error error = 2;
+}
+
+message NextQuestionRequest {
+  RoomId room_id = 1;
+  UserId requested_by = 2;
+}
+
+message NextQuestionResponse {
+  bool advanced = 1;
+  optional Error error = 2;
 }
 
 message SubmitAnswerRequest {
@@ -73,10 +129,24 @@ message GetRoomStateRequest {
   RoomId room_id = 1;
 }
 
+message TeamState {
+  string team_id = 1;
+  uint32 score = 2;
+  repeated PlayerId players = 3;
+}
+
 message PlayerState {
   PlayerId player_id = 1;
   string display_name = 2;
   uint32 score = 3;
+  optional string team_id = 4;
+}
+
+message QuestionState {
+  string question_id = 1;
+  string question_text = 2;
+  repeated string options = 3;
+  optional google.protobuf.Timestamp ends_at = 4;
 }
 
 message GetRoomStateResponse {
@@ -86,4 +156,6 @@ message GetRoomStateResponse {
   optional string current_question_id = 4;
   google.protobuf.Timestamp updated_at = 5;
   optional Error error = 6;
+  repeated TeamState teams = 7;
+  optional QuestionState current_question = 8;
 }

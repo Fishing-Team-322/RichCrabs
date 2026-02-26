@@ -62,6 +62,14 @@ impl QuizRepository {
         Ok(())
     }
 
+    pub async fn delete(&self, quiz_id: Uuid) -> sqlx::Result<bool> {
+        let result = sqlx::query("DELETE FROM quizzes WHERE id = $1")
+            .bind(quiz_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
     pub async fn find_by_id(&self, quiz_id: Uuid) -> sqlx::Result<Option<Quiz>> {
         let row = sqlx::query(
             "SELECT id, owner_user_id, title, description, status, published_version, questions_json, created_at, updated_at
@@ -71,6 +79,41 @@ impl QuizRepository {
         .bind(quiz_id)
         .fetch_optional(&self.pool)
         .await?;
+
+        Ok(row.map(Self::map_quiz))
+    }
+
+    pub async fn find_published(
+        &self,
+        quiz_id: Uuid,
+        version: Option<i32>,
+    ) -> sqlx::Result<Option<Quiz>> {
+        let row = if let Some(version) = version {
+            sqlx::query(
+                "SELECT q.id, q.owner_user_id, v.title, v.description, 'published' AS status, v.version AS published_version,
+                        v.questions_json, q.created_at, q.updated_at
+                 FROM quizzes q
+                 JOIN quiz_versions v ON v.quiz_id = q.id
+                 WHERE q.id = $1 AND v.version = $2",
+            )
+            .bind(quiz_id)
+            .bind(version)
+            .fetch_optional(&self.pool)
+            .await?
+        } else {
+            sqlx::query(
+                "SELECT q.id, q.owner_user_id, v.title, v.description, 'published' AS status, v.version AS published_version,
+                        v.questions_json, q.created_at, q.updated_at
+                 FROM quizzes q
+                 JOIN quiz_versions v ON v.quiz_id = q.id
+                 WHERE q.id = $1
+                 ORDER BY v.version DESC
+                 LIMIT 1",
+            )
+            .bind(quiz_id)
+            .fetch_optional(&self.pool)
+            .await?
+        };
 
         Ok(row.map(Self::map_quiz))
     }
