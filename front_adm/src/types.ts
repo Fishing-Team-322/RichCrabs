@@ -30,3 +30,36 @@ export type RoomDetails = {
   currentQuestionId?: string;
   players: Player[];
 };
+
+/* ---- Security (Live Abuse Monitor) ---- */
+
+export type SecurityOverview = {
+  windowSec: number; // например "за 5 минут"
+  rateLimitHits: number;
+  invalidJoinTickets: number;
+  replayDetected: number;
+  suspiciousBursts: number;
+  wsQueueDrops: number;
+};
+
+export type SecurityEventType =
+  | "rate_limit"
+  | "invalid_ticket"
+  | "replay"
+  | "suspicious_burst"
+  | "bad_webhook_secret"
+  | "ws_queue_drop";
+
+export type SecurityEvent = {
+  ts: string; // ISO
+  type: SecurityEventType;
+  severity: "low" | "med" | "high";
+  roomId?: string;
+  ip?: string;
+  deviceKey?: string;
+  message: string;
+};
+
+export type SecurityEventsResponse = {
+  events: SecurityEvent[];
+};
