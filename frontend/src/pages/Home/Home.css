@@ -1,0 +1,105 @@
+.homePage {
+  display: grid;
+  gap: 16px;
+}
+
+.homeHero h1 {
+  margin: 0;
+  font-size: 32px;
+}
+
+.homeHero p {
+  color: #475569;
+}
+
+.homeLabel {
+  color: #2563eb;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.homeActions,
+.homeSplitActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.homeBtn {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #1e293b;
+  text-decoration: none;
+  background: #fff;
+  font-weight: 600;
+}
+
+.homeBtnPrimary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.homeOnboarding ol {
+  margin: 12px 0;
+  padding-left: 18px;
+  color: #334155;
+}
+
+.homeQuickSection {
+  display: grid;
+  gap: 16px;
+}
+
+.homeRecentWrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.homeRecentWrap h3,
+.homeFeatureItem h3,
+.homeFaqItem h3,
+.homePlan h3 {
+  margin-bottom: 6px;
+}
+
+.homeRecentWrap ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #334155;
+}
+
+.homeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.homeFeatureList,
+.homePlans,
+.homeFaq {
+  display: grid;
+  gap: 10px;
+}
+
+.homeFeatureItem,
+.homePlan,
+.homeFaqItem {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.homePrice {
+  margin: 0;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+@media (max-width: 760px) {
+  .homeHero h1 {
+    font-size: 26px;
+  }
+}
