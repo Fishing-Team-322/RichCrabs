@@ -1,6 +1,12 @@
-import React, { Suspense } from 'react'
-import { Link, Navigate, NavLink, Outlet, Route, Routes, matchPath, useLocation } from 'react-router-dom'
-import { useAppSelector } from '../../store/hooks'
+import React, { Suspense, useEffect } from 'react'
+import { Link, Route, Routes } from 'react-router-dom'
+import { useAppDispatch } from '../../store/hooks'
+import { restoreSession } from '../../store/slices'
+import Layout from '../../components/Layout'
+import Login from '../../pages/auth/Login'
+import Register from '../../pages/auth/Register'
+import AuthGuard from './guards/AuthGuard'
+import GuestGuard from './guards/GuestGuard'
 import { routes } from './routeMap'
 import './router.css'
 
@@ -26,94 +32,13 @@ const NotFoundPage: React.FC = () => (
   </div>
 )
 
-const PublicGuard: React.FC = () => {
-  const isAuthenticated = useAppSelector((state) => Boolean(state.user.currentUser))
-
-  if (isAuthenticated) {
-    return <Navigate to={routes.profile} replace />
-  }
-
-  return <Outlet />
-}
-
-const PrivateGuard: React.FC = () => {
-  const isAuthenticated = useAppSelector((state) => Boolean(state.user.currentUser))
-
-  if (!isAuthenticated) {
-    return <Navigate to={routes.authLogin} replace />
-  }
-
-  return <Outlet />
-}
-
-const internalNavigation = [
-  { to: routes.quizzes, label: 'Квизы' },
-  { to: routes.rooms, label: 'Комнаты' },
-  { to: routes.profile, label: 'Профиль' },
-  { to: routes.subscriptions, label: 'Подписки' },
-  { to: routes.bots, label: 'Боты' },
-  { to: routes.adminDashboard, label: 'Админ' },
-]
-
-const breadcrumbMap = [
-  { pattern: routes.quizzes, label: 'Квизы' },
-  { pattern: routes.quizzesNew, label: 'Новый квиз' },
-  { pattern: routes.quizzesEdit, label: 'Редактирование квиза' },
-  { pattern: routes.quizzesPublish, label: 'Публикация квиза' },
-  { pattern: routes.rooms, label: 'Комнаты' },
-  { pattern: routes.roomsNew, label: 'Новая комната' },
-  { pattern: routes.roomDetails, label: 'Комната' },
-  { pattern: routes.quizRuntime, label: 'Игра' },
-  { pattern: routes.profile, label: 'Профиль' },
-  { pattern: routes.subscriptions, label: 'Подписки' },
-  { pattern: routes.bots, label: 'Боты' },
-  { pattern: routes.adminDashboard, label: 'Панель администратора' },
-  { pattern: routes.adminSecurity, label: 'Безопасность' },
-]
-
-const InternalLayout: React.FC = () => {
-  const location = useLocation()
-
-  const breadcrumbs = breadcrumbMap.filter((crumb) =>
-    Boolean(matchPath({ path: crumb.pattern, end: true }, location.pathname)),
-  )
-
-  return (
-    <div className="appShell">
-      <aside className="sidebarNav">
-        <div className="brandBlock">RichCrabs</div>
-        <nav>
-          {internalNavigation.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => (isActive ? 'navItem active' : 'navItem')}
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-      </aside>
-
-      <div className="contentWrap">
-        <header className="topbar">
-          <strong>Внутренние разделы</strong>
-          <div className="breadcrumbs">
-            <Link to={routes.home}>Главная</Link>
-            {breadcrumbs.map((crumb) => (
-              <span key={crumb.pattern}>/ {crumb.label}</span>
-            ))}
-          </div>
-        </header>
-        <main className="contentMain">
-          <Outlet />
-        </main>
-      </div>
-    </div>
-  )
-}
-
 const AppRouter: React.FC = () => {
+  const dispatch = useAppDispatch()
+
+  useEffect(() => {
+    void dispatch(restoreSession())
+  }, [dispatch])
+
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
@@ -121,13 +46,13 @@ const AppRouter: React.FC = () => {
         <Route path={routes.join} element={<AppPage title="Join" description="Ввод PIN или invite-кода." />} />
         <Route path={routes.invite} element={<AppPage title="Invite" description="Прямой вход по invite-токену." />} />
 
-        <Route element={<PublicGuard />}>
-          <Route path={routes.authLogin} element={<AppPage title="Вход" description="Страница авторизации." />} />
-          <Route path={routes.authRegister} element={<AppPage title="Регистрация" description="Страница регистрации." />} />
+        <Route element={<GuestGuard />}>
+          <Route path={routes.authLogin} element={<Login />} />
+          <Route path={routes.authRegister} element={<Register />} />
         </Route>
 
-        <Route element={<PrivateGuard />}>
-          <Route element={<InternalLayout />}>
+        <Route element={<AuthGuard />}>
+          <Route element={<Layout />}>
             <Route path={routes.quizzes} element={<AppPage title="Квизы" description="Список доступных квизов." />} />
             <Route path={routes.quizzesNew} element={<AppPage title="Новый квиз" description="Создание нового квиза." />} />
             <Route

@@ -1,8 +1,9 @@
 import { configureStore } from '@reduxjs/toolkit'
-import { gameReducer, userReducer } from './slices/index.ts'
+import { authReducer, gameReducer, userReducer } from './slices/index.ts'
 
 export const store = configureStore({
   reducer: {
+    auth: authReducer,
     user: userReducer,
     game: gameReducer,
   },

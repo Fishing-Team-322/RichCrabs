@@ -1,89 +1,66 @@
-import React from "react";
-import { IconGrid, IconKey, IconRooms, IconShield } from "./Icons";
+import { Link, NavLink, Outlet, matchPath, useLocation } from 'react-router-dom'
+import Header from './Header/Header'
+import { routes } from '../app/router/routeMap'
 
-function cn(...xs: Array<string | false | undefined | null>) {
-  return xs.filter(Boolean).join(" ");
-}
+const internalNavigation = [
+  { to: routes.quizzes, label: 'Квизы' },
+  { to: routes.rooms, label: 'Комнаты' },
+  { to: routes.profile, label: 'Профиль' },
+  { to: routes.subscriptions, label: 'Подписки' },
+  { to: routes.bots, label: 'Боты' },
+  { to: routes.adminDashboard, label: 'Админ' },
+]
 
-export type RouteKey = "dashboard" | "security";
+const breadcrumbMap = [
+  { pattern: routes.quizzes, label: 'Квизы' },
+  { pattern: routes.quizzesNew, label: 'Новый квиз' },
+  { pattern: routes.quizzesEdit, label: 'Редактирование квиза' },
+  { pattern: routes.quizzesPublish, label: 'Публикация квиза' },
+  { pattern: routes.rooms, label: 'Комнаты' },
+  { pattern: routes.roomsNew, label: 'Новая комната' },
+  { pattern: routes.roomDetails, label: 'Комната' },
+  { pattern: routes.quizRuntime, label: 'Игра' },
+  { pattern: routes.profile, label: 'Профиль' },
+  { pattern: routes.subscriptions, label: 'Подписки' },
+  { pattern: routes.bots, label: 'Боты' },
+  { pattern: routes.adminDashboard, label: 'Админ дашборд' },
+  { pattern: routes.adminSecurity, label: 'Админ безопасность' },
+]
 
-export function Layout(props: {
-  route: RouteKey;
-  onRoute: (r: RouteKey) => void;
+const Layout = () => {
+  const location = useLocation()
 
-  statusOk: boolean;
-  statusText: string;
-  updatedLabel: string;
+  const breadcrumbs = breadcrumbMap.filter((crumb) =>
+    Boolean(matchPath({ path: crumb.pattern, end: true }, location.pathname)),
+  )
 
-  totalsRooms: number;
-  totalsPlayers: number;
-
-  onOpenToken: () => void;
-
-  children: React.ReactNode;
-}) {
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="logo"><div className="logoDot" /></div>
-          <div className="brandText">
-            <div className="brandTitle">Watchtower</div>
-            <div className="brandSub">QuizBattle Admin</div>
-          </div>
-        </div>
-
-        <nav className="nav">
-          <div
-            className={cn("navItem", props.route === "dashboard" && "active")}
-            onClick={() => props.onRoute("dashboard")}
-          >
-            <IconGrid />
-            <span>Dashboard</span>
-          </div>
-
-          <div
-            className={cn("navItem", props.route === "security" && "active")}
-            onClick={() => props.onRoute("security")}
-          >
-            <IconShield />
-            <span>Security</span>
-          </div>
-
-          <div className="navItem" style={{ opacity: 0.65 }}>
-            <IconRooms />
-            <span>Rooms</span>
-            <span className="chip">soon</span>
-          </div>
+    <div className="appShell">
+      <aside className="sidebarNav">
+        <div className="brandBlock">RichCrabs</div>
+        <nav>
+          {internalNavigation.map((item) => (
+            <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? 'navItem active' : 'navItem')}>
+              {item.label}
+            </NavLink>
+          ))}
         </nav>
-
-        <div className="sidebarBottom">
-          <div className="miniStat">
-            <div className="miniK">Rooms</div>
-            <div className="miniV">{props.totalsRooms}</div>
-          </div>
-
-          <div className="miniStat">
-            <div className="miniK">Players</div>
-            <div className="miniV">{props.totalsPlayers}</div>
-          </div>
-
-          <button className="btn ghost" onClick={props.onOpenToken}>
-            <IconKey />
-            Token
-          </button>
-
-          <div className={cn("statusPill", props.statusOk ? "ok" : "bad")}>
-            <span className="dot" />
-            <span className="statusText">{props.statusText}</span>
-            <span className="statusTime">{props.updatedLabel}</span>
-          </div>
-        </div>
       </aside>
 
-      <main className="main">
-        {props.children}
-      </main>
+      <div className="contentWrap">
+        <Header />
+        <div className="breadcrumbs">
+          <Link to={routes.home}>Главная</Link>
+          {breadcrumbs.map((crumb) => (
+            <span key={crumb.pattern}>/ {crumb.label}</span>
+          ))}
+        </div>
+        <main className="contentMain">
+          <Outlet />
+        </main>
+      </div>
     </div>
-  );
+  )
 }
+
+export default Layout
