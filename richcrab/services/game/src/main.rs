@@ -4,7 +4,7 @@ mod service;
 
 use std::{env, net::SocketAddr, time::Duration};
 
-use service::GameServiceImpl;
+use service::{GameServiceImpl, HealthServiceImpl};
 use shared::redis_client::RedisClient;
 use tonic::transport::Server;
 
@@ -29,16 +29,23 @@ async fn main() -> anyhow::Result<()> {
             format!("http://{entitlements_addr}"),
         )
         .await?;
-    let svc = GameServiceImpl::new(redis, entitlements);
+    let game_service = GameServiceImpl::new(redis, entitlements);
+    let health_ping_service = HealthServiceImpl;
 
     let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
     health_reporter
         .set_serving::<proto::richcrab::v1::game_service_server::GameServiceServer<GameServiceImpl>>()
         .await;
+    health_reporter
+        .set_serving::<proto::richcrab::v1::health_server::HealthServer<HealthServiceImpl>>()
+        .await;
 
     Server::builder()
         .add_service(health_service)
-        .add_service(proto::richcrab::v1::game_service_server::GameServiceServer::new(svc))
+        .add_service(proto::richcrab::v1::game_service_server::GameServiceServer::new(game_service))
+        .add_service(proto::richcrab::v1::health_server::HealthServer::new(
+            health_ping_service,
+        ))
         .serve(addr)
         .await?;
 

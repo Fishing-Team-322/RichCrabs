@@ -430,3 +430,18 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         }))
     }
 }
+
+#[derive(Default)]
+pub struct HealthServiceImpl;
+
+#[tonic::async_trait]
+impl proto::richcrab::v1::health_server::Health for HealthServiceImpl {
+    async fn ping(
+        &self,
+        _request: Request<proto::richcrab::v1::PingRequest>,
+    ) -> Result<Response<proto::richcrab::v1::PingResponse>, Status> {
+        Ok(Response::new(proto::richcrab::v1::PingResponse {
+            message: "pong".to_string(),
+        }))
+    }
+}
