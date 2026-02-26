@@ -1,73 +1,52 @@
-# React + TypeScript + Vite
+# Frontend architecture
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Directory structure (`frontend/src`)
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```text
+src/
+  app/          # application bootstrap: providers, router, app composition
+  pages/        # route-level pages
+    admin/      # admin-only route pages (inside the same frontend app)
+  features/     # business features (auth, quizzes, rooms, bots, billing)
+  entities/     # core domain entities and related models/types
+  shared/       # cross-cutting reusable layer (ui, utils, api)
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Layer responsibilities
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### `app/`
+- Инициализация приложения.
+- Глобальные провайдеры (`Redux`, `Theme`, `Router`) в `app/providers`.
+- Корневой роутинг в `app/router`.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### `pages/`
+- Только route-level контейнеры.
+- Содержат компоновку фич для конкретного URL.
+- Для админских экранов используйте исключительно `pages/admin/*`.
+
+### `features/`
+- Завершённые пользовательские сценарии.
+- Текущие целевые домены: `auth`, `quizzes`, `rooms`, `bots`, `billing`.
+- У каждой фичи должен быть публичный API (например, через `index.ts`).
+
+### `entities/`
+- Базовые доменные типы и модели.
+- Общие структуры данных и примитивы, не зависящие от конкретной фичи.
+
+### `shared/`
+- `shared/ui` — UI-kit без бизнес-логики.
+- `shared/utils` — утилиты.
+- `shared/api` — базовый API client/транспорт.
+
+## Mandatory rule about admin UI
+
+- Отдельной админки `front_adm` **не существует**.
+- Все admin-экраны разрабатываются внутри этого приложения и располагаются в `frontend/src/pages/admin/*`.
+
+## Extension rules
+
+1. Любой новый код размещайте в соответствующем слое по ответственности.
+2. Избегайте прямых зависимостей между несоседними слоями (например, `shared` не должен зависеть от `features`).
+3. Новые маршруты добавляйте только в `app/router/AppRouter.tsx`.
+4. Новые глобальные провайдеры добавляйте только в `app/providers/AppProviders.tsx`.
+5. Административные разделы создавайте только в `pages/admin/*` и подключайте через основной router.
