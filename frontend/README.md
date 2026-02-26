@@ -50,3 +50,17 @@ src/
 3. Новые маршруты добавляйте только в `app/router/AppRouter.tsx`.
 4. Новые глобальные провайдеры добавляйте только в `app/providers/AppProviders.tsx`.
 5. Административные разделы создавайте только в `pages/admin/*` и подключайте через основной router.
+
+## Environment variables
+
+Создайте файл `.env` (или `.env.local`) в директории `frontend/` и задайте:
+
+```bash
+VITE_API_BASE_URL=http://localhost:5000
+VITE_WS_URL=http://localhost:5000
+VITE_APP_ENV=development
+```
+
+- `VITE_API_BASE_URL` — базовый URL HTTP API для `frontend/src/services/api.ts`.
+- `VITE_WS_URL` — URL WebSocket/socket.io сервера для `frontend/src/services/socket.ts`.
+- `VITE_APP_ENV` — произвольная метка окружения (`development`, `staging`, `production`) для feature flags/диагностики.
