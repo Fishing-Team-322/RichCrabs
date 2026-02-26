@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7-labs
+
 # -------- builder --------
 FROM ubuntu:22.04 AS builder
 
@@ -11,20 +13,45 @@ RUN apt-get update && apt-get install -y \
 
 # vcpkg
 WORKDIR /opt
-RUN git clone https://github.com/microsoft/vcpkg.git
-RUN /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+RUN git clone https://github.com/microsoft/vcpkg.git \
+  && /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
 ENV VCPKG_ROOT=/opt/vcpkg
+ENV VCPKG_DEFAULT_TRIPLET=x64-linux-release
+ENV VCPKG_DEFAULT_HOST_TRIPLET=x64-linux
 
-# build
 WORKDIR /app
-COPY . .
 
-RUN cmake -S . -B build -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake
+# copy only manifest/triplet first so dependency layer is reused while source code changes
+COPY vcpkg.json /app/vcpkg.json
+COPY triplets/x64-linux-release.cmake /app/triplets/x64-linux-release.cmake
 
-RUN cmake --build build -j
+# install deps with BuildKit caches
+RUN --mount=type=cache,target=/opt/vcpkg/downloads,id=vcpkg-downloads \
+    --mount=type=cache,target=/opt/vcpkg/buildtrees,id=vcpkg-buildtrees-x64-linux-release \
+    --mount=type=cache,target=/opt/vcpkg/packages,id=vcpkg-packages-x64-linux-release \
+    --mount=type=cache,target=/root/.cache/vcpkg/archives,id=vcpkg-bincache \
+    /opt/vcpkg/vcpkg install \
+      --triplet=x64-linux-release \
+      --overlay-triplets=/app/triplets \
+      --x-manifest-root=/app \
+      --clean-after-build
+
+# now copy project sources
+COPY . /app
+
+# build gateway
+RUN --mount=type=cache,target=/opt/vcpkg/downloads,id=vcpkg-downloads \
+    --mount=type=cache,target=/opt/vcpkg/buildtrees,id=vcpkg-buildtrees-x64-linux-release \
+    --mount=type=cache,target=/opt/vcpkg/packages,id=vcpkg-packages-x64-linux-release \
+    --mount=type=cache,target=/root/.cache/vcpkg/archives,id=vcpkg-bincache \
+    cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
+      -DVCPKG_TARGET_TRIPLET=x64-linux-release \
+      -DVCPKG_OVERLAY_TRIPLETS=/app/triplets
+
+RUN cmake --build /app/build -j
 
 # -------- runtime --------
 FROM ubuntu:22.04 AS runtime
@@ -35,10 +62,10 @@ RUN apt-get update && apt-get install -y ca-certificates \
 
 WORKDIR /app
 
-# бинарь
+# binary
 COPY --from=builder /app/build/defay1x9 /app/defay1x9
 
-# openapi.yaml нужен в рантайме
+# openapi.yaml needed in runtime
 COPY api /app/api
 
 ENV GW_LISTEN_HOST=0.0.0.0
@@ -59,7 +86,7 @@ ENV GW_GRPC_DEADLINE_MS_JOIN_ROOM=1500
 ENV GW_GRPC_DEADLINE_MS_START_GAME=1500
 ENV GW_GRPC_DEADLINE_MS_GET_ROOM_STATE=1000
 
-# CSRF defaults (для локалки Secure=false)
+# CSRF defaults (for local dev Secure=false)
 ENV GW_CSRF_COOKIE_NAME=XSRF-TOKEN
 ENV GW_CSRF_HEADER_NAME=X-XSRF-TOKEN
 ENV GW_CSRF_COOKIE_SECURE=false
