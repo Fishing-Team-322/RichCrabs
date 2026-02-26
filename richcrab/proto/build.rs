@@ -14,6 +14,7 @@ fn main() {
         "proto/quiz.proto",
         "proto/entitlements.proto",
         "proto/bot.proto",
+        "proto/richcrab.proto",
     ];
 
     tonic_build::configure()
