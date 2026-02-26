@@ -424,6 +424,8 @@ components:
 
     WsClientMessage:
       oneOf:
+        - $ref: '#/components/schemas/WsClientPing'
+        - $ref: '#/components/schemas/WsClientStartGame'
         - $ref: '#/components/schemas/WsClientGetState'
         - $ref: '#/components/schemas/WsClientSubmitAnswer'
       discriminator:
@@ -431,10 +433,37 @@ components:
 
     WsServerMessage:
       oneOf:
+        - $ref: '#/components/schemas/WsServerHello'
+        - $ref: '#/components/schemas/WsServerRoomEvent'
         - $ref: '#/components/schemas/WsServerRoomState'
+        - $ref: '#/components/schemas/WsServerPong'
         - $ref: '#/components/schemas/WsServerError'
       discriminator:
         propertyName: type
+
+    WsClientPing:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: ping
+      example:
+        type: ping
+
+    WsClientStartGame:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: start_game
+        request_id:
+          type: string
+          description: Optional client request id.
+      example:
+        type: start_game
+        request_id: ccc0f7f4b89a4f41a4f80d1fb3809dcf
 
     WsClientGetState:
       type: object
@@ -443,17 +472,21 @@ components:
         type:
           type: string
           const: get_state
+        request_id:
+          type: string
       example:
         type: get_state
 
     WsClientSubmitAnswer:
       type: object
-      required: [type, questionId, answer]
+      required: [type, question_id, answer]
       properties:
         type:
           type: string
           const: submit_answer
-        questionId:
+        request_id:
+          type: string
+        question_id:
           type: string
           example: q-1
         answer:
@@ -461,26 +494,95 @@ components:
           example: 42
       example:
         type: submit_answer
-        questionId: q-1
+        question_id: q-1
         answer: 42
+
+    WsServerHello:
+      type: object
+      required: [type, roomId, role]
+      properties:
+        type:
+          type: string
+          const: hello
+        roomId:
+          type: string
+          example: room-1
+        role:
+          type: string
+          example: player
+      example:
+        type: hello
+        roomId: room-1
+        role: player
+
+    WsServerRoomEvent:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: room_event
+        event:
+          type: object
+          additionalProperties: true
+        event_raw:
+          type: string
+      example:
+        type: room_event
+        event:
+          kind: question_opened
+          question_id: q-1
 
     WsServerRoomState:
       type: object
-      required: [type, state]
+      required: [type, room_id, state, players]
       properties:
         type:
           type: string
           const: room_state
+        room_id:
+          type: string
+          example: room-1
         state:
           type: string
           example: in_progress
+        current_question_id:
+          type: string
+          example: q-1
+        players:
+          type: array
+          items:
+            type: object
+            required: [player_id, display_name, score]
+            properties:
+              player_id:
+                type: string
+              display_name:
+                type: string
+              score:
+                type: integer
       example:
         type: room_state
+        room_id: room-1
         state: in_progress
+        players:
+          - player_id: p1
+            display_name: Alice
+            score: 10
+
+    WsServerPong:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: pong
+      example:
+        type: pong
 
     WsServerError:
       type: object
-      required: [type, error]
+      required: [type, error, message]
       properties:
         type:
           type: string
@@ -488,9 +590,25 @@ components:
         error:
           type: string
           example: get_state_failed
+        message:
+          type: string
+          example: get_state rpc failed
+        details:
+          description: Optional structured details.
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: array
+              items:
+                type: object
+                additionalProperties: true
       example:
         type: error
         error: get_state_failed
+        message: get_state rpc failed
+        details:
+          grpc_code: 14
+          grpc_message: unavailable
 
 paths:
   /health:
@@ -1097,6 +1215,9 @@ paths:
       summary: WebSocket upgrade endpoint
       description: |
         Upgrade to WebSocket and exchange typed messages.
+
+        Client message types: `ping`, `start_game`, `submit_answer`, `get_state`.
+        Server message types: `hello`, `room_event`, `room_state`, `error`, `pong`.
 
         Client -> Server schema: `WsClientMessage`
         Server -> Client schema: `WsServerMessage`

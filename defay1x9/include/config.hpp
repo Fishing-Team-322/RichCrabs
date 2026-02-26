@@ -23,6 +23,8 @@ struct Config final {
   int grpc_deadline_ms_join_room = 1500;
   int grpc_deadline_ms_start_game = 1500;
   int grpc_deadline_ms_get_room_state = 1000;
+  bool ws_mock_stream_enabled = false;
+  bool ws_mock_stream_auto_on_unavailable = true;
   std::string app_env = "development";
   std::string session_signing_key;
 
