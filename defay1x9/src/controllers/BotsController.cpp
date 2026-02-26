@@ -1,0 +1,111 @@
+#include "controllers/BotsController.hpp"
+
+#include <drogon/drogon.h>
+
+#include "controllers/ControllerUtils.hpp"
+#include "http_api_utils.hpp"
+
+namespace controllers {
+
+void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
+  drogon::app().registerHandler(
+      "/api/v1/bots",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+        std::string parseError;
+        auto body = api::parseJsonBody(req, parseError);
+        if (!body) {
+          cb(api::jsonErrorResponse(400, "invalid_json", parseError));
+          return;
+        }
+
+        api::JsonValidator validator(*body);
+        auto name = validator.requiredString("name");
+        auto version = validator.requiredString("version");
+        auto endpoint = validator.requiredString("endpoint");
+        if (!validator.ok()) {
+          auto response = drogon::HttpResponse::newHttpJsonResponse(validator.errorResponse());
+          response->setStatusCode(drogon::k400BadRequest);
+          cb(response);
+          return;
+        }
+
+        const auto requestId = requestIdFromRequest(req);
+        auto result = quizCore.registerBot(resolveUserId(req, conf), *name, *version, *endpoint, requestId);
+        if (!result.bot) {
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "register_bot")));
+          return;
+        }
+
+        Json::Value responseBody;
+        responseBody["bot"] = botToJson(*result.bot);
+        cb(drogon::HttpResponse::newHttpJsonResponse(responseBody));
+      },
+      {drogon::Post});
+
+  drogon::app().registerHandler(
+      "/api/v1/bots",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+        const auto requestId = requestIdFromRequest(req);
+        auto result = quizCore.listBots(resolveUserId(req, conf), requestId);
+        if (result.status != QuizCoreRpcStatus::kOk) {
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "list_bots")));
+          return;
+        }
+
+        Json::Value responseBody;
+        for (const auto& bot : result.bots) {
+          responseBody["bots"].append(botToJson(bot));
+        }
+        cb(drogon::HttpResponse::newHttpJsonResponse(responseBody));
+      },
+      {drogon::Get});
+
+  drogon::app().registerHandler(
+      "/api/v1/bots/{1}",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req,
+                        std::function<void(const drogon::HttpResponsePtr&)>&& cb,
+                        std::string botId) {
+        const auto requestId = requestIdFromRequest(req);
+        auto result = quizCore.getBotStatus(resolveUserId(req, conf), botId, requestId);
+        if (!result.bot) {
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "get_bot_status")));
+          return;
+        }
+
+        Json::Value responseBody;
+        responseBody["bot"] = botToJson(*result.bot);
+        cb(drogon::HttpResponse::newHttpJsonResponse(responseBody));
+      },
+      {drogon::Get});
+
+  drogon::app().registerHandler(
+      "/api/v1/bots/{1}",
+      [](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string) {
+        cb(notImplemented("PATCH /api/v1/bots/{botId}"));
+      },
+      {drogon::Patch});
+
+  drogon::app().registerHandler(
+      "/api/v1/bots/{1}",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req,
+                        std::function<void(const drogon::HttpResponsePtr&)>&& cb,
+                        std::string botId) {
+        const auto requestId = requestIdFromRequest(req);
+        auto result = quizCore.removeBot(resolveUserId(req, conf), botId, requestId);
+        if (result.status != QuizCoreRpcStatus::kOk) {
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "remove_bot")));
+          return;
+        }
+        if (!result.removed) {
+          cb(api::jsonErrorResponse(404, "bot_not_found", "bot_id does not exist"));
+          return;
+        }
+
+        auto response = drogon::HttpResponse::newHttpResponse();
+        response->setStatusCode(drogon::k204NoContent);
+        cb(response);
+      },
+      {drogon::Delete});
+}
+
+}  // namespace controllers
