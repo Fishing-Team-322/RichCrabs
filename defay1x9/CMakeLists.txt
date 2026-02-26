@@ -55,6 +55,20 @@ add_executable(defay1x9
   src/csrf.cpp
   src/session.cpp
   src/http_api_utils.cpp
+  src/controllers/ControllerUtils.cpp
+  src/controllers/ServiceController.cpp
+  src/controllers/AuthController.cpp
+  src/controllers/ProfileController.cpp
+  src/controllers/GamesController.cpp
+  src/controllers/BotsController.cpp
+  src/controllers/AdminController.cpp
+  include/controllers/ControllerUtils.hpp
+  include/controllers/ServiceController.hpp
+  include/controllers/AuthController.hpp
+  include/controllers/ProfileController.hpp
+  include/controllers/GamesController.hpp
+  include/controllers/BotsController.hpp
+  include/controllers/AdminController.hpp
   ${PROTO_SRCS}
   ${GRPC_SRCS}
   ${GRPC_HDRS}

@@ -15,6 +15,7 @@ struct CsrfConfig final {
 
 std::string IssueCsrfToken();
 void SetCsrfCookie(const drogon::HttpResponsePtr& resp, const CsrfConfig& cfg, const std::string& token);
+void ClearCsrfCookie(const drogon::HttpResponsePtr& resp, const CsrfConfig& cfg);
 bool VerifyCsrf(const drogon::HttpRequestPtr& req, const CsrfConfig& cfg);
 
 } // namespace security

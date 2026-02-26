@@ -29,17 +29,43 @@ std::optional<std::string> JsonValidator::requiredUuid(const std::string& field,
   return readString(field, legacyField, true, true);
 }
 
+std::optional<std::string> JsonValidator::optionalString(const std::string& field,
+                                                         const std::string& legacyField) {
+  return readString(field, legacyField, false, false);
+}
+
+std::optional<std::string> JsonValidator::optionalUuid(const std::string& field,
+                                                       const std::string& legacyField) {
+  return readString(field, legacyField, false, true);
+}
+
+void JsonValidator::requireAtLeastOne(const std::vector<std::string>& fields, const std::string& reason) {
+  for (const auto& field : fields) {
+    if (body_.isMember(field)) return;
+  }
+  if (!fields.empty()) issues_.push_back({fields.front(), reason});
+}
+
+void JsonValidator::addIssue(const std::string& field, const std::string& reason) {
+  issues_.push_back({field, reason});
+}
+
 bool JsonValidator::ok() const { return issues_.empty(); }
 
+const std::vector<ValidationIssue>& JsonValidator::issues() const { return issues_; }
+
 Json::Value JsonValidator::errorResponse() const {
-  Json::Value root;
-  root["error"] = "validation_error";
+  Json::Value details(Json::arrayValue);
   for (const auto& issue : issues_) {
     Json::Value item;
     item["field"] = issue.field;
     item["reason"] = issue.reason;
-    root["details"].append(std::move(item));
+    details.append(std::move(item));
   }
+  Json::Value root;
+  root["error"] = std::string(toString(ErrorCode::kValidationError));
+  root["message"] = "request validation failed";
+  root["details"] = std::move(details);
   return root;
 }
 
@@ -106,47 +132,66 @@ std::optional<Json::Value> parseJsonBody(const drogon::HttpRequestPtr& req, std:
   return root;
 }
 
-drogon::HttpResponsePtr jsonErrorResponse(int code, const std::string& error, const std::string& details) {
+std::string_view toString(ErrorCode code) {
+  switch (code) {
+    case ErrorCode::kInvalidJson: return "invalid_json";
+    case ErrorCode::kValidationError: return "validation_error";
+    case ErrorCode::kUnauthorized: return "unauthorized";
+    case ErrorCode::kCsrfRequired: return "csrf_required";
+    case ErrorCode::kForbidden: return "forbidden";
+    case ErrorCode::kNotFound: return "not_found";
+    case ErrorCode::kEmailTaken: return "email_taken";
+    case ErrorCode::kTooManyAttempts: return "too_many_attempts";
+    case ErrorCode::kNotImplemented: return "not_implemented";
+    case ErrorCode::kGrpcUnavailable: return "grpc_unavailable";
+    case ErrorCode::kGrpcTimeout: return "grpc_timeout";
+  }
+  return "validation_error";
+}
+
+
+drogon::HttpResponsePtr jsonErrorResponse(int code,
+                                          ErrorCode error,
+                                          const std::string& message,
+                                          std::optional<Json::Value> details) {
   Json::Value body;
-  body["error"] = error;
-  body["details"] = details;
+  body["error"] = std::string(toString(error));
+  body["message"] = message;
+  if (details.has_value()) body["details"] = std::move(*details);
   auto resp = drogon::HttpResponse::newHttpJsonResponse(body);
   resp->setStatusCode(static_cast<drogon::HttpStatusCode>(code));
   return resp;
 }
 
 drogon::HttpResponsePtr validationErrorResponse(const std::vector<ValidationIssue>& issues) {
-  Json::Value body;
-  body["error"] = "validation_error";
+  Json::Value details(Json::arrayValue);
   for (const auto& issue : issues) {
     Json::Value row;
     row["field"] = issue.field;
     row["reason"] = issue.reason;
-    body["details"].append(std::move(row));
+    details.append(std::move(row));
   }
-  auto resp = drogon::HttpResponse::newHttpJsonResponse(body);
-  resp->setStatusCode(drogon::k400BadRequest);
-  return resp;
+  return jsonErrorResponse(400, ErrorCode::kValidationError, "request validation failed", std::move(details));
 }
 
 GatewayError mapRpcError(QuizCoreRpcStatus status, const std::string& operation) {
   switch (status) {
     case QuizCoreRpcStatus::kInvalidArgument:
-      return {GatewayErrorKind::kBadRequest, "upstream_invalid_argument", operation};
+      return {GatewayErrorKind::kBadGateway, ErrorCode::kGrpcUnavailable, "grpc call failed: " + operation, std::nullopt};
     case QuizCoreRpcStatus::kNotFound:
-      return {GatewayErrorKind::kNotFound, "upstream_not_found", operation};
+      return {GatewayErrorKind::kBadGateway, ErrorCode::kGrpcUnavailable, "grpc call failed: " + operation, std::nullopt};
     case QuizCoreRpcStatus::kPermissionDenied:
-      return {GatewayErrorKind::kForbidden, "upstream_permission_denied", operation};
+      return {GatewayErrorKind::kBadGateway, ErrorCode::kGrpcUnavailable, "grpc call failed: " + operation, std::nullopt};
     case QuizCoreRpcStatus::kFailedPrecondition:
-      return {GatewayErrorKind::kConflict, "upstream_failed_precondition", operation};
+      return {GatewayErrorKind::kBadGateway, ErrorCode::kGrpcUnavailable, "grpc call failed: " + operation, std::nullopt};
     case QuizCoreRpcStatus::kDeadlineExceeded:
-      return {GatewayErrorKind::kGatewayTimeout, "upstream_timeout", operation};
+      return {GatewayErrorKind::kGatewayTimeout, ErrorCode::kGrpcTimeout, "grpc timeout: " + operation, std::nullopt};
     case QuizCoreRpcStatus::kUnavailable:
-      return {GatewayErrorKind::kBadGateway, "upstream_unavailable", operation};
+      return {GatewayErrorKind::kBadGateway, ErrorCode::kGrpcUnavailable, "grpc unavailable: " + operation, std::nullopt};
     case QuizCoreRpcStatus::kUnknown:
     case QuizCoreRpcStatus::kOk:
     default:
-      return {GatewayErrorKind::kBadGateway, "upstream_error", operation};
+      return {GatewayErrorKind::kBadGateway, ErrorCode::kGrpcUnavailable, "grpc unavailable: " + operation, std::nullopt};
   }
 }
 
@@ -164,7 +209,7 @@ int httpStatusCode(GatewayErrorKind kind) {
 }
 
 drogon::HttpResponsePtr jsonErrorResponse(const GatewayError& error) {
-  return jsonErrorResponse(httpStatusCode(error.kind), error.error, error.details);
+  return jsonErrorResponse(httpStatusCode(error.kind), error.error, error.message, error.details);
 }
 
 }  // namespace api
