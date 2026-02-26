@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../../hooks/useAuth'
+import useAuth from '../../hooks/useAuth'
 import { routes } from '../../app/router/routeMap'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/

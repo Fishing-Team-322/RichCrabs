@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { login, logout, register } from '../store/slices'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
 
-export const useAuth = () => {
+const useAuth = () => {
   const dispatch = useAppDispatch()
   const auth = useAppSelector((state) => state.auth)
 
@@ -26,3 +26,5 @@ export const useAuth = () => {
     signOut,
   }
 }
+
+export default useAuth
