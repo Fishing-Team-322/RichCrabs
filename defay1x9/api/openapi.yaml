@@ -55,26 +55,50 @@ components:
       properties:
         error:
           type: string
-          example: validation_failed
+          enum:
+            - invalid_json
+            - validation_error
+            - unauthorized
+            - csrf_required
+            - forbidden
+            - not_found
+            - email_taken
+            - too_many_attempts
+            - not_implemented
+            - grpc_unavailable
+            - grpc_timeout
+          example: validation_error
         message:
           type: string
           example: request validation failed
         details:
-          type: array
-          items:
-            $ref: '#/components/schemas/ErrorDetail'
+          description: Optional structured details (object or array).
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
       examples:
         validation:
           value:
-            error: validation_failed
+            error: validation_error
             message: request validation failed
             details:
               - field: email
                 reason: invalid_format
         forbidden:
           value:
-            error: csrf_failed
+            error: csrf_required
             message: csrf token mismatch
+        grpcUnavailable:
+          value:
+            error: grpc_unavailable
+            message: grpc unavailable: get_room_state
+        notFound:
+          value:
+            error: not_found
+            message: bot_id does not exist
 
     HealthResponse:
       type: object

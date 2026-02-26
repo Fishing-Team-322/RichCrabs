@@ -14,7 +14,7 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
         std::string parseError;
         auto body = api::parseJsonBody(req, parseError);
         if (!body) {
-          cb(api::jsonErrorResponse(400, "invalid_json", parseError));
+          cb(api::jsonErrorResponse(400, api::ErrorCode::kInvalidJson, parseError));
           return;
         }
 
@@ -97,7 +97,7 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
           return;
         }
         if (!result.removed) {
-          cb(api::jsonErrorResponse(404, "bot_not_found", "bot_id does not exist"));
+          cb(api::jsonErrorResponse(404, api::ErrorCode::kNotFound, "bot_id does not exist"));
           return;
         }
 

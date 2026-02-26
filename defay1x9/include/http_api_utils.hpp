@@ -4,6 +4,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <json/value.h>
@@ -11,6 +12,22 @@
 #include "quizcore_client.hpp"
 
 namespace api {
+
+enum class ErrorCode {
+  kInvalidJson,
+  kValidationError,
+  kUnauthorized,
+  kCsrfRequired,
+  kForbidden,
+  kNotFound,
+  kEmailTaken,
+  kTooManyAttempts,
+  kNotImplemented,
+  kGrpcUnavailable,
+  kGrpcTimeout,
+};
+
+std::string_view toString(ErrorCode code);
 
 struct ValidationIssue final {
   std::string field;
@@ -41,7 +58,10 @@ private:
 
 std::optional<Json::Value> parseJsonBody(const drogon::HttpRequestPtr& req, std::string& error);
 
-drogon::HttpResponsePtr jsonErrorResponse(int code, const std::string& error, const std::string& details);
+drogon::HttpResponsePtr jsonErrorResponse(int code,
+                                          ErrorCode error,
+                                          const std::string& message,
+                                          std::optional<Json::Value> details = std::nullopt);
 drogon::HttpResponsePtr validationErrorResponse(const std::vector<ValidationIssue>& issues);
 
 enum class GatewayErrorKind {
@@ -56,8 +76,9 @@ enum class GatewayErrorKind {
 
 struct GatewayError final {
   GatewayErrorKind kind;
-  std::string error;
-  std::string details;
+  ErrorCode error;
+  std::string message;
+  std::optional<Json::Value> details;
 };
 
 GatewayError mapRpcError(QuizCoreRpcStatus status, const std::string& operation);

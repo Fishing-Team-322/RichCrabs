@@ -66,7 +66,7 @@ void RegisterServiceRoutes(const Config& conf, QuizCoreClient& quizCore) {
       [conf](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         auto schema = readFile(conf.openapi_path);
         if (schema.empty()) {
-          cb(api::jsonErrorResponse(404, "openapi_not_found", "openapi schema file is missing"));
+          cb(api::jsonErrorResponse(404, api::ErrorCode::kNotFound, "openapi schema file is missing"));
           return;
         }
         cb(textResponse(schema, drogon::CT_TEXT_PLAIN));
@@ -115,7 +115,7 @@ void RegisterServiceRoutes(const Config& conf, QuizCoreClient& quizCore) {
       "/logout",
       [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         if (!security::VerifyCsrf(req, conf.csrf)) {
-          cb(api::jsonErrorResponse(403, "csrf_failed", "csrf token mismatch"));
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kCsrfRequired, "csrf token mismatch"));
           return;
         }
 
@@ -133,7 +133,7 @@ void RegisterServiceRoutes(const Config& conf, QuizCoreClient& quizCore) {
       [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         auto session = security::VerifySessionFromRequest(req, conf.session);
         if (!session) {
-          cb(api::jsonErrorResponse(401, "no_session", "session cookie is missing or invalid"));
+          cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
           return;
         }
 
