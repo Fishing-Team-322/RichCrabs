@@ -1,5 +1,6 @@
 #include "config.hpp"
 #include <cstdlib>
+#include <stdexcept>
 
 static std::string envStr(const char* k, const std::string& d) {
   if (const char* v = std::getenv(k)) {
@@ -32,6 +33,27 @@ Config Config::LoadFromEnv() {
 
   c.public_base_url = envStr("GW_PUBLIC_BASE_URL", c.public_base_url);
   c.openapi_path = envStr("GW_OPENAPI_PATH", c.openapi_path);
+  c.grpc_game_addr = envStr("GW_GRPC_GAME_ADDR", c.grpc_game_addr);
+  c.grpc_join_addr = envStr("GW_GRPC_JOIN_ADDR", c.grpc_join_addr);
+  c.grpc_quiz_addr = envStr("GW_GRPC_QUIZ_ADDR", c.grpc_quiz_addr);
+  c.grpc_entitlements_addr = envStr("GW_GRPC_ENTITLEMENTS_ADDR", c.grpc_entitlements_addr);
+  c.grpc_bot_addr = envStr("GW_GRPC_BOT_ADDR", c.grpc_bot_addr);
+  c.default_user_id = envStr("GW_DEFAULT_USER_ID", c.default_user_id);
+
+  c.grpc_deadline_ms_create_room = envInt("GW_GRPC_DEADLINE_MS_CREATE_ROOM", c.grpc_deadline_ms_create_room);
+  c.grpc_deadline_ms_issue_join_ticket = envInt("GW_GRPC_DEADLINE_MS_ISSUE_JOIN_TICKET", c.grpc_deadline_ms_issue_join_ticket);
+  c.grpc_deadline_ms_join_room = envInt("GW_GRPC_DEADLINE_MS_JOIN_ROOM", c.grpc_deadline_ms_join_room);
+  c.grpc_deadline_ms_start_game = envInt("GW_GRPC_DEADLINE_MS_START_GAME", c.grpc_deadline_ms_start_game);
+  c.grpc_deadline_ms_get_room_state = envInt("GW_GRPC_DEADLINE_MS_GET_ROOM_STATE", c.grpc_deadline_ms_get_room_state);
+  c.app_env = envStr("GW_ENV", c.app_env);
+  c.session_signing_key = envStr("GW_SESSION_SIGNING_KEY", "");
+
+  if (c.app_env == "production" && c.session_signing_key.empty()) {
+    throw std::runtime_error("GW_SESSION_SIGNING_KEY is required in production");
+  }
+  if (c.session_signing_key.empty()) {
+    c.session_signing_key = "dev-insecure-session-key";
+  }
 
   c.csrf.cookie_name = envStr("GW_CSRF_COOKIE_NAME", c.csrf.cookie_name);
   c.csrf.header_name = envStr("GW_CSRF_HEADER_NAME", c.csrf.header_name);

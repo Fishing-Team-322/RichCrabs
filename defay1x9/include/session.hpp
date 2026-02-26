@@ -1,6 +1,7 @@
 #pragma once
 #include <drogon/HttpRequest.h>
 #include <drogon/HttpResponse.h>
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -15,10 +16,15 @@ struct SessionCookieConfig final {
 };
 
 struct SessionClaims final {
+  std::string role;  // "host" | "player"
   std::string pin;
-  std::string role;     // "host" | "player"
-  std::string subject;  // host_id | player_id
+  std::string room_id;
+  std::string player_id;
+  std::string user_id;
+  std::int64_t exp = 0;
 };
+
+void SetSessionSigningKey(std::string key);
 
 std::string IssueSessionToken(const SessionClaims& c, int ttl_seconds);
 

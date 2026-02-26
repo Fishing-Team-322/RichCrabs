@@ -3,6 +3,10 @@
   "version-string": "0.1.0",
   "dependencies": [
     "drogon",
-    "spdlog"
+    "spdlog",
+    "grpc",
+    "protobuf",
+    "openssl",
+    "abseil"
   ]
 }
