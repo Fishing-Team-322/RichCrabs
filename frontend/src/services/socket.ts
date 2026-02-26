@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client'
-import { GameState } from '../types/gameTypes'
+import { RoomStateDto } from '../types/room.types'
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000'
+const SOCKET_URL = import.meta.env.VITE_WS_URL || 'http://localhost:5000'
 
 let socket: Socket | null = null
 
@@ -23,8 +23,8 @@ export const disconnectSocket = () => {
 }
 
 export interface ServerToClientEvents {
-  gameState: (state: GameState) => void
-  answerResult: (result: any) => void
+  gameState: (state: RoomStateDto) => void
+  answerResult: (result: unknown) => void
 }
 
 export interface ClientToServerEvents {

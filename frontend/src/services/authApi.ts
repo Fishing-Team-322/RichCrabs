@@ -1,18 +1,47 @@
-import { apiFetch } from './api'
-import { AuthResponse } from '../types/userTypes.ts'
+import { apiFetch, setAuthTokens } from './api'
+import type {
+  AuthResponseDto,
+  LoginRequestDto,
+  RefreshResponseDto,
+  RegisterRequestDto,
+} from '../types/auth.types'
+
+const applyTokensFromResponse = (response: AuthResponseDto | RefreshResponseDto) => {
+  const accessToken = response.accessToken || response.token
+  if (!accessToken) return
+  setAuthTokens(accessToken, response.refreshToken)
+}
 
 export const authApi = {
-  login: (email: string, password: string) =>
-    apiFetch<AuthResponse>('/api/auth/login', {
+  login: async (payload: LoginRequestDto) => {
+    const response = await apiFetch<AuthResponseDto>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
-    }),
+      body: JSON.stringify(payload),
+    })
+    applyTokensFromResponse(response)
+    return response
+  },
 
-  register: (name: string, email: string, password: string) =>
-    apiFetch<AuthResponse>('/api/auth/register', {
+  register: async (payload: RegisterRequestDto) => {
+    const response = await apiFetch<AuthResponseDto>('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password }),
-    }),
+      body: JSON.stringify(payload),
+    })
+    applyTokensFromResponse(response)
+    return response
+  },
 
-  getProfile: () => apiFetch<AuthResponse>('/api/user/profile'),
+  refresh: async (refreshToken: string) => {
+    const response = await apiFetch<RefreshResponseDto>(
+      '/api/auth/refresh',
+      {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+      },
+      false
+    )
+
+    applyTokensFromResponse(response)
+    return response
+  },
 }
