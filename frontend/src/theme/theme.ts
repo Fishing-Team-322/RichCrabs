@@ -15,3 +15,8 @@ export const animations = {
   pulse: 'pulse 2s infinite',
   gradientShift: 'gradientShift 10s ease infinite',
 }
+
+export const theme = {
+  colors,
+  animations,
+}
