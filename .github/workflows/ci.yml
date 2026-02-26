@@ -43,7 +43,6 @@ jobs:
       ENCRYPTION_KEY: ci-encryption-key
       TELEGRAM_WEBHOOK_BASE_URL: http://localhost:8090
       LOG_LEVEL: info
-
       SERVICE_ADDR_GAME: 127.0.0.1:50051
       SERVICE_ADDR_JOIN: 127.0.0.1:50052
       SERVICE_ADDR_QUIZ: 127.0.0.1:50053
@@ -75,10 +74,10 @@ jobs:
       - name: Clippy
         run: cargo clippy --manifest-path richcrab/Cargo.toml --workspace --all-targets -- -D warnings
 
-      - name: Tests
+      - name: Unit + integration tests
         run: cargo test --manifest-path richcrab/Cargo.toml --workspace --all-targets
 
-      - name: Check smoke_load compiles
+      - name: Smoke-load binary check
         run: cargo check --manifest-path richcrab/Cargo.toml -p smoke_load
 
   admin_frontend:
@@ -107,29 +106,33 @@ jobs:
         run: npm run build
 
   docker_build:
-    name: Docker build (gateway + rust-backend)
+    name: Docker build (cached) — Rust + C++
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v3
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build rust-backend image (no push)
+      # Rust backend image
+      - name: Build rust-backend (with GHA cache)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/rust-backend.Dockerfile
           push: false
           tags: richcrabs/rust-backend:ci
-          cache-from: type=gha,scope=rust-backend
-          cache-to: type=gha,mode=max,scope=rust-backend
+          cache-from: type=gha,scope=ci-rust-backend
+          cache-to: type=gha,mode=max,scope=ci-rust-backend
 
-      - name: Build gateway image (no push)
+      # C++ gateway image (vcpkg cache inside Dockerfile тоже подхватится через buildx cache)
+      - name: Build gateway (with GHA cache)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: defay1x9/Dockerfile
           push: false
           tags: richcrabs/gateway:ci
-          cache-from: type=gha,scope=gateway
-          cache-to: type=gha,mode=max,scope=gateway
+          cache-from: type=gha,scope=ci-gateway
+          cache-to: type=gha,mode=max,scope=ci-gateway
