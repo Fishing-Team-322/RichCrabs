@@ -4,11 +4,12 @@ VALUES
   ('00000000-0000-0000-0000-000000000102', 'pro', 'Pro', 100000, now())
 ON CONFLICT (code) DO NOTHING;
 
-INSERT INTO users (id, telegram_user_id, display_name, created_at, updated_at)
+INSERT INTO users (id, telegram_user_id, display_name, plan_code, created_at, updated_at)
 VALUES (
   '00000000-0000-0000-0000-000000000001',
   123456789,
   'Local Test User',
+  'free',
   now(),
   now()
 )
