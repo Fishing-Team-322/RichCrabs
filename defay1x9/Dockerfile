@@ -13,12 +13,14 @@ RUN apt-get update && apt-get install -y \
 
 # vcpkg
 WORKDIR /opt
-RUN git clone https://github.com/microsoft/vcpkg.git \
+RUN git clone --depth 1 https://github.com/microsoft/vcpkg.git \
   && /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
 ENV VCPKG_ROOT=/opt/vcpkg
+ENV VCPKG_FEATURE_FLAGS=manifests
+ENV VCPKG_BINARY_SOURCES="clear;files,/root/.cache/vcpkg/bincache,readwrite"
 ENV VCPKG_DEFAULT_TRIPLET=x64-linux-release
-ENV VCPKG_DEFAULT_HOST_TRIPLET=x64-linux
+ENV VCPKG_DEFAULT_HOST_TRIPLET=x64-linux-release
 
 WORKDIR /app
 
@@ -30,9 +32,10 @@ COPY triplets/x64-linux-release.cmake /app/triplets/x64-linux-release.cmake
 RUN --mount=type=cache,target=/opt/vcpkg/downloads,id=vcpkg-downloads \
     --mount=type=cache,target=/opt/vcpkg/buildtrees,id=vcpkg-buildtrees-x64-linux-release \
     --mount=type=cache,target=/opt/vcpkg/packages,id=vcpkg-packages-x64-linux-release \
-    --mount=type=cache,target=/root/.cache/vcpkg/archives,id=vcpkg-bincache \
+    --mount=type=cache,target=/root/.cache/vcpkg/bincache,id=vcpkg-bincache \
     /opt/vcpkg/vcpkg install \
       --triplet=x64-linux-release \
+      --host-triplet=x64-linux-release \
       --overlay-triplets=/app/triplets \
       --x-manifest-root=/app \
       --clean-after-build
@@ -44,14 +47,15 @@ COPY . /app
 RUN --mount=type=cache,target=/opt/vcpkg/downloads,id=vcpkg-downloads \
     --mount=type=cache,target=/opt/vcpkg/buildtrees,id=vcpkg-buildtrees-x64-linux-release \
     --mount=type=cache,target=/opt/vcpkg/packages,id=vcpkg-packages-x64-linux-release \
-    --mount=type=cache,target=/root/.cache/vcpkg/archives,id=vcpkg-bincache \
+    --mount=type=cache,target=/root/.cache/vcpkg/bincache,id=vcpkg-bincache \
     cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
       -DVCPKG_TARGET_TRIPLET=x64-linux-release \
+      -DVCPKG_HOST_TRIPLET=x64-linux-release \
       -DVCPKG_OVERLAY_TRIPLETS=/app/triplets
 
-RUN cmake --build /app/build -j
+RUN cmake --build /app/build -j"$(nproc)"
 
 # -------- runtime --------
 FROM ubuntu:22.04 AS runtime
