@@ -2,6 +2,7 @@
 #include <spdlog/spdlog.h>
 
 #include <fstream>
+#include <random>
 #include <sstream>
 #include <string>
 
@@ -69,6 +70,26 @@ static Json::Value botToJson(const QuizCoreBot& bot) {
   return j;
 }
 
+static std::string generateRequestId() {
+  static constexpr char kHex[] = "0123456789abcdef";
+  static thread_local std::mt19937_64 rng{std::random_device{}()};
+  std::uniform_int_distribution<uint64_t> dist(0, 0xffffffffffffffffULL);
+  auto toHex = [&](uint64_t v) {
+    std::string out(16, '0');
+    for (int i = 15; i >= 0; --i) {
+      out[i] = kHex[v & 0xF];
+      v >>= 4;
+    }
+    return out;
+  };
+  return toHex(dist(rng)) + toHex(dist(rng));
+}
+
+static std::string requestIdFromRequest(const drogon::HttpRequestPtr& req) {
+  const auto incoming = req->getHeader("x-request-id");
+  return incoming.empty() ? generateRequestId() : incoming;
+}
+
 int main() {
   auto conf = Config::LoadFromEnv();
   security::SetSessionSigningKey(conf.session_signing_key);
@@ -90,8 +111,28 @@ int main() {
 
   drogon::app().registerHandler(
       "/health",
-      [](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
-        cb(textResp("ok", drogon::CT_TEXT_PLAIN));
+      [&quizCore](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+        const auto requestId = requestIdFromRequest(req);
+        const bool checkGrpc = req->getOptionalParameter<bool>("grpc").value_or(false);
+
+        Json::Value r;
+        r["status"] = "ok";
+        r["gateway"] = "ok";
+        r["requestId"] = requestId;
+
+        if (checkGrpc) {
+          const bool grpcOk = quizCore.pingHealth(requestId);
+          r["dependencies"]["rust_grpc"] = grpcOk ? "ok" : "down";
+          if (!grpcOk) {
+            r["status"] = "degraded";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(r);
+            resp->setStatusCode(drogon::k503ServiceUnavailable);
+            cb(resp);
+            return;
+          }
+        }
+
+        cb(jsonOk(r));
       },
       {drogon::Get});
 
@@ -175,6 +216,7 @@ int main() {
         auto jptr = req->getJsonObject();
         if (!jptr) { cb(jsonError(400, "invalid_json")); return; }
 
+        const auto requestId = requestIdFromRequest(req);
         const auto& body = *jptr;
         const std::string ownerUserId = body.get("ownerUserId", conf.default_user_id).asString();
         const std::string quizId = body.get("quizId", "").asString();
@@ -182,7 +224,8 @@ int main() {
         if (quizId.empty()) { cb(jsonError(400, "quiz_id_required")); return; }
         if (title.empty()) { cb(jsonError(400, "title_required")); return; }
 
-        auto out = quizCore.createRoom(ownerUserId, quizId, title);
+        spdlog::info("create_game request_id={} pin=- room_id=- player_id=-", requestId);
+        auto out = quizCore.createRoom(ownerUserId, quizId, title, requestId);
         if (!out) { cb(jsonError(502, "quizcore_create_failed")); return; }
 
         // выдаём сессию host в HttpOnly cookie
@@ -202,6 +245,7 @@ int main() {
         r["inviteToken"] = out->invite_token;
         r["inviteUrl"] = conf.public_base_url + "/invite/" + out->invite_token;
         r["wsUrl"] = conf.public_base_url + "/ws";
+        spdlog::info("create_game_ok request_id={} pin={} room_id={} player_id=-", requestId, out->pin, out->room_id);
 
         auto resp = jsonOk(r);
         security::SetSessionCookie(resp, conf.session, sessionToken);
@@ -217,8 +261,10 @@ int main() {
         auto jptr = req->getJsonObject();
         if (!jptr) { cb(jsonError(400, "invalid_json")); return; }
 
+        const auto requestId = requestIdFromRequest(req);
         const std::string name = (*jptr).get("name", "").asString();
-        auto out = quizCore.joinRoomByPin(pin, name);
+        spdlog::info("join_by_pin request_id={} pin={} room_id=- player_id=-", requestId, pin);
+        auto out = quizCore.joinRoomByPin(pin, name, requestId);
         if (!out) { cb(jsonError(404, "game_not_found_or_closed")); return; }
 
         security::SessionClaims claims;
@@ -236,6 +282,7 @@ int main() {
         r["role"] = "player";
         r["wsUrl"] = conf.public_base_url + "/ws";
         r["csrfToken"] = csrfToken;
+        spdlog::info("join_by_pin_ok request_id={} pin={} room_id={} player_id={}", requestId, pin, out->room_id, out->player_id);
 
         auto resp = jsonOk(r);
         security::SetSessionCookie(resp, conf.session, sessionToken);
@@ -251,8 +298,10 @@ int main() {
         auto jptr = req->getJsonObject();
         if (!jptr) { cb(jsonError(400, "invalid_json")); return; }
 
+        const auto requestId = requestIdFromRequest(req);
         const std::string name = (*jptr).get("name", "").asString();
-        auto out = quizCore.joinRoomByInvite(inviteToken, name);
+        spdlog::info("join_by_invite request_id={} pin=- room_id=- player_id=-", requestId);
+        auto out = quizCore.joinRoomByInvite(inviteToken, name, requestId);
         if (!out) { cb(jsonError(404, "game_not_found_or_closed")); return; }
 
         security::SessionClaims claims;
@@ -268,6 +317,7 @@ int main() {
         r["team"] = "A";
         r["role"] = "player";
         r["wsUrl"] = conf.public_base_url + "/ws";
+        spdlog::info("join_by_invite_ok request_id={} pin=- room_id={} player_id={}", requestId, out->room_id, out->player_id);
 
         auto resp = jsonOk(r);
         security::SetSessionCookie(resp, conf.session, sessionToken);
@@ -280,6 +330,7 @@ int main() {
   drogon::app().registerHandler(
       "/api/v1/games/{1}/start",
       [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string /*pin*/) {
+        const auto requestId = requestIdFromRequest(req);
         // 1) session must exist
         auto s = security::VerifySessionFromRequest(req, conf.session);
         if (!s) { cb(jsonError(401, "no_session")); return; }
@@ -293,7 +344,8 @@ int main() {
         // 4) perform action using host user_id
         if (s->room_id.empty()) { cb(jsonError(403, "room_missing")); return; }
 
-        if (!quizCore.startGame(s->room_id, s->user_id)) { cb(jsonError(409, "cannot_start")); return; }
+        spdlog::info("start_game request_id={} pin={} room_id={} player_id=-", requestId, s->pin, s->room_id);
+        if (!quizCore.startGame(s->room_id, s->user_id, requestId)) { cb(jsonError(409, "cannot_start")); return; }
 
         auto resp = drogon::HttpResponse::newHttpResponse();
         resp->setStatusCode(drogon::k204NoContent);
@@ -316,7 +368,8 @@ int main() {
           return;
         }
 
-        const auto result = quizCore.registerBot(resolveUserId(req, conf), name, version, endpoint);
+        const auto requestId = requestIdFromRequest(req);
+        const auto result = quizCore.registerBot(resolveUserId(req, conf), name, version, endpoint, requestId);
         if (!result.bot) {
           cb(jsonError(mapRpcStatusToHttp(result.status), "bot_register_failed"));
           return;
@@ -332,7 +385,8 @@ int main() {
   drogon::app().registerHandler(
       "/api/v1/bots",
       [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
-        const auto result = quizCore.listBots(resolveUserId(req, conf));
+        const auto requestId = requestIdFromRequest(req);
+        const auto result = quizCore.listBots(resolveUserId(req, conf), requestId);
         if (result.status != QuizCoreRpcStatus::kOk) {
           cb(jsonError(mapRpcStatusToHttp(result.status), "bot_list_failed"));
           return;
@@ -348,7 +402,8 @@ int main() {
   drogon::app().registerHandler(
       "/api/v1/bots/{1}",
       [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string botId) {
-        const auto result = quizCore.removeBot(resolveUserId(req, conf), botId);
+        const auto requestId = requestIdFromRequest(req);
+        const auto result = quizCore.removeBot(resolveUserId(req, conf), botId, requestId);
         if (result.status != QuizCoreRpcStatus::kOk) {
           cb(jsonError(mapRpcStatusToHttp(result.status), "bot_remove_failed"));
           return;
@@ -365,7 +420,8 @@ int main() {
   drogon::app().registerHandler(
       "/api/v1/bots/{1}",
       [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string botId) {
-        const auto result = quizCore.getBotStatus(resolveUserId(req, conf), botId);
+        const auto requestId = requestIdFromRequest(req);
+        const auto result = quizCore.getBotStatus(resolveUserId(req, conf), botId, requestId);
         if (!result.bot) {
           cb(jsonError(mapRpcStatusToHttp(result.status), "bot_get_failed"));
           return;

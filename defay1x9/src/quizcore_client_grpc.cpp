@@ -9,6 +9,7 @@
 #include "common.pb.h"
 #include "game.grpc.pb.h"
 #include "join.grpc.pb.h"
+#include "richcrab.grpc.pb.h"
 
 using richcrab::v1::BotService;
 using richcrab::v1::CreateRoomRequest;
@@ -32,6 +33,9 @@ using richcrab::v1::RemoveBotRequest;
 using richcrab::v1::RemoveBotResponse;
 using richcrab::v1::StartGameRequest;
 using richcrab::v1::StartGameResponse;
+using richcrab::v1::Health;
+using richcrab::v1::PingRequest;
+using richcrab::v1::PingResponse;
 
 namespace {
 QuizCoreRpcStatus mapStatus(const grpc::Status& status) {
@@ -58,6 +62,10 @@ QuizCoreBot mapBot(const richcrab::v1::Bot& bot) {
 void attachUserId(grpc::ClientContext& ctx, const std::string& userId) {
   ctx.AddMetadata("x-user-id", userId);
 }
+
+void attachRequestId(grpc::ClientContext& ctx, const std::string& requestId) {
+  if (!requestId.empty()) ctx.AddMetadata("x-request-id", requestId);
+}
 }
 
 class QuizCoreClientGrpc::Impl final {
@@ -81,11 +89,13 @@ public:
     game = GameService::NewStub(gameChannel);
     join = JoinService::NewStub(joinChannel);
     bot = BotService::NewStub(botChannel);
+    health = Health::NewStub(gameChannel);
   }
 
   std::unique_ptr<GameService::Stub> game;
   std::unique_ptr<JoinService::Stub> join;
   std::unique_ptr<BotService::Stub> bot;
+  std::unique_ptr<Health::Stub> health;
   int deadline_ms_create_room;
   int deadline_ms_issue_join_ticket;
   int deadline_ms_join_room;
@@ -114,8 +124,10 @@ QuizCoreClientGrpc::~QuizCoreClientGrpc() = default;
 
 std::optional<QuizCoreCreateRoomResult> QuizCoreClientGrpc::createRoom(const std::string& ownerUserId,
                                                                         const std::string& quizId,
-                                                                        const std::string& title) {
+                                                                        const std::string& title,
+                                                                        const std::string& requestId) {
   grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
   ctx.set_deadline(std::chrono::system_clock::now() +
                    std::chrono::milliseconds(impl_->deadline_ms_create_room));
   CreateRoomRequest req;
@@ -135,8 +147,10 @@ std::optional<QuizCoreCreateRoomResult> QuizCoreClientGrpc::createRoom(const std
 }
 
 std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByPin(const std::string& pin,
-                                                                         const std::string& displayName) {
+                                                                         const std::string& displayName,
+                                                                         const std::string& requestId) {
   grpc::ClientContext ticketCtx;
+  attachRequestId(ticketCtx, requestId);
   ticketCtx.set_deadline(std::chrono::system_clock::now() +
                          std::chrono::milliseconds(impl_->deadline_ms_issue_join_ticket));
   IssueJoinTicketByPinRequest ticketReq;
@@ -148,6 +162,7 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByPin(const st
   if (!ticketStatus.ok() || ticketResp.has_error() || !ticketResp.has_ticket()) return std::nullopt;
 
   grpc::ClientContext joinCtx;
+  attachRequestId(joinCtx, requestId);
   joinCtx.set_deadline(std::chrono::system_clock::now() +
                        std::chrono::milliseconds(impl_->deadline_ms_join_room));
   JoinRoomRequest joinReq;
@@ -165,8 +180,10 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByPin(const st
 }
 
 std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByInvite(const std::string& inviteToken,
-                                                                            const std::string& displayName) {
+                                                                            const std::string& displayName,
+                                                                            const std::string& requestId) {
   grpc::ClientContext ticketCtx;
+  attachRequestId(ticketCtx, requestId);
   ticketCtx.set_deadline(std::chrono::system_clock::now() +
                          std::chrono::milliseconds(impl_->deadline_ms_issue_join_ticket));
   IssueJoinTicketByInviteRequest ticketReq;
@@ -178,6 +195,7 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByInvite(const
   if (!ticketStatus.ok() || ticketResp.has_error() || !ticketResp.has_ticket()) return std::nullopt;
 
   grpc::ClientContext joinCtx;
+  attachRequestId(joinCtx, requestId);
   joinCtx.set_deadline(std::chrono::system_clock::now() +
                        std::chrono::milliseconds(impl_->deadline_ms_join_room));
   JoinRoomRequest joinReq;
@@ -194,8 +212,11 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByInvite(const
   return out;
 }
 
-bool QuizCoreClientGrpc::startGame(const std::string& roomId, const std::string& requestedByUserId) {
+bool QuizCoreClientGrpc::startGame(const std::string& roomId,
+                                   const std::string& requestedByUserId,
+                                   const std::string& requestId) {
   grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
   ctx.set_deadline(std::chrono::system_clock::now() +
                    std::chrono::milliseconds(impl_->deadline_ms_start_game));
   StartGameRequest req;
@@ -208,8 +229,10 @@ bool QuizCoreClientGrpc::startGame(const std::string& roomId, const std::string&
   return resp.started();
 }
 
-std::optional<QuizCoreRoomState> QuizCoreClientGrpc::getRoomState(const std::string& roomId) {
+std::optional<QuizCoreRoomState> QuizCoreClientGrpc::getRoomState(const std::string& roomId,
+                                                                  const std::string& requestId) {
   grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
   ctx.set_deadline(std::chrono::system_clock::now() +
                    std::chrono::milliseconds(impl_->deadline_ms_get_room_state));
   GetRoomStateRequest req;
@@ -236,9 +259,11 @@ std::optional<QuizCoreRoomState> QuizCoreClientGrpc::getRoomState(const std::str
 QuizCoreRegisterBotResult QuizCoreClientGrpc::registerBot(const std::string& userId,
                                                           const std::string& name,
                                                           const std::string& version,
-                                                          const std::string& endpoint) {
+                                                          const std::string& endpoint,
+                                                          const std::string& requestId) {
   grpc::ClientContext ctx;
   attachUserId(ctx, userId);
+  attachRequestId(ctx, requestId);
   RegisterBotRequest req;
   req.set_name(name);
   req.set_version(version);
@@ -254,9 +279,11 @@ QuizCoreRegisterBotResult QuizCoreClientGrpc::registerBot(const std::string& use
   return out;
 }
 
-QuizCoreListBotsResult QuizCoreClientGrpc::listBots(const std::string& userId) {
+QuizCoreListBotsResult QuizCoreClientGrpc::listBots(const std::string& userId,
+                                                    const std::string& requestId) {
   grpc::ClientContext ctx;
   attachUserId(ctx, userId);
+  attachRequestId(ctx, requestId);
   ListBotsRequest req;
 
   ListBotsResponse resp;
@@ -270,9 +297,11 @@ QuizCoreListBotsResult QuizCoreClientGrpc::listBots(const std::string& userId) {
 }
 
 QuizCoreRemoveBotResult QuizCoreClientGrpc::removeBot(const std::string& userId,
-                                                      const std::string& botId) {
+                                                      const std::string& botId,
+                                                      const std::string& requestId) {
   grpc::ClientContext ctx;
   attachUserId(ctx, userId);
+  attachRequestId(ctx, requestId);
   RemoveBotRequest req;
   req.mutable_bot_id()->set_value(botId);
 
@@ -287,9 +316,11 @@ QuizCoreRemoveBotResult QuizCoreClientGrpc::removeBot(const std::string& userId,
 }
 
 QuizCoreGetBotResult QuizCoreClientGrpc::getBotStatus(const std::string& userId,
-                                                      const std::string& botId) {
+                                                      const std::string& botId,
+                                                      const std::string& requestId) {
   grpc::ClientContext ctx;
   attachUserId(ctx, userId);
+  attachRequestId(ctx, requestId);
   GetBotStatusRequest req;
   req.mutable_bot_id()->set_value(botId);
 
@@ -301,4 +332,14 @@ QuizCoreGetBotResult QuizCoreClientGrpc::getBotStatus(const std::string& userId,
   if (!status.ok() || resp.has_error() || !resp.has_bot()) return out;
   out.bot = mapBot(resp.bot());
   return out;
+}
+
+bool QuizCoreClientGrpc::pingHealth(const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::milliseconds(500));
+  PingRequest req;
+  PingResponse resp;
+  const auto status = impl_->health->Ping(&ctx, req, &resp);
+  return status.ok();
 }

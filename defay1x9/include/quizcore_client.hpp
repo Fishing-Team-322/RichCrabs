@@ -75,22 +75,33 @@ public:
 
   virtual std::optional<QuizCoreCreateRoomResult> createRoom(const std::string& ownerUserId,
                                                               const std::string& quizId,
-                                                              const std::string& title) = 0;
+                                                              const std::string& title,
+                                                              const std::string& requestId = "") = 0;
   virtual std::optional<QuizCoreJoinRoomResult> joinRoomByPin(const std::string& pin,
-                                                              const std::string& displayName) = 0;
+                                                              const std::string& displayName,
+                                                              const std::string& requestId = "") = 0;
   virtual std::optional<QuizCoreJoinRoomResult> joinRoomByInvite(const std::string& inviteToken,
-                                                                 const std::string& displayName) = 0;
-  virtual bool startGame(const std::string& roomId, const std::string& requestedByUserId) = 0;
-  virtual std::optional<QuizCoreRoomState> getRoomState(const std::string& roomId) = 0;
+                                                                 const std::string& displayName,
+                                                                 const std::string& requestId = "") = 0;
+  virtual bool startGame(const std::string& roomId,
+                         const std::string& requestedByUserId,
+                         const std::string& requestId = "") = 0;
+  virtual std::optional<QuizCoreRoomState> getRoomState(const std::string& roomId,
+                                                        const std::string& requestId = "") = 0;
   virtual QuizCoreRegisterBotResult registerBot(const std::string& userId,
                                                 const std::string& name,
                                                 const std::string& version,
-                                                const std::string& endpoint) = 0;
-  virtual QuizCoreListBotsResult listBots(const std::string& userId) = 0;
+                                                const std::string& endpoint,
+                                                const std::string& requestId = "") = 0;
+  virtual QuizCoreListBotsResult listBots(const std::string& userId,
+                                          const std::string& requestId = "") = 0;
   virtual QuizCoreRemoveBotResult removeBot(const std::string& userId,
-                                            const std::string& botId) = 0;
+                                            const std::string& botId,
+                                            const std::string& requestId = "") = 0;
   virtual QuizCoreGetBotResult getBotStatus(const std::string& userId,
-                                            const std::string& botId) = 0;
+                                            const std::string& botId,
+                                            const std::string& requestId = "") = 0;
+  virtual bool pingHealth(const std::string& requestId = "") = 0;
 };
 
 class QuizCoreClientGrpc final : public QuizCoreClient {
@@ -110,22 +121,33 @@ public:
 
   std::optional<QuizCoreCreateRoomResult> createRoom(const std::string& ownerUserId,
                                                       const std::string& quizId,
-                                                      const std::string& title) override;
+                                                      const std::string& title,
+                                                      const std::string& requestId = "") override;
   std::optional<QuizCoreJoinRoomResult> joinRoomByPin(const std::string& pin,
-                                                      const std::string& displayName) override;
+                                                      const std::string& displayName,
+                                                      const std::string& requestId = "") override;
   std::optional<QuizCoreJoinRoomResult> joinRoomByInvite(const std::string& inviteToken,
-                                                         const std::string& displayName) override;
-  bool startGame(const std::string& roomId, const std::string& requestedByUserId) override;
-  std::optional<QuizCoreRoomState> getRoomState(const std::string& roomId) override;
+                                                         const std::string& displayName,
+                                                         const std::string& requestId = "") override;
+  bool startGame(const std::string& roomId,
+                 const std::string& requestedByUserId,
+                 const std::string& requestId = "") override;
+  std::optional<QuizCoreRoomState> getRoomState(const std::string& roomId,
+                                                const std::string& requestId = "") override;
   QuizCoreRegisterBotResult registerBot(const std::string& userId,
                                         const std::string& name,
                                         const std::string& version,
-                                        const std::string& endpoint) override;
-  QuizCoreListBotsResult listBots(const std::string& userId) override;
+                                        const std::string& endpoint,
+                                        const std::string& requestId = "") override;
+  QuizCoreListBotsResult listBots(const std::string& userId,
+                                  const std::string& requestId = "") override;
   QuizCoreRemoveBotResult removeBot(const std::string& userId,
-                                    const std::string& botId) override;
+                                    const std::string& botId,
+                                    const std::string& requestId = "") override;
   QuizCoreGetBotResult getBotStatus(const std::string& userId,
-                                    const std::string& botId) override;
+                                    const std::string& botId,
+                                    const std::string& requestId = "") override;
+  bool pingHealth(const std::string& requestId = "") override;
 
 private:
   class Impl;

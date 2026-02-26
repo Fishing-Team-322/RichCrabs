@@ -9,9 +9,11 @@
 #include <grpcpp/grpcpp.h>
 #include <json/reader.h>
 #include <json/value.h>
+#include <spdlog/spdlog.h>
 
 #include <chrono>
 #include <condition_variable>
+#include <random>
 #include <deque>
 #include <memory>
 #include <mutex>
@@ -79,6 +81,25 @@ std::string JsonString(const Json::Value& value) {
   return Json::writeString(builder, value);
 }
 
+std::string GenerateRequestId() {
+  static constexpr char kHex[] = "0123456789abcdef";
+  static thread_local std::mt19937_64 rng{std::random_device{}()};
+  std::uniform_int_distribution<uint64_t> dist(0, 0xffffffffffffffffULL);
+  auto toHex = [&](uint64_t v) {
+    std::string out(16, '0');
+    for (int i = 15; i >= 0; --i) {
+      out[i] = kHex[v & 0xF];
+      v >>= 4;
+    }
+    return out;
+  };
+  return toHex(dist(rng)) + toHex(dist(rng));
+}
+
+void AttachRequestId(grpc::ClientContext& ctx, const std::string& requestId) {
+  if (!requestId.empty()) ctx.AddMetadata("x-request-id", requestId);
+}
+
 void EnqueueRoomMessage(const std::shared_ptr<RoomHubEntry>& entry, std::string payload) {
   std::lock_guard<std::mutex> lock(entry->mu);
   if (entry->stream_stop) return;
@@ -122,6 +143,7 @@ void RunStreamLoop(const std::shared_ptr<RoomHubEntry>& entry) {
     }
 
     grpc::ClientContext ctx;
+    AttachRequestId(ctx, GenerateRequestId());
     SubscribeRoomEventsRequest req;
     req.mutable_room_id()->set_value(entry->room_id);
     {
@@ -261,6 +283,7 @@ void WsGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
     g_conn_sessions[conn.get()] = cs;
   }
 
+  spdlog::info("ws_connected pin=- room_id={} player_id={}", cs.room_id, cs.player_id.empty() ? "-" : cs.player_id);
   auto roomEntry = AcquireRoomEntry(cs);
   {
     std::lock_guard<std::mutex> lock(roomEntry->mu);
@@ -298,6 +321,7 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
     return;
   }
 
+  const std::string requestId = j.get("request_id", "").asString().empty() ? GenerateRequestId() : j.get("request_id", "").asString();
   const std::string t = j.get("type", "").asString();
   if (t == "ping") {
     conn->send(R"({"type":"pong"})");
@@ -314,11 +338,13 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
     }
 
     grpc::ClientContext ctx;
+    AttachRequestId(ctx, requestId);
     StartGameRequest req;
     req.mutable_room_id()->set_value(connSession->room_id);
     req.mutable_requested_by()->set_value(connSession->user_id);
 
     StartGameResponse resp;
+    spdlog::info("ws_start_game request_id={} pin=- room_id={} player_id=-", requestId, connSession->room_id);
     const auto status = gameStub->StartGame(&ctx, req, &resp);
     if (!status.ok() || resp.has_error()) {
       SendError(conn, "start_game_failed");
@@ -346,6 +372,7 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
     }
 
     grpc::ClientContext ctx;
+    AttachRequestId(ctx, requestId);
     SubmitAnswerRequest req;
     req.mutable_room_id()->set_value(connSession->room_id);
     req.mutable_player_id()->set_value(connSession->player_id);
@@ -353,6 +380,7 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
     req.set_answer(answer);
 
     SubmitAnswerResponse resp;
+    spdlog::info("ws_submit_answer request_id={} pin=- room_id={} player_id={}", requestId, connSession->room_id, connSession->player_id);
     const auto status = gameStub->SubmitAnswer(&ctx, req, &resp);
     if (!status.ok() || resp.has_error()) {
       SendError(conn, "submit_answer_failed");
@@ -369,6 +397,7 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
 
   if (t == "get_state") {
     grpc::ClientContext ctx;
+    AttachRequestId(ctx, requestId);
     GetRoomStateRequest req;
     req.mutable_room_id()->set_value(connSession->room_id);
 
@@ -411,6 +440,7 @@ void WsGateway::handleConnectionClosed(const drogon::WebSocketConnectionPtr& con
     }
   }
   if (!removed) return;
+  spdlog::info("ws_disconnected pin=- room_id={} player_id={}", removed->room_id, removed->player_id.empty() ? "-" : removed->player_id);
 
   std::shared_ptr<RoomHubEntry> entry;
   {
