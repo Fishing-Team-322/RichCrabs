@@ -7,13 +7,26 @@
 #include <string>
 #include <vector>
 
+enum class QuizCoreRpcStatus {
+  kOk,
+  kPermissionDenied,
+  kInvalidArgument,
+  kNotFound,
+  kFailedPrecondition,
+  kDeadlineExceeded,
+  kUnavailable,
+  kUnknown,
+};
+
 struct QuizCoreCreateRoomResult final {
+  QuizCoreRpcStatus status = QuizCoreRpcStatus::kUnknown;
   std::string room_id;
   std::string pin;
   std::string invite_token;
 };
 
 struct QuizCoreJoinRoomResult final {
+  QuizCoreRpcStatus status = QuizCoreRpcStatus::kUnknown;
   std::string room_id;
   std::string join_ticket;
   std::string player_id;
@@ -30,15 +43,6 @@ struct QuizCoreRoomState final {
   std::string state;
   std::vector<QuizCorePlayerState> players;
   std::optional<std::string> current_question_id;
-};
-
-enum class QuizCoreRpcStatus {
-  kOk,
-  kPermissionDenied,
-  kInvalidArgument,
-  kFailedPrecondition,
-  kUnavailable,
-  kUnknown,
 };
 
 struct QuizCoreBot final {
