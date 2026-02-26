@@ -15,6 +15,7 @@ async fn main() -> anyhow::Result<()> {
 
     let redis_url = env::var(shared::config::REDIS_URL)?;
     let entitlements_addr = env::var(shared::config::SERVICE_ADDR_ENTITLEMENTS)?;
+    let quiz_addr = env::var(shared::config::SERVICE_ADDR_QUIZ)?;
     let addr: SocketAddr = env::var(shared::config::SERVICE_ADDR_GAME)?.parse()?;
 
     let redis = RedisClient::new(
@@ -29,7 +30,11 @@ async fn main() -> anyhow::Result<()> {
             format!("http://{entitlements_addr}"),
         )
         .await?;
-    let game_service = GameServiceImpl::new(redis, entitlements);
+    let quiz = proto::richcrab::v1::quiz_service_client::QuizServiceClient::connect(format!(
+        "http://{quiz_addr}"
+    ))
+    .await?;
+    let game_service = GameServiceImpl::new(redis, entitlements, quiz);
     let health_ping_service = HealthServiceImpl;
 
     let (mut health_reporter, health_service) = tonic_health::server::health_reporter();

@@ -39,12 +39,23 @@ pub struct Player {
 }
 
 #[derive(Debug, Clone)]
+pub struct GameQuestion {
+    pub question_id: String,
+    pub question_text: String,
+    pub options: Vec<String>,
+    pub correct_option_index: Option<u32>,
+}
+
+#[derive(Debug, Clone)]
 pub struct QuestionRound {
+    pub question_index: usize,
     pub question_id: String,
     pub question_text: String,
     pub options: Vec<String>,
     pub started_at: DateTime<Utc>,
+    pub ends_at: DateTime<Utc>,
     pub answers_locked: HashSet<String>,
+    pub active_team_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -56,7 +67,9 @@ pub struct RoundTimer {
 #[derive(Debug, Clone)]
 pub struct GameResult {
     pub winner_player_id: Option<String>,
+    pub winner_team_id: Option<String>,
     pub final_scores: HashMap<String, u32>,
+    pub final_team_scores: HashMap<String, u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +81,7 @@ pub struct RoomState {
     pub state: RoomLifecycleState,
     pub players: HashMap<String, Player>,
     pub teams: HashMap<String, Team>,
+    pub question_bank: Vec<GameQuestion>,
     pub current_question: Option<QuestionRound>,
     pub timer: Option<RoundTimer>,
     pub result: Option<GameResult>,
