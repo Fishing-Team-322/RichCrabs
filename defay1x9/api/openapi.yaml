@@ -1,51 +1,251 @@
 openapi: 3.1.0
 info:
   title: QuizBattle Gateway API
-  version: 0.2.0
-  description: Drogon gateway contract for RichCrabs Rust gRPC services.
+  version: 0.3.0
+  description: HTTP and WebSocket contract for gateway, gameplay, auth, profile, bots and admin APIs.
 servers:
   - url: http://localhost:8080
 
 tags:
-  - name: Auth / Session
-    description: Session and CSRF operations.
+  - name: Service
+    description: Service and documentation endpoints.
   - name: Games
-    description: Create and start game sessions.
-  - name: Rooms / Invites
-    description: Join flows by PIN or invite.
+    description: Room lifecycle and gameplay endpoints.
+  - name: Invites
+    description: Join and invite flows.
+  - name: WebSocket
+    description: Real-time channel and message contracts.
   - name: Bots
-    description: Bot integration management endpoints.
-  - name: System
-    description: Gateway health and docs endpoints.
+    description: Bot management APIs.
+  - name: Admin
+    description: Administrative endpoints under /admin/api/*.
+  - name: Auth
+    description: Registration, login, logout and CSRF endpoints.
+  - name: Profile
+    description: Current user profile and password management.
+  - name: Session
+    description: Active session information.
 
 components:
   securitySchemes:
-    cookieAuth:
+    sessionCookie:
       type: apiKey
       in: cookie
       name: QB-SESSION
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+
   schemas:
-    ErrorResponse:
-      type: object
-      required: [error, details]
-      properties:
-        error:
-          type: string
-        details:
-          oneOf:
-            - type: string
-            - type: array
-              items:
-                $ref: '#/components/schemas/ValidationIssue'
-    ValidationIssue:
+    ErrorDetail:
       type: object
       required: [field, reason]
       properties:
         field:
           type: string
+          example: email
         reason:
           type: string
-          enum: [required, type_mismatch, invalid_uuid, invalid_enum]
+          example: invalid_format
+
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          example: validation_failed
+        message:
+          type: string
+          example: request validation failed
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+      examples:
+        validation:
+          value:
+            error: validation_failed
+            message: request validation failed
+            details:
+              - field: email
+                reason: invalid_format
+        forbidden:
+          value:
+            error: csrf_failed
+            message: csrf token mismatch
+
+    HealthResponse:
+      type: object
+      required: [status, gateway]
+      properties:
+        status:
+          type: string
+          example: ok
+        gateway:
+          type: string
+          example: ok
+        requestId:
+          type: string
+          example: 0123456789abcdef0123456789abcdef
+
+    CsrfResponse:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          example: csrf-token-123
+
+    SessionResponse:
+      type: object
+      required: [authenticated, role]
+      properties:
+        authenticated:
+          type: boolean
+          example: true
+        role:
+          type: string
+          example: host
+        userId:
+          type: string
+          format: uuid
+          example: 00000000-0000-0000-0000-000000000001
+        roomId:
+          type: string
+          example: room-1
+        pin:
+          type: string
+          example: ABC123
+        playerId:
+          type: string
+          example: 123e4567-e89b-12d3-a456-426614174000
+        exp:
+          type: integer
+          format: int64
+          example: 1730000000
+
+    UserProfile:
+      type: object
+      required: [id, email, displayName]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 00000000-0000-0000-0000-000000000001
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        displayName:
+          type: string
+          example: Alice
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Alice Cooper
+        avatarUrl:
+          type: string
+          format: uri
+          example: https://cdn.example.com/avatars/alice.png
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          format: password
+          example: oldPass123
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+          example: newPass123!
+
+    RegisterRequest:
+      type: object
+      required: [email, password, displayName]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: Passw0rd!
+        displayName:
+          type: string
+          example: Alice
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        password:
+          type: string
+          format: password
+          example: Passw0rd!
+
+    AuthResponse:
+      type: object
+      required: [user, csrfToken]
+      properties:
+        user:
+          $ref: '#/components/schemas/UserProfile'
+        csrfToken:
+          type: string
+          example: csrf-token-123
+
+    CreateGameRequest:
+      type: object
+      required: [ownerUserId, quizId, title]
+      properties:
+        ownerUserId:
+          type: string
+          format: uuid
+          example: 00000000-0000-0000-0000-000000000001
+        quizId:
+          type: string
+          minLength: 1
+          maxLength: 120
+          example: demo-quiz
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Friday Quiz
+
+    CreateGameResponse:
+      type: object
+      required: [pin, inviteToken, inviteUrl, wsUrl]
+      properties:
+        pin:
+          type: string
+          pattern: '^[A-Z0-9]{6}$'
+          example: ABC123
+        inviteToken:
+          type: string
+          example: token123
+        inviteUrl:
+          type: string
+          example: http://localhost:8080/invite/token123
+        wsUrl:
+          type: string
+          example: ws://localhost:8080/ws
+
     JoinRequest:
       type: object
       required: [name]
@@ -54,82 +254,116 @@ components:
           type: string
           minLength: 1
           maxLength: 32
-        displayName:
-          type: string
-          deprecated: true
-          description: Deprecated alias for backward compatibility.
-    CreateGameRequest:
-      type: object
-      required: [ownerUserId, quizId, title]
-      properties:
-        ownerUserId:
-          type: string
-          format: uuid
-        quizId:
-          type: string
-          minLength: 1
-          maxLength: 120
-        title:
-          type: string
-          minLength: 1
-          maxLength: 200
-        roomTitle:
-          type: string
-          deprecated: true
-          description: Deprecated alias for backward compatibility.
-    CreateGameResponse:
-      type: object
-      required: [pin, inviteToken, inviteUrl, wsUrl]
-      properties:
-        pin:
-          type: string
-          pattern: "^[A-Z0-9]{6}$"
-        inviteToken:
-          type: string
-        inviteUrl:
-          type: string
-        wsUrl:
-          type: string
+          example: Alice
+
     JoinResponse:
       type: object
       required: [playerId, team, role, wsUrl]
       properties:
         playerId:
           type: string
+          example: 123e4567-e89b-12d3-a456-426614174000
         team:
           type: string
           enum: [A, B]
+          example: A
         role:
           type: string
           enum: [player]
+          example: player
         wsUrl:
           type: string
+          example: ws://localhost:8080/ws
         csrfToken:
           type: string
+          example: csrf-token-123
+
+    GameStateResponse:
+      type: object
+      required: [pin, state]
+      properties:
+        pin:
+          type: string
+          example: ABC123
+        state:
+          type: string
+          example: lobby
+        players:
+          type: array
+          items:
+            type: object
+            properties:
+              playerId:
+                type: string
+                example: 123e4567-e89b-12d3-a456-426614174000
+              name:
+                type: string
+                example: Alice
+              score:
+                type: integer
+                example: 0
+
     RegisterBotRequest:
       type: object
       required: [name, version, endpoint]
       properties:
-        name: { type: string, minLength: 1, maxLength: 120 }
-        version: { type: string, minLength: 1, maxLength: 120 }
-        endpoint: { type: string, minLength: 1, maxLength: 300 }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          example: Demo Bot
+        version:
+          type: string
+          minLength: 1
+          maxLength: 120
+          example: 1.0.0
+        endpoint:
+          type: string
+          minLength: 1
+          maxLength: 300
+          example: https://bot.example.com/webhook
+
+    UpdateBotRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Demo Bot v2
+        endpoint:
+          type: string
+          example: https://bot.example.com/v2/webhook
+        status:
+          type: string
+          example: active
+
     Bot:
       type: object
       required: [botId, name, version, status, registeredAt]
       properties:
-        botId: { type: string }
-        name: { type: string }
-        version: { type: string }
-        status: { type: string }
+        botId:
+          type: string
+          example: bot_1
+        name:
+          type: string
+          example: Demo Bot
+        version:
+          type: string
+          example: 1.0.0
+        status:
+          type: string
+          example: active
         registeredAt:
           type: integer
           format: int64
-    RegisterBotResponse:
+          example: 1730000000
+
+    BotResponse:
       type: object
       required: [bot]
       properties:
         bot:
           $ref: '#/components/schemas/Bot'
+
     ListBotsResponse:
       type: object
       required: [bots]
@@ -138,190 +372,393 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Bot'
-    GetBotResponse:
+
+    AdminStatsResponse:
       type: object
-      required: [bot]
+      required: [usersCount, gamesCount, activeRooms]
       properties:
-        bot:
-          $ref: '#/components/schemas/Bot'
+        usersCount:
+          type: integer
+          example: 1024
+        gamesCount:
+          type: integer
+          example: 2048
+        activeRooms:
+          type: integer
+          example: 32
+
+    AdminUserActionRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          example: abuse report #42
+
+    WsClientMessage:
+      oneOf:
+        - $ref: '#/components/schemas/WsClientGetState'
+        - $ref: '#/components/schemas/WsClientSubmitAnswer'
+      discriminator:
+        propertyName: type
+
+    WsServerMessage:
+      oneOf:
+        - $ref: '#/components/schemas/WsServerRoomState'
+        - $ref: '#/components/schemas/WsServerError'
+      discriminator:
+        propertyName: type
+
+    WsClientGetState:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: get_state
+      example:
+        type: get_state
+
+    WsClientSubmitAnswer:
+      type: object
+      required: [type, questionId, answer]
+      properties:
+        type:
+          type: string
+          const: submit_answer
+        questionId:
+          type: string
+          example: q-1
+        answer:
+          type: string
+          example: 42
+      example:
+        type: submit_answer
+        questionId: q-1
+        answer: 42
+
+    WsServerRoomState:
+      type: object
+      required: [type, state]
+      properties:
+        type:
+          type: string
+          const: room_state
+        state:
+          type: string
+          example: in_progress
+      example:
+        type: room_state
+        state: in_progress
+
+    WsServerError:
+      type: object
+      required: [type, error]
+      properties:
+        type:
+          type: string
+          const: error
+        error:
+          type: string
+          example: get_state_failed
+      example:
+        type: error
+        error: get_state_failed
 
 paths:
   /health:
     get:
-      tags: [System]
-      summary: Gateway health check.
-      description: Returns gateway status and optionally gRPC dependency health.
+      tags: [Service]
+      summary: Gateway health check
       responses:
-        "200":
-          description: Healthy.
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /openapi.yaml:
+    get:
+      tags: [Service]
+      summary: OpenAPI schema document
+      responses:
+        '200':
+          description: OpenAPI YAML
+
+  /docs:
+    get:
+      tags: [Service]
+      summary: Swagger UI page
+      responses:
+        '200':
+          description: HTML documentation page
+
+  /csrf:
+    get:
+      tags: [Service]
+      summary: Issue CSRF token (service endpoint)
+      responses:
+        '200':
+          description: CSRF token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfResponse'
+
+  /logout:
+    post:
+      tags: [Service]
+      summary: Logout from service endpoint
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      responses:
+        '200':
+          description: Logged out
           content:
             application/json:
               examples:
                 ok:
-                  value:
-                    status: ok
-                    gateway: ok
-                    requestId: 0123456789abcdef0123456789abcdef
-        "503":
-          description: Degraded when grpc=true and upstream is down.
-
-  /openapi.yaml:
-    get:
-      tags: [System]
-      summary: OpenAPI document.
-      description: Serves the gateway API contract.
-      responses:
-        "200": { description: OpenAPI YAML }
-
-  /docs:
-    get:
-      tags: [System]
-      summary: Swagger UI page.
-      description: Interactive API documentation.
-      responses:
-        "200": { description: HTML page }
-
-  /csrf:
-    get:
-      tags: [Auth / Session]
-      summary: Issue CSRF token.
-      description: Returns token and sets XSRF-TOKEN cookie.
-      responses:
-        "200":
-          description: Token issued.
-          content:
-            application/json:
-              examples:
-                csrf:
-                  value:
-                    token: csrf-token
-
-  /me:
-    get:
-      tags: [Auth / Session]
-      summary: Session debug profile.
-      description: Returns claims extracted from current session.
-      responses:
-        "200": { description: Session data }
-        "401":
-          description: Missing session.
+                  value: { ok: true }
+        '403':
+          description: CSRF token mismatch
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /logout:
-    post:
-      tags: [Auth / Session]
-      summary: Logout current session.
-      description: Clears session cookie and requires CSRF header.
+  /api/v1/session:
+    get:
+      tags: [Session]
+      summary: Get current session
+      security:
+        - sessionCookie: []
       responses:
-        "200":
-          description: Logged out.
+        '200':
+          description: Current session data
           content:
             application/json:
-              examples:
-                ok:
-                  value:
-                    ok: true
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          description: Missing or invalid session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/me:
+    get:
+      tags: [Profile]
+      summary: Get current profile
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+    patch:
+      tags: [Profile]
+      summary: Update current profile
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+            examples:
+              update:
+                value:
+                  displayName: Alice Cooper
+                  avatarUrl: https://cdn.example.com/avatars/alice.png
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+  /api/v1/me/password:
+    post:
+      tags: [Profile]
+      summary: Change current user password
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Password changed
+
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register account
+      security:
+        - csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Registered and authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login by email and password
+      security:
+        - csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout current account
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      responses:
+        '200':
+          description: Logged out
+
+  /api/v1/auth/csrf:
+    get:
+      tags: [Auth]
+      summary: Issue CSRF token for auth API
+      responses:
+        '200':
+          description: CSRF token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfResponse'
 
   /api/v1/games:
     post:
       tags: [Games]
-      summary: Create game room and host session.
-      description: Creates room, returns invite data, sets host session cookie.
+      summary: Create game room and host session
+      security:
+        - csrfHeader: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateGameRequest'
-            examples:
-              create:
-                value:
-                  ownerUserId: 00000000-0000-0000-0000-000000000001
-                  quizId: demo-quiz
-                  title: Friday Quiz
       responses:
-        "200":
-          description: Room created.
+        '200':
+          description: Room created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreateGameResponse'
-              examples:
-                created:
-                  value:
-                    pin: ABC123
-                    inviteToken: token123
-                    inviteUrl: http://localhost:8080/invite/token123
-                    wsUrl: http://localhost:8080/ws
-        "400":
-          description: Invalid JSON or validation error.
+        '400':
+          description: Validation error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/games/{pin}/join:
-    post:
-      tags: [Rooms / Invites]
-      summary: Join by PIN.
-      description: Issues join ticket and authenticates player session.
+  /api/v1/games/{pin}:
+    get:
+      tags: [Games]
+      summary: Get game by pin
       parameters:
         - name: pin
           in: path
           required: true
-          schema: { type: string, pattern: "^[A-Z0-9]{6}$" }
+          schema:
+            type: string
+            pattern: '^[A-Z0-9]{6}$'
+      responses:
+        '200':
+          description: Room summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameStateResponse'
+
+  /api/v1/games/{pin}/join:
+    post:
+      tags: [Invites]
+      summary: Join game by pin
+      security:
+        - csrfHeader: []
+      parameters:
+        - name: pin
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z0-9]{6}$'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/JoinRequest'
-            examples:
-              byPin:
-                value:
-                  name: Alice
       responses:
-        "200":
-          description: Joined.
+        '200':
+          description: Joined
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JoinResponse'
-              examples:
-                joined:
-                  value:
-                    playerId: 123e4567-e89b-12d3-a456-426614174000
-                    team: A
-                    role: player
-                    wsUrl: http://localhost:8080/ws
-                    csrfToken: csrf-token
 
   /api/v1/invites/{inviteToken}/join:
     post:
-      tags: [Rooms / Invites]
-      summary: Join by invite token.
-      description: Joins game using invite token and player name.
+      tags: [Invites]
+      summary: Join game by invite token
+      security:
+        - csrfHeader: []
       parameters:
         - name: inviteToken
           in: path
           required: true
-          schema: { type: string, minLength: 1 }
+          schema:
+            type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/JoinRequest'
-            examples:
-              byInvite:
-                value:
-                  name: Bob
       responses:
-        "200":
-          description: Joined.
+        '200':
+          description: Joined
           content:
             application/json:
               schema:
@@ -330,107 +767,275 @@ paths:
   /api/v1/games/{pin}/start:
     post:
       tags: [Games]
-      summary: Start game.
-      description: Host-only operation protected by session and CSRF token.
+      summary: Start game
       security:
-        - cookieAuth: []
+        - sessionCookie: []
+        - csrfHeader: []
       parameters:
         - name: pin
           in: path
           required: true
-          schema: { type: string, pattern: "^[A-Z0-9]{6}$" }
+          schema:
+            type: string
+            pattern: '^[A-Z0-9]{6}$'
       responses:
-        "204": { description: Started }
-        "403":
-          description: Forbidden (host-only or CSRF mismatch).
+        '204':
+          description: Started
+
+  /api/v1/games/{pin}/state:
+    get:
+      tags: [Games]
+      summary: Get game state
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: pin
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z0-9]{6}$'
+      responses:
+        '200':
+          description: Current game state
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/GameStateResponse'
+
+  /api/v1/games/{pin}/leave:
+    post:
+      tags: [Games]
+      summary: Leave game
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - name: pin
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z0-9]{6}$'
+      responses:
+        '204':
+          description: Left game
+
+  /api/v1/games/{pin}/kick:
+    post:
+      tags: [Games]
+      summary: Kick player from game
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - name: pin
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z0-9]{6}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [playerId]
+              properties:
+                playerId:
+                  type: string
+                  example: 123e4567-e89b-12d3-a456-426614174000
+      responses:
+        '204':
+          description: Player kicked
 
   /api/v1/bots:
+    get:
+      tags: [Bots]
+      summary: List bots
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Bots list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListBotsResponse'
     post:
       tags: [Bots]
-      summary: Register bot.
-      description: Registers a bot endpoint for current user.
+      summary: Create bot
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RegisterBotRequest'
-            examples:
-              register:
-                value:
-                  name: Demo Bot
-                  version: 1.0.0
-                  endpoint: https://bot.example.com/webhook
       responses:
-        "200":
-          description: Bot registered.
+        '200':
+          description: Bot created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RegisterBotResponse'
-              examples:
-                registered:
-                  value:
-                    bot:
-                      botId: bot_1
-                      name: Demo Bot
-                      version: 1.0.0
-                      status: active
-                      registeredAt: 1730000000
-    get:
-      tags: [Bots]
-      summary: List bots.
-      description: Returns all bots available to current user.
-      responses:
-        "200":
-          description: Bots list.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListBotsResponse'
-              examples:
-                list:
-                  value:
-                    bots: []
+                $ref: '#/components/schemas/BotResponse'
 
   /api/v1/bots/{botId}:
     get:
       tags: [Bots]
-      summary: Get bot status.
-      description: Returns details for one bot.
+      summary: Get bot
+      security:
+        - sessionCookie: []
       parameters:
         - name: botId
           in: path
           required: true
-          schema: { type: string, minLength: 1 }
+          schema:
+            type: string
       responses:
-        "200":
-          description: Bot details.
+        '200':
+          description: Bot details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetBotResponse'
-              examples:
-                bot:
-                  value:
-                    bot:
-                      botId: bot_1
-                      name: Demo Bot
-                      version: 1.0.0
-                      status: active
-                      registeredAt: 1730000000
-    delete:
+                $ref: '#/components/schemas/BotResponse'
+    patch:
       tags: [Bots]
-      summary: Remove bot.
-      description: Deletes bot registration.
+      summary: Update bot
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
       parameters:
         - name: botId
           in: path
           required: true
-          schema: { type: string, minLength: 1 }
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBotRequest'
       responses:
-        "204": { description: Bot removed }
+        '200':
+          description: Updated bot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotResponse'
+    delete:
+      tags: [Bots]
+      summary: Delete bot
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - name: botId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Bot deleted
+
+  /admin/api/stats:
+    get:
+      tags: [Admin]
+      summary: Get admin stats
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Platform stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStatsResponse'
+
+  /admin/api/users/{userId}/ban:
+    post:
+      tags: [Admin]
+      summary: Ban user
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUserActionRequest'
+      responses:
+        '204':
+          description: User banned
+
+  /admin/api/users/{userId}/unban:
+    post:
+      tags: [Admin]
+      summary: Unban user
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUserActionRequest'
+      responses:
+        '204':
+          description: User unbanned
+
+  /admin/api/bots/{botId}/disable:
+    post:
+      tags: [Admin]
+      summary: Disable bot
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - name: botId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Bot disabled
+
+  /ws:
+    get:
+      tags: [WebSocket]
+      summary: WebSocket upgrade endpoint
+      description: |
+        Upgrade to WebSocket and exchange typed messages.
+
+        Client -> Server schema: `WsClientMessage`
+        Server -> Client schema: `WsServerMessage`
+      responses:
+        '101':
+          description: Switching Protocols
+      x-websocket-messages:
+        clientToServer:
+          $ref: '#/components/schemas/WsClientMessage'
+        serverToClient:
+          $ref: '#/components/schemas/WsServerMessage'
