@@ -38,6 +38,9 @@ RUN --mount=type=cache,target=/opt/vcpkg/downloads,id=vcpkg-downloads \
 COPY defay1x9/ /repo/defay1x9/
 COPY richcrab/proto/proto/ /repo/richcrab/proto/proto/
 
+# На случай, если build/ попал в контекст до обновления .dockerignore
+RUN rm -rf /repo/defay1x9/build /repo/defay1x9/CMakeCache.txt
+
 RUN --mount=type=cache,target=/opt/vcpkg/downloads,id=vcpkg-downloads \
     --mount=type=cache,target=/opt/vcpkg/buildtrees,id=vcpkg-buildtrees-x64-linux-release \
     --mount=type=cache,target=/opt/vcpkg/packages,id=vcpkg-packages-x64-linux-release \
