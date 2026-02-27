@@ -25,6 +25,10 @@ using richcrab::v1::IssueJoinTicketResponse;
 using richcrab::v1::JoinRoomRequest;
 using richcrab::v1::JoinRoomResponse;
 using richcrab::v1::JoinService;
+using richcrab::v1::KickPlayerRequest;
+using richcrab::v1::KickPlayerResponse;
+using richcrab::v1::LeaveRoomRequest;
+using richcrab::v1::LeaveRoomResponse;
 using richcrab::v1::ListBotsRequest;
 using richcrab::v1::ListBotsResponse;
 using richcrab::v1::RegisterBotRequest;
@@ -243,6 +247,50 @@ bool QuizCoreClientGrpc::startGame(const std::string& roomId,
   const auto status = impl_->game->StartGame(&ctx, req, &resp);
   if (!status.ok() || resp.has_error()) return false;
   return resp.started();
+}
+
+QuizCoreLeaveRoomResult QuizCoreClientGrpc::leaveRoom(const std::string& roomId,
+                                                      const std::string& playerId,
+                                                      const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_start_game));
+  LeaveRoomRequest req;
+  req.mutable_room_id()->set_value(roomId);
+  req.mutable_player_id()->set_value(playerId);
+
+  LeaveRoomResponse resp;
+  const auto status = impl_->game->LeaveRoom(&ctx, req, &resp);
+
+  QuizCoreLeaveRoomResult out;
+  out.status = mapStatus(status);
+  if (!status.ok() || resp.has_error()) return out;
+  out.left = resp.left();
+  return out;
+}
+
+QuizCoreKickPlayerResult QuizCoreClientGrpc::kickPlayer(const std::string& roomId,
+                                                        const std::string& requestedByUserId,
+                                                        const std::string& playerId,
+                                                        const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_start_game));
+  KickPlayerRequest req;
+  req.mutable_room_id()->set_value(roomId);
+  req.mutable_requested_by()->set_value(requestedByUserId);
+  req.mutable_player_id()->set_value(playerId);
+
+  KickPlayerResponse resp;
+  const auto status = impl_->game->KickPlayer(&ctx, req, &resp);
+
+  QuizCoreKickPlayerResult out;
+  out.status = mapStatus(status);
+  if (!status.ok() || resp.has_error()) return out;
+  out.kicked = resp.kicked();
+  return out;
 }
 
 std::optional<QuizCoreRoomState> QuizCoreClientGrpc::getRoomState(const std::string& roomId,
