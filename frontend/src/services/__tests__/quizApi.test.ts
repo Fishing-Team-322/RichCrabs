@@ -11,21 +11,21 @@ describe('quizApi contract', () => {
   })
 
   it('uses /api/v1/quizzes list and maps items', async () => {
-    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({ items: [{ quizId: 'q1', title: 'Quiz', questions: [1] }] }))
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ items: [{ quizId: 'q1', title: 'Quiz', questions: [1] }] }))
     const items = await quizApi.list()
     expect(items[0].id).toBe('q1')
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/quizzes', expect.objectContaining({ method: 'GET' }))
   })
 
   it('creates draft via /api/v1/quizzes', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({ quiz: { quizId: 'q1', title: 'Quiz', questions: [] } }))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ quiz: { quizId: 'q1', title: 'Quiz', questions: [] } }))
     const draft = await quizApi.draft()
     expect(draft.id).toBe('q1')
   })
 
   it('uses ai endpoints', async () => {
     const fetchMock = vi
-      .spyOn(global, 'fetch')
+      .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(jsonResponse({ jobId: 'j1', status: 'running' }))
       .mockResolvedValueOnce(jsonResponse({ jobId: 'j1', status: 'running' }))
     await quizApi.startGeneration({ topic: 'Topic', difficulty: 'easy', questionCount: 5, language: 'ru', format: 'single' })
@@ -36,7 +36,7 @@ describe('quizApi contract', () => {
 
   it('uses quiz CRUD endpoints', async () => {
     const fetchMock = vi
-      .spyOn(global, 'fetch')
+      .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(jsonResponse({ quiz: { quizId: 'q1' } }))
       .mockResolvedValueOnce(jsonResponse({ quiz: { quizId: 'q1', title: 'a', questions: [] } }))
       .mockResolvedValueOnce(jsonResponse({ quiz: { quizId: 'q1', title: 'a', questions: [] } }))

@@ -12,7 +12,7 @@ describe('botsApi contract', () => {
 
   it('uses /api/v1/bots CRUD', async () => {
     const fetchMock = vi
-      .spyOn(global, 'fetch')
+      .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(jsonResponse({ bots: [{ botId: 'b1', name: 'Bot', status: 'enabled' }] }))
       .mockResolvedValueOnce(jsonResponse({ bot: { botId: 'b2', name: 'Bot2', status: 'enabled' } }))
       .mockResolvedValueOnce(jsonResponse(null, 204))
@@ -26,7 +26,7 @@ describe('botsApi contract', () => {
 
   it('uses /api/v1/telegram/bots/connect and maps status/unbind', async () => {
     const fetchMock = vi
-      .spyOn(global, 'fetch')
+      .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(jsonResponse({ botId: 'b1', status: 'connected' }))
       .mockResolvedValueOnce(jsonResponse({ botId: 'b1', status: 'connected' }))
       .mockResolvedValueOnce(jsonResponse({ bots: [{ botId: 'b1', name: 'Bot', status: 'enabled' }] }))

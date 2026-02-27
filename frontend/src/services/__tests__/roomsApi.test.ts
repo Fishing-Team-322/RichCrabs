@@ -12,7 +12,7 @@ describe('roomsApi contract', () => {
 
   it('uses /api/v1/games for create/list/getOpenRooms', async () => {
     const fetchMock = vi
-      .spyOn(global, 'fetch')
+      .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(jsonResponse({ pin: 'ABC123', inviteUrl: '/invite/t' }))
       .mockResolvedValueOnce(jsonResponse([{ pin: 'ABC123', state: 'lobby', players: [] }]))
       .mockResolvedValueOnce(jsonResponse([{ id: '1', pin: 'ABC123', players: [], status: 'waiting' }]))
@@ -26,7 +26,7 @@ describe('roomsApi contract', () => {
 
   it('uses /api/v1/games/{pin} endpoints', async () => {
     const fetchMock = vi
-      .spyOn(global, 'fetch')
+      .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(jsonResponse({ pin: 'ABC123', state: 'lobby', players: [] }))
       .mockResolvedValueOnce(jsonResponse(null, 204))
       .mockResolvedValueOnce(jsonResponse({ pin: 'ABC123', state: 'playing', players: [] }))

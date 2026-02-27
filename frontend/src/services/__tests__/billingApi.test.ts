@@ -11,7 +11,7 @@ describe('billingApi contract', () => {
 
   it('uses /api/v1/entitlements and /api/v1/usage for available billing data', async () => {
     const fetchMock = vi
-      .spyOn(global, 'fetch')
+      .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(jsonResponse({ limits: [{ limit: 'rooms', max: 10 }] }))
       .mockResolvedValueOnce(jsonResponse({ usage: { rooms: 1 } }))
     const plans = await billingApi.plans()
