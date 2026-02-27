@@ -57,6 +57,7 @@ add_executable(defay1x9
   src/session.cpp
   src/http_api_utils.cpp
   src/controllers/ControllerUtils.cpp
+  src/controllers/BotStateStorage.cpp
   src/controllers/AuthStorage.cpp
   src/controllers/ServiceController.cpp
   src/controllers/AuthController.cpp
@@ -69,6 +70,7 @@ add_executable(defay1x9
   src/controllers/TelegramController.cpp
   src/controllers/AdminController.cpp
   include/controllers/ControllerUtils.hpp
+  include/controllers/BotStateStorage.hpp
   include/controllers/AuthStorage.hpp
   include/controllers/ServiceController.hpp
   include/controllers/AuthController.hpp

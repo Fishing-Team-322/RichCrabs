@@ -4,6 +4,7 @@
 #include "config.hpp"
 #include "controllers/AdminController.hpp"
 #include "controllers/AuthController.hpp"
+#include "controllers/BotStateStorage.hpp"
 #include "controllers/BotsController.hpp"
 #include "controllers/EntitlementsController.hpp"
 #include "controllers/GamesController.hpp"
@@ -23,6 +24,11 @@ int main() {
   spdlog::info("listen {}:{}", conf.listen_host, conf.listen_port);
   spdlog::info("public_base_url={}", conf.public_base_url);
   spdlog::info("openapi_path={}", conf.openapi_path);
+
+  std::string botSchemaError;
+  if (!controllers::EnsureBotStateSchema(conf, botSchemaError)) {
+    spdlog::warn("bot state schema init failed: {}", botSchemaError);
+  }
 
   QuizCoreClientGrpc quizCore(conf.grpc_game_addr,
                               conf.grpc_join_addr,

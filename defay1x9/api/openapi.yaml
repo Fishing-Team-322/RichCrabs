@@ -360,16 +360,19 @@ components:
         name:
           type: string
           example: Demo Bot v2
-        endpoint:
-          type: string
-          example: https://bot.example.com/v2/webhook
-        status:
-          type: string
-          example: active
+        enabled:
+          type: boolean
+          example: true
+        metadata:
+          type: object
+          additionalProperties: true
+          example:
+            channel: telegram
+            locale: ru
 
     Bot:
       type: object
-      required: [botId, name, version, status, registeredAt]
+      required: [botId, name, version, status, registeredAt, enabled, metadata]
       properties:
         botId:
           type: string
@@ -387,6 +390,13 @@ components:
           type: integer
           format: int64
           example: 1730000000
+        enabled:
+          type: boolean
+          example: true
+        metadata:
+          type: object
+          additionalProperties: true
+          example: {}
 
     BotResponse:
       type: object
@@ -1694,7 +1704,7 @@ paths:
                 $ref: '#/components/schemas/BotResponse'
     patch:
       tags: [Bots]
-      summary: Update bot (not implemented)
+      summary: Update bot
       security:
         - sessionCookie: []
         - csrfHeader: []
@@ -1711,8 +1721,26 @@ paths:
             schema:
               $ref: '#/components/schemas/UpdateBotRequest'
       responses:
-        '501':
-          description: Not implemented
+        '200':
+          description: Bot updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Bot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Update conflict
           content:
             application/json:
               schema:
