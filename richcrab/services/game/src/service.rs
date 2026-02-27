@@ -2,6 +2,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
 use chrono::Utc;
 use futures::Stream;
+use qrcodegen::{QrCode, QrCodeEcc};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::Deserialize;
 use shared::{redis_client::RedisClient, redis_keys};
@@ -20,6 +21,38 @@ struct JoinTicketPayload {
     room_id: String,
     display_name: String,
     issued_at_unix: i64,
+}
+
+fn invite_path(invite_token: &str) -> String {
+    format!("/join?inviteToken={invite_token}")
+}
+
+fn invite_qr_svg(invite_path: &str) -> String {
+    let qr = QrCode::encode_text(invite_path, QrCodeEcc::Medium)
+        .expect("invite path must always encode as QR");
+    let border: i32 = 4;
+    let scale: i32 = 6;
+    let size = qr.size();
+    let dimension = (size + border * 2) * scale;
+
+    let mut svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {dimension} {dimension}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/>"##
+    );
+
+    for y in 0..size {
+        for x in 0..size {
+            if qr.get_module(x, y) {
+                let rx = (x + border) * scale;
+                let ry = (y + border) * scale;
+                svg.push_str(&format!(
+                    r##"<rect x="{rx}" y="{ry}" width="{scale}" height="{scale}" fill="#000"/>"##
+                ));
+            }
+        }
+    }
+
+    svg.push_str("</svg>");
+    svg
 }
 
 pub struct GameServiceImpl {
@@ -220,12 +253,17 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         metrics.rooms_active.inc();
         self.report_usage(&owner_id, "CREATE_ROOM", 1).await?;
 
+        let invite_path = invite_path(&invite_token);
+        let invite_qr_svg = invite_qr_svg(&invite_path);
+
         Ok(Response::new(proto::richcrab::v1::CreateRoomResponse {
             room_id: Some(proto::richcrab::v1::RoomId { value: room_id }),
             pin,
             invite_token,
             created_at: Self::now_ts(),
             error: None,
+            invite_path,
+            invite_qr_svg,
         }))
     }
 
@@ -712,5 +750,29 @@ impl proto::richcrab::v1::health_server::Health for HealthServiceImpl {
         Ok(Response::new(proto::richcrab::v1::PingResponse {
             message: "pong".to_string(),
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{invite_path, invite_qr_svg};
+
+    #[test]
+    fn invite_path_is_relative() {
+        let token = "abc123";
+        let path = invite_path(token);
+
+        assert!(path.starts_with('/'));
+        assert!(path.contains("inviteToken=abc123"));
+        assert!(!path.contains("://"));
+    }
+
+    #[test]
+    fn invite_qr_svg_is_valid_svg() {
+        let svg = invite_qr_svg("/join?inviteToken=abc123");
+
+        assert!(svg.starts_with("<svg"));
+        assert!(svg.contains("</svg>"));
+        assert!(svg.contains("<rect"));
     }
 }
