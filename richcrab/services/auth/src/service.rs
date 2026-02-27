@@ -88,6 +88,13 @@ impl AuthService for AuthServiceImpl {
             .await
             .map_err(|e| Status::internal(format!("login failed: {e}")))?;
         if let Some(user) = user {
+            if user.banned {
+                return Ok(Response::new(LoginResponse {
+                    authenticated: false,
+                    user: None,
+                    error: None,
+                }));
+            }
             Ok(Response::new(LoginResponse {
                 authenticated: true,
                 user: Some(Self::map_user(user)),
@@ -204,7 +211,7 @@ impl AuthService for AuthServiceImpl {
             .await
             .map_err(|e| Status::internal(format!("set user ban failed: {e}")))?;
         Ok(Response::new(SetUserBanResponse {
-            updated: true,
+            updated: found,
             found,
             error: None,
         }))
