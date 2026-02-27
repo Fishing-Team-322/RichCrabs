@@ -1,5 +1,5 @@
 
-import type { RoomRow } from "../types";
+import type { RoomRow } from '../features/monitoring/types';
 import { IconArrow } from "./Icons";
 
 export function RoomsTable(props: {
