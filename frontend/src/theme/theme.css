@@ -91,6 +91,12 @@ a { color: inherit; }
   padding: 4px 8px;
 }
 
+
+.authForm {
+  display: grid;
+  gap: 12px;
+}
+
 @media (max-width: 760px) {
   .authCard { margin: 24px auto; }
 }
