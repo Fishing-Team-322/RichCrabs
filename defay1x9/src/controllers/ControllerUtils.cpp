@@ -11,12 +11,6 @@
 
 namespace {
 
-constexpr bool kAllowDefaultUserFallbackBuild =
-#if defined(GW_ALLOW_DEFAULT_USER_FALLBACK)
-    true;
-#else
-    false;
-#endif
 
 struct UserResolution final {
   std::optional<std::string> user_id;
@@ -24,8 +18,10 @@ struct UserResolution final {
   std::string reason;
 };
 
-bool IsDevFallbackAllowed(const Config& conf) {
-  return conf.app_env == "dev" || conf.app_env == "development" || kAllowDefaultUserFallbackBuild;
+bool IsLocalSmokeFallbackAllowed(const Config& conf) {
+  if (!conf.auth_local_smoke_fallback_enabled) return false;
+  return conf.app_env == "local" || conf.app_env == "smoke" || conf.app_env == "dev" ||
+         conf.app_env == "development" || conf.app_env == "test";
 }
 
 UserResolution ResolveUser(const drogon::HttpRequestPtr& req, const Config& conf) {
@@ -48,8 +44,8 @@ UserResolution ResolveUser(const drogon::HttpRequestPtr& req, const Config& conf
     reason = "session_user_id_missing";
   }
 
-  if (IsDevFallbackAllowed(conf) && !conf.default_user_id.empty()) {
-    spdlog::warn("auth_fallback_default_user_id reason={} env={} path={}",
+  if (IsLocalSmokeFallbackAllowed(conf) && !conf.default_user_id.empty()) {
+    spdlog::warn("auth_local_smoke_fallback_default_user_id reason={} env={} path={}",
                  reason,
                  conf.app_env,
                  req->path());

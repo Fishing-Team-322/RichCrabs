@@ -46,6 +46,7 @@ struct Config final {
   bool ws_mock_stream_enabled = false;
   bool ws_mock_stream_auto_on_unavailable = true;
   std::string app_env = "development";
+  bool auth_local_smoke_fallback_enabled = false;
   std::string session_signing_key;
 
   security::CsrfConfig csrf{};
