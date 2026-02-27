@@ -13,6 +13,9 @@ import HomePage from '../../pages/Home/Home'
 import CreateRoom from '../../pages/CreateRoom/CreateRoom'
 import OpenGames from '../../pages/rooms/OpenGames'
 import RoomDetails from '../../pages/rooms/RoomDetails'
+import JoinPage from '../../pages/join/JoinPage'
+import InviteJoinPage from '../../pages/join/InviteJoinPage'
+import RuntimePage from '../../pages/Quiz/RuntimePage'
 import AuthGuard from './guards/AuthGuard'
 import GuestGuard from './guards/GuestGuard'
 import { routes } from './routeMap'
@@ -51,8 +54,9 @@ const AppRouter: React.FC = () => {
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route path={routes.home} element={<HomePage />} />
-        <Route path={routes.join} element={<AppPage title="Join" description="Ввод PIN или invite-кода." />} />
-        <Route path={routes.invite} element={<AppPage title="Invite" description="Прямой вход по invite-токену." />} />
+        <Route path={routes.join} element={<JoinPage />} />
+        <Route path={routes.invite} element={<InviteJoinPage />} />
+        <Route path={routes.quizRuntime} element={<RuntimePage />} />
 
         <Route element={<GuestGuard />}>
           <Route path={routes.authLogin} element={<Login />} />
@@ -68,7 +72,6 @@ const AppRouter: React.FC = () => {
             <Route path={routes.rooms} element={<OpenGames />} />
             <Route path={routes.roomsNew} element={<CreateRoom />} />
             <Route path={routes.roomDetails} element={<RoomDetails />} />
-            <Route path={routes.quizRuntime} element={<AppPage title="Игра" description="Игровой runtime комнаты." />} />
             <Route path={routes.profile} element={<AppPage title="Профиль" description="Управление профилем пользователя." />} />
             <Route
               path={routes.subscriptions}

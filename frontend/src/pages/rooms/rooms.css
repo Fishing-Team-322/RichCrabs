@@ -103,3 +103,13 @@
   align-items: center;
   flex-wrap: wrap;
 }
+
+.roomQr {
+  display: grid;
+  gap: 8px;
+  width: fit-content;
+  padding: 10px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  background: #f8fafc;
+}
