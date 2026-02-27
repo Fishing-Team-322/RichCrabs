@@ -18,6 +18,7 @@ import InviteJoinPage from '../../pages/join/InviteJoinPage'
 import RuntimePage from '../../pages/Quiz/RuntimePage'
 import Profile from '../../pages/Profile/Profile'
 import Subscriptions from '../../pages/Subscriptions/Subscriptions'
+import TelegramBots from '../../pages/TelegramBots/TelegramBots'
 import AuthGuard from './guards/AuthGuard'
 import GuestGuard from './guards/GuestGuard'
 import { routes } from './routeMap'
@@ -76,7 +77,7 @@ const AppRouter: React.FC = () => {
             <Route path={routes.roomDetails} element={<RoomDetails />} />
             <Route path={routes.profile} element={<Profile />} />
             <Route path={routes.subscriptions} element={<Subscriptions />} />
-            <Route path={routes.bots} element={<AppPage title="Боты" description="Интеграции с ботами." />} />
+            <Route path={routes.bots} element={<TelegramBots />} />
             <Route
               path={routes.adminDashboard}
               element={<AppPage title="Admin Dashboard" description="Административная панель." />}
