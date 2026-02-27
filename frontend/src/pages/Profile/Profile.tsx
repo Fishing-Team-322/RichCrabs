@@ -43,7 +43,7 @@ const Profile = () => {
       try {
         const data = await profileApi.getProfile()
         setLocalProfile(data)
-        setName(data.name || '')
+        setName(data.displayName || '')
         setAvatarUrl(data.avatarUrl || '')
         setTimezone(data.timezone || '')
         setLocale(data.locale || '')
@@ -87,7 +87,7 @@ const Profile = () => {
     setSaveState('saving')
     try {
       const updated = await profileApi.updateProfile({
-        name: name.trim(),
+        displayName: name.trim(),
         avatarUrl: avatarUrl.trim() || undefined,
         timezone: timezone.trim() || undefined,
         locale: locale.trim() || undefined,
@@ -135,9 +135,9 @@ const Profile = () => {
           <h1>{t('profile.title')}</h1>
           <LanguageSwitcher />
           <div className="profileBasic">
-            {profile.avatarUrl ? <img src={profile.avatarUrl} alt={profile.name} className="profileAvatar" /> : <div className="profileAvatar fallback">{profile.name[0]}</div>}
+            {profile.avatarUrl ? <img src={profile.avatarUrl} alt={profile.displayName} className="profileAvatar" /> : <div className="profileAvatar fallback">{profile.displayName[0]}</div>}
             <div>
-              <div className="profileName">{profile.name}</div>
+              <div className="profileName">{profile.displayName}</div>
               <div>{profile.email}</div>
               <div className="profileMuted">ID: {profile.id}</div>
             </div>

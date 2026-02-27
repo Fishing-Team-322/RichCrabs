@@ -5,9 +5,9 @@ import type {
 } from '../types/http.types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
-
-const ACCESS_TOKEN_KEY = 'token'
-const REFRESH_TOKEN_KEY = 'refresh_token'
+const CSRF_ENDPOINT = '/api/v1/auth/csrf'
+const CSRF_COOKIE_NAME = import.meta.env.VITE_CSRF_COOKIE_NAME || 'XSRF-TOKEN'
+const CSRF_HEADER_NAME = import.meta.env.VITE_CSRF_HEADER_NAME || 'X-XSRF-TOKEN'
 
 export class AppError extends Error {
   status: number
@@ -23,21 +23,11 @@ export class AppError extends Error {
   }
 }
 
-let refreshPromise: Promise<string | null> | null = null
-
-const getAccessToken = (): string => localStorage.getItem(ACCESS_TOKEN_KEY) || ''
-const getRefreshToken = (): string => localStorage.getItem(REFRESH_TOKEN_KEY) || ''
-
-export const setAuthTokens = (accessToken: string, refreshToken?: string) => {
-  localStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
-  if (refreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
-  }
-}
+let csrfPromise: Promise<string | null> | null = null
 
 export const clearAuthTokens = () => {
-  localStorage.removeItem(ACCESS_TOKEN_KEY)
-  localStorage.removeItem(REFRESH_TOKEN_KEY)
+  localStorage.removeItem('token')
+  localStorage.removeItem('refresh_token')
 }
 
 const parseErrorPayload = async (response: Response): Promise<HttpErrorDto> => {
@@ -84,87 +74,81 @@ const normalizeResponse = <T>(payload: T | ApiEnvelope<T>): T => {
   return payload as T
 }
 
-const extractAccessToken = (payload: unknown): string | null => {
-  if (!payload || typeof payload !== 'object') return null
+const getCookieValue = (name: string): string | null => {
+  if (typeof document === 'undefined') return null
 
-  const p = payload as Record<string, unknown>
-  const token = p.accessToken || p.token
-  return typeof token === 'string' ? token : null
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`))
+  return match ? decodeURIComponent(match[1]) : null
 }
 
-const extractRefreshToken = (payload: unknown): string | undefined => {
-  if (!payload || typeof payload !== 'object') return undefined
+const loadCsrfToken = async (): Promise<string | null> => {
+  const existingToken = getCookieValue(CSRF_COOKIE_NAME)
+  if (existingToken) return existingToken
 
-  const p = payload as Record<string, unknown>
-  return typeof p.refreshToken === 'string' ? p.refreshToken : undefined
-}
+  const response = await fetch(`${API_BASE}${CSRF_ENDPOINT}`, {
+    method: 'GET',
+    credentials: 'include',
+  })
 
-const reauth = async (): Promise<string | null> => {
-  const refreshToken = getRefreshToken()
-  if (!refreshToken) return null
-
-  const tryRefresh = async (endpoint: string): Promise<string | null> => {
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    })
-
-    if (!response.ok) {
-      return null
-    }
-
-    const payload = normalizeResponse(await response.json())
-    const accessToken = extractAccessToken(payload)
-    if (!accessToken) {
-      return null
-    }
-
-    const nextRefreshToken = extractRefreshToken(payload)
-    setAuthTokens(accessToken, nextRefreshToken)
-    return accessToken
+  if (!response.ok) {
+    return null
   }
 
-  return (await tryRefresh('/api/auth/refresh')) || tryRefresh('/api/auth/reauth')
+  const payload = normalizeResponse(await response.json()) as { token?: string }
+  return payload.token || getCookieValue(CSRF_COOKIE_NAME)
 }
 
-const getRefreshedToken = async (): Promise<string | null> => {
-  if (!refreshPromise) {
-    refreshPromise = reauth().finally(() => {
-      refreshPromise = null
+const getCsrfToken = async (): Promise<string | null> => {
+  if (!csrfPromise) {
+    csrfPromise = loadCsrfToken().finally(() => {
+      csrfPromise = null
     })
   }
 
-  return refreshPromise
+  return csrfPromise
+}
+
+const isStateChangingRequest = (method?: string): boolean => {
+  const normalized = (method || 'GET').toUpperCase()
+  return normalized !== 'GET' && normalized !== 'HEAD' && normalized !== 'OPTIONS'
 }
 
 export async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {},
-  withReauth = true
+  withCsrfRetry = true
 ): Promise<T> {
-  const token = getAccessToken()
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` }),
-    ...options.headers,
+  const method = (options.method || 'GET').toUpperCase()
+  const headers: Record<string, string> = {
+    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(options.headers as Record<string, string> | undefined),
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers })
+  if (isStateChangingRequest(method)) {
+    const csrfToken = await getCsrfToken()
+    if (csrfToken) {
+      headers[CSRF_HEADER_NAME] = csrfToken
+    }
+  }
 
-  if (response.status === 401 && withReauth) {
-    const refreshedToken = await getRefreshedToken()
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    method,
+    credentials: 'include',
+    headers,
+  })
 
-    if (refreshedToken) {
+  if (response.status === 403 && withCsrfRetry && isStateChangingRequest(method)) {
+    csrfPromise = null
+    const nextCsrfToken = await getCsrfToken()
+    if (nextCsrfToken) {
       return apiFetch<T>(endpoint, options, false)
     }
+  }
 
+  if (response.status === 401) {
     clearAuthTokens()
-    throw new AppError({
-      message: 'Session expired. Please sign in again.',
-      status: 401,
-      code: 'AUTH_EXPIRED',
-    })
   }
 
   if (!response.ok) {

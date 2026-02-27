@@ -12,7 +12,7 @@ const useAuth = () => {
   )
 
   const signUp = useCallback(
-    (name: string, email: string, password: string) => dispatch(register({ name, email, password })),
+    (displayName: string, email: string, password: string) => dispatch(register({ displayName, email, password })),
     [dispatch],
   )
 
@@ -20,7 +20,7 @@ const useAuth = () => {
 
   return {
     ...auth,
-    isAuthenticated: Boolean(auth.profile && auth.token),
+    isAuthenticated: Boolean(auth.profile),
     signIn,
     signUp,
     signOut,

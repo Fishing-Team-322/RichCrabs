@@ -107,6 +107,14 @@ void RegisterProfileRoutes(const Config& conf) {
       },
       {drogon::Patch});
 
+
+  drogon::app().registerHandler(
+      "/api/v1/me/sessions",
+      [](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+        cb(notImplemented("/api/v1/me/sessions"));
+      },
+      {drogon::Get});
+
   drogon::app().registerHandler(
       "/api/v1/me/password",
       [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
