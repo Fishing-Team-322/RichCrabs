@@ -19,22 +19,13 @@ import RuntimePage from '../../pages/Quiz/RuntimePage'
 import Profile from '../../pages/Profile/Profile'
 import Subscriptions from '../../pages/Subscriptions/Subscriptions'
 import TelegramBots from '../../pages/TelegramBots/TelegramBots'
+import AdminLayout from '../../components/admin/AdminLayout'
+import AdminDashboardPage from '../../pages/admin/DashboardPage'
+import AdminSecurityPage from '../../pages/admin/SecurityPage'
 import AuthGuard from './guards/AuthGuard'
 import GuestGuard from './guards/GuestGuard'
 import { routes } from './routeMap'
 import './router.css'
-
-interface AppPageProps {
-  title: string
-  description: string
-}
-
-const AppPage: React.FC<AppPageProps> = ({ title, description }) => (
-  <section className="pageCard">
-    <h1>{title}</h1>
-    <p>{description}</p>
-  </section>
-)
 
 const LoadingFallback: React.FC = () => <div className="routeState">Загрузка роутов...</div>
 
@@ -78,14 +69,11 @@ const AppRouter: React.FC = () => {
             <Route path={routes.profile} element={<Profile />} />
             <Route path={routes.subscriptions} element={<Subscriptions />} />
             <Route path={routes.bots} element={<TelegramBots />} />
-            <Route
-              path={routes.adminDashboard}
-              element={<AppPage title="Admin Dashboard" description="Административная панель." />}
-            />
-            <Route
-              path={routes.adminSecurity}
-              element={<AppPage title="Admin Security" description="Раздел безопасности админки." />}
-            />
+          </Route>
+
+          <Route element={<AdminLayout />}>
+            <Route path={routes.adminDashboard} element={<AdminDashboardPage />} />
+            <Route path={routes.adminSecurity} element={<AdminSecurityPage />} />
           </Route>
         </Route>
 
