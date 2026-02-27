@@ -3,14 +3,17 @@ mod repository;
 use std::{env, net::SocketAddr};
 
 use axum::{
+    extract::Request,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
+    middleware::{self, Next},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
 use repository::BotIngressRepository;
 use sqlx::postgres::PgPoolOptions;
+use subtle::ConstantTimeEq;
 
 #[derive(Clone)]
 struct AppState {
@@ -42,9 +45,11 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let app = Router::new()
-        .route(
-            "/api/v1/telegram/webhook/:bot_id/:webhook_secret",
-            post(handle_webhook),
+        .nest(
+            "/api/v1/telegram/webhook",
+            Router::new()
+                .route("/:bot_id/:webhook_secret", post(handle_webhook))
+                .layer(middleware::from_fn(telegram_secret_guard)),
         )
         .route("/health", get(health))
         .route("/metrics", get(shared::observability::metrics_handler))
@@ -59,7 +64,6 @@ async fn main() -> anyhow::Result<()> {
 async fn handle_webhook(
     Path((bot_id, webhook_secret)): Path<(String, String)>,
     State(state): State<AppState>,
-    headers: HeaderMap,
 ) -> impl IntoResponse {
     let metrics = shared::observability::init_metrics();
     metrics
@@ -87,21 +91,6 @@ async fn handle_webhook(
         );
     }
 
-    if let Some(secret_header) = headers
-        .get("x-telegram-bot-api-secret-token")
-        .and_then(|value| value.to_str().ok())
-    {
-        if secret_header != webhook_secret {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(SimpleResponse {
-                    ok: false,
-                    message: "telegram secret header mismatch".to_string(),
-                }),
-            );
-        }
-    }
-
     (
         StatusCode::GONE,
         Json(SimpleResponse {
@@ -109,6 +98,52 @@ async fn handle_webhook(
             message: "webhook processing moved to gateway".to_string(),
         }),
     )
+}
+
+async fn telegram_secret_guard(request: Request, next: Next) -> impl IntoResponse {
+    let headers: &HeaderMap = request.headers();
+    let Some(header_secret) = headers
+        .get("x-telegram-bot-api-secret-token")
+        .and_then(|value| value.to_str().ok())
+    else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(SimpleResponse {
+                ok: false,
+                message: "missing telegram secret header".to_string(),
+            }),
+        )
+            .into_response();
+    };
+
+    let path = request.uri().path();
+    let Some(webhook_secret) = path.rsplit('/').next() else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(SimpleResponse {
+                ok: false,
+                message: "invalid webhook path".to_string(),
+            }),
+        )
+            .into_response();
+    };
+
+    if !secure_equal(header_secret.as_bytes(), webhook_secret.as_bytes()) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(SimpleResponse {
+                ok: false,
+                message: "telegram secret header mismatch".to_string(),
+            }),
+        )
+            .into_response();
+    }
+
+    next.run(request).await
+}
+
+fn secure_equal(left: &[u8], right: &[u8]) -> bool {
+    left.len() == right.len() && left.ct_eq(right).into()
 }
 
 async fn health() -> impl IntoResponse {
