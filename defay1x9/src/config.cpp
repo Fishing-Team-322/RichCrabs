@@ -41,6 +41,7 @@ Config Config::LoadFromEnv() {
   c.grpc_quiz_addr = envStr("GW_GRPC_QUIZ_ADDR", c.grpc_quiz_addr);
   c.grpc_entitlements_addr = envStr("GW_GRPC_ENTITLEMENTS_ADDR", c.grpc_entitlements_addr);
   c.grpc_bot_addr = envStr("GW_GRPC_BOT_ADDR", c.grpc_bot_addr);
+  c.grpc_auth_addr = envStr("GW_GRPC_AUTH_ADDR", c.grpc_auth_addr);
   c.default_user_id = envStr("GW_DEFAULT_USER_ID", c.default_user_id);
 
   c.grpc_deadline_ms_create_room = envInt("GW_GRPC_DEADLINE_MS_CREATE_ROOM", c.grpc_deadline_ms_create_room);
@@ -59,6 +60,7 @@ Config Config::LoadFromEnv() {
   c.grpc_deadline_ms_publish_quiz = envInt("GW_GRPC_DEADLINE_MS_PUBLISH_QUIZ", c.grpc_deadline_ms_publish_quiz);
   c.grpc_deadline_ms_start_ai_quiz_job = envInt("GW_GRPC_DEADLINE_MS_START_AI_QUIZ_JOB", c.grpc_deadline_ms_start_ai_quiz_job);
   c.grpc_deadline_ms_entitlements = envInt("GW_GRPC_DEADLINE_MS_ENTITLEMENTS", c.grpc_deadline_ms_entitlements);
+  c.grpc_deadline_ms_auth = envInt("GW_GRPC_DEADLINE_MS_AUTH", c.grpc_deadline_ms_auth);
   c.redis_url = envStr("GW_REDIS_URL", c.redis_url);
   c.database_url = envStr("DATABASE_URL", c.database_url);
   c.entitlements_rooms_daily_limit = static_cast<uint64_t>(envInt("GW_ENT_LIMIT_ROOMS_DAILY", static_cast<int>(c.entitlements_rooms_daily_limit)));
