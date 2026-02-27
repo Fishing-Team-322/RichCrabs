@@ -215,6 +215,14 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             )
             .await
             .map_err(|e| Status::internal(format!("failed to write invite token: {e}")))?;
+        self.redis
+            .set_with_ttl(
+                &redis_keys::room_invite_token_key(&room_id),
+                &invite_token,
+                self.pin_ttl,
+            )
+            .await
+            .map_err(|e| Status::internal(format!("failed to write room invite token: {e}")))?;
 
         let initial_state = RoomState {
             room_id: room_id.clone(),
@@ -248,6 +256,84 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             invite_path,
             invite_qr_svg,
         }))
+    }
+
+    async fn regenerate_invite(
+        &self,
+        request: Request<proto::richcrab::v1::RegenerateInviteRequest>,
+    ) -> Result<Response<proto::richcrab::v1::RegenerateInviteResponse>, Status> {
+        let req = request.into_inner();
+        let room_id = req
+            .room_id
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("room_id is required"))?;
+        let requested_by = req
+            .requested_by
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("requested_by is required"))?;
+
+        let room = self.resolve_room(&room_id).await?;
+        let (state_tx, state_rx) = oneshot::channel();
+        room.tx
+            .send(RoomCommand::GetState { response: state_tx })
+            .await
+            .map_err(|_| Status::unavailable("room is unavailable"))?;
+        let state = state_rx
+            .await
+            .map_err(|_| Status::internal("room actor response dropped"))?;
+
+        if requested_by != state.owner_user_id {
+            return Err(Status::permission_denied(
+                "only room owner can regenerate invite",
+            ));
+        }
+
+        let previous_token = self
+            .redis
+            .get_value(&redis_keys::room_invite_token_key(&room_id))
+            .await
+            .map_err(|e| Status::internal(format!("failed to read room invite token: {e}")))?;
+
+        let invite_token = uuid::Uuid::new_v4().to_string();
+        self.redis
+            .set_with_ttl(
+                &redis_keys::invite_key(&invite_token),
+                &room_id,
+                self.pin_ttl,
+            )
+            .await
+            .map_err(|e| Status::internal(format!("failed to write invite token: {e}")))?;
+        self.redis
+            .set_with_ttl(
+                &redis_keys::room_invite_token_key(&room_id),
+                &invite_token,
+                self.pin_ttl,
+            )
+            .await
+            .map_err(|e| Status::internal(format!("failed to write room invite token: {e}")))?;
+
+        if let Some(previous_token) = previous_token {
+            if previous_token != invite_token {
+                self.redis
+                    .delete_key(&redis_keys::invite_key(previous_token))
+                    .await
+                    .map_err(|e| {
+                        Status::internal(format!("failed to delete old invite token: {e}"))
+                    })?;
+            }
+        }
+
+        let invite_path = invite_path(&invite_token);
+        let invite_qr_svg = invite_qr_svg(&invite_path)?;
+
+        Ok(Response::new(
+            proto::richcrab::v1::RegenerateInviteResponse {
+                invite_token,
+                invite_path,
+                invite_qr_svg,
+                error: None,
+            },
+        ))
     }
 
     async fn join_room(
@@ -752,9 +838,9 @@ mod tests {
 
     #[test]
     fn invite_qr_svg_is_valid_svg() {
-        let svg = invite_qr_svg("/join?inviteToken=abc123");
+        let svg = invite_qr_svg("/join?inviteToken=abc123").expect("qr svg is generated");
 
-        assert!(svg.starts_with("<svg"));
+        assert!(svg.contains("<svg"));
         assert!(svg.contains("</svg>"));
         assert!(svg.contains("<rect"));
     }

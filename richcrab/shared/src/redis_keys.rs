@@ -16,6 +16,10 @@ pub fn invite_key(invite_token: impl AsRef<str>) -> String {
     format!("invite:{}", invite_token.as_ref())
 }
 
+pub fn room_invite_token_key(room_id: impl AsRef<str>) -> String {
+    format!("room_invite_token:{}", room_id.as_ref())
+}
+
 pub fn ticket_key(join_ticket: impl AsRef<str>) -> String {
     format!("ticket:{}", join_ticket.as_ref())
 }
@@ -32,6 +36,7 @@ mod tests {
     fn builds_expected_keys() {
         assert_eq!(pin_key("1234"), "pin:1234");
         assert_eq!(invite_key("abc"), "invite:abc");
+        assert_eq!(room_invite_token_key("r1"), "room_invite_token:r1");
         assert_eq!(ticket_key("xyz"), "ticket:xyz");
         assert_eq!(ratelimit_key("ip", "1.2.3.4"), "ratelimit:ip:1.2.3.4");
     }
