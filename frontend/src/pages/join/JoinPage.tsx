@@ -85,8 +85,8 @@ const JoinPage = () => {
   }, [inviteForm, navigate, notifications])
 
   return (
-    <section className="roomsPage">
-      <article className="pageCard roomForm">
+    <section className="roomsPage joinPage">
+      <article className="pageCard roomForm joinCard">
         <h1>{t('join.title')}</h1>
         <div className="roomsActions">
           <button className={`roomButton ${tab === 'pin' ? 'primary' : ''}`} type="button" onClick={() => setTab('pin')}>{t('join.pinTab')}</button>

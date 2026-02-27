@@ -101,3 +101,18 @@
 
 .roomForm input.error,
 .roomForm select.error { border-color: #ff8eb1; }
+
+.joinPage {
+  min-height: 100vh;
+  padding: 20px 14px;
+  align-items: center;
+}
+
+.joinCard {
+  width: min(720px, 100%);
+  margin: 0 auto;
+}
+
+.joinCard .roomButton.primary {
+  min-width: 180px;
+}
