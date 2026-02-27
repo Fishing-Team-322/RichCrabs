@@ -25,6 +25,7 @@ struct QuizCoreCreateRoomResult final {
   std::string room_id;
   std::string pin;
   std::string invite_token;
+  std::string invite_path;
 };
 
 struct QuizCoreJoinRoomResult final {

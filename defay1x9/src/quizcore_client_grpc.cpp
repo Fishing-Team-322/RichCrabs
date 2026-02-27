@@ -303,6 +303,7 @@ std::optional<QuizCoreCreateRoomResult> QuizCoreClientGrpc::createRoom(const std
   out.room_id = resp.room_id().value();
   out.pin = resp.pin();
   out.invite_token = resp.invite_token();
+  out.invite_path = resp.invite_path();
   return out;
 }
 
