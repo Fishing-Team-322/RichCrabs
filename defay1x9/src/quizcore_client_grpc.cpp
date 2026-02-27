@@ -53,6 +53,8 @@ using richcrab::v1::CreateQuizRequest;
 using richcrab::v1::CreateQuizResponse;
 using richcrab::v1::GetQuizRequest;
 using richcrab::v1::GetQuizResponse;
+using richcrab::v1::GetAiQuizJobRequest;
+using richcrab::v1::GetAiQuizJobResponse;
 using richcrab::v1::PublishQuizRequest;
 using richcrab::v1::PublishQuizResponse;
 using richcrab::v1::Quiz;
@@ -861,6 +863,33 @@ QuizCoreStartAiQuizJobResult QuizCoreClientGrpc::startAiQuizJob(
   }
   out.job_id = resp.job_id();
   out.status_text = resp.status();
+  out.status = QuizCoreRpcStatus::kOk;
+  return out;
+}
+
+QuizCoreGetAiQuizJobResult QuizCoreClientGrpc::getAiQuizJob(const std::string& jobId,
+                                                            const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_get_quiz));
+
+  GetAiQuizJobRequest req;
+  req.set_job_id(jobId);
+
+  GetAiQuizJobResponse resp;
+  const auto status = impl_->quiz->GetAiQuizJob(&ctx, req, &resp);
+
+  QuizCoreGetAiQuizJobResult out;
+  out.status = mapStatus(status);
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
+  out.job_id = resp.job_id();
+  out.status_text = resp.status();
+  if (resp.has_quiz()) out.quiz = mapQuiz(resp.quiz());
   out.status = QuizCoreRpcStatus::kOk;
   return out;
 }
