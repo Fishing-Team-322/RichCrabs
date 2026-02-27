@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { DashboardPage as DashboardContent } from '../Dashboard'
+import DashboardContent from './Dashboard'
 import type { AdminOutletContext } from '../../components/admin/AdminLayout'
 
 const AdminDashboardPage = () => {

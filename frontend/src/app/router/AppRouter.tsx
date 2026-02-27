@@ -3,29 +3,11 @@ import { Link, Route, Routes } from 'react-router-dom'
 import { useAppDispatch } from '../../store/hooks'
 import { restoreSession } from '../../store/slices'
 import Layout from '../../components/Layout'
-import Login from '../../pages/auth/Login'
-import Register from '../../pages/auth/Register'
-import QuizzesList from '../../pages/quizzes/QuizzesList'
-import QuizCreate from '../../pages/quizzes/QuizCreate'
-import QuizEdit from '../../pages/quizzes/QuizEdit'
-import QuizPublish from '../../pages/quizzes/QuizPublish'
-import HomePage from '../../pages/Home/Home'
-import CreateRoom from '../../pages/CreateRoom/CreateRoom'
-import OpenGames from '../../pages/rooms/OpenGames'
-import RoomDetails from '../../pages/rooms/RoomDetails'
-import JoinPage from '../../pages/join/JoinPage'
-import InviteJoinPage from '../../pages/join/InviteJoinPage'
-import RuntimePage from '../../pages/Quiz/RuntimePage'
-import Profile from '../../pages/Profile/Profile'
-import Subscriptions from '../../pages/Subscriptions/Subscriptions'
-import TelegramBots from '../../pages/TelegramBots/TelegramBots'
-import AdminLayout from '../../components/admin/AdminLayout'
-import AdminDashboardPage from '../../pages/admin/DashboardPage'
-import AdminSecurityPage from '../../pages/admin/SecurityPage'
 import AuthGuard from './guards/AuthGuard'
 import GuestGuard from './guards/GuestGuard'
 import {
   AdminDashboard,
+  AdminLayout,
   AdminSecurity,
   CreateRoom,
   HomePage,
@@ -92,8 +74,8 @@ const AppRouter: React.FC = () => {
           </Route>
 
           <Route element={<AdminLayout />}>
-            <Route path={routes.adminDashboard} element={<AdminDashboardPage />} />
-            <Route path={routes.adminSecurity} element={<AdminSecurityPage />} />
+            <Route path={routes.adminDashboard} element={<AdminDashboard />} />
+            <Route path={routes.adminSecurity} element={<AdminSecurity />} />
           </Route>
         </Route>
 

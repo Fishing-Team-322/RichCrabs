@@ -28,6 +28,7 @@ const subscriptions = createPreloadable(() => import('../../pages/Subscriptions/
 const telegramBots = createPreloadable(() => import('../../pages/TelegramBots/TelegramBots'))
 const adminDashboard = createPreloadable(() => import('../../pages/admin/Dashboard'))
 const adminSecurity = createPreloadable(() => import('../../pages/admin/Security'))
+const adminLayout = createPreloadable(() => import('../../components/admin/AdminLayout'))
 
 export const HomePage = home.Component
 export const JoinPage = join.Component
@@ -47,6 +48,7 @@ export const Subscriptions = subscriptions.Component
 export const TelegramBots = telegramBots.Component
 export const AdminDashboard = adminDashboard.Component
 export const AdminSecurity = adminSecurity.Component
+export const AdminLayout = adminLayout.Component
 
 export const preloadJoinFlow = () => Promise.all([join.preload(), quizRuntime.preload()])
 export const preloadQuizRuntime = () => quizRuntime.preload()

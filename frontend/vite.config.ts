@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 
 const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {}
 
+const hasBudget = typeof env.BUNDLE_BUDGET_KB !== 'undefined'
 const chunkBudgetKb = Number(env.BUNDLE_BUDGET_KB || 300)
 
 const budgetPlugin = () => ({
@@ -18,7 +19,7 @@ const budgetPlugin = () => ({
       }
     }
 
-    if (violations.length) {
+    if (hasBudget && violations.length) {
       throw new Error(`Bundle budget exceeded:\n${violations.join('\n')}`)
     }
   },

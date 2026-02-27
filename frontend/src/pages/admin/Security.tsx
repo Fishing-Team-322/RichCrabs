@@ -7,7 +7,11 @@ import { monitoringApi } from '../../features/monitoring/api/monitoringApi'
 import { mockSecurityEvents, mockSecurityOverview } from '../../features/monitoring/mockSecurity'
 import type { SecurityEventsResponse, SecurityOverview } from '../../features/monitoring/types'
 
-const Security = () => {
+type SecurityProps = {
+  onStatus?: (ok: boolean, text: string, updatedAt: number | null) => void
+}
+
+const Security = ({ onStatus }: SecurityProps) => {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [pollMs, setPollMs] = useState(2000)
   const [demoMode, setDemoMode] = useState(true)
@@ -46,6 +50,12 @@ const Security = () => {
   useEffect(() => {
     void refresh()
   }, [demoMode])
+
+  useEffect(() => {
+    if (!onStatus) return
+    const ok = !error
+    onStatus(ok, ok ? 'Monitoring' : 'Error', Date.now())
+  }, [error, onStatus])
 
   const windowLabel = useMemo(() => {
     const minutes = Math.round((overview.windowSec ?? 300) / 60)
