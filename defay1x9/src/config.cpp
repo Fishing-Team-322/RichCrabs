@@ -55,6 +55,11 @@ Config Config::LoadFromEnv() {
   c.grpc_deadline_ms_update_quiz = envInt("GW_GRPC_DEADLINE_MS_UPDATE_QUIZ", c.grpc_deadline_ms_update_quiz);
   c.grpc_deadline_ms_publish_quiz = envInt("GW_GRPC_DEADLINE_MS_PUBLISH_QUIZ", c.grpc_deadline_ms_publish_quiz);
   c.grpc_deadline_ms_start_ai_quiz_job = envInt("GW_GRPC_DEADLINE_MS_START_AI_QUIZ_JOB", c.grpc_deadline_ms_start_ai_quiz_job);
+  c.grpc_deadline_ms_entitlements = envInt("GW_GRPC_DEADLINE_MS_ENTITLEMENTS", c.grpc_deadline_ms_entitlements);
+  c.redis_url = envStr("GW_REDIS_URL", c.redis_url);
+  c.entitlements_rooms_daily_limit = static_cast<uint64_t>(envInt("GW_ENT_LIMIT_ROOMS_DAILY", static_cast<int>(c.entitlements_rooms_daily_limit)));
+  c.entitlements_bots_daily_limit = static_cast<uint64_t>(envInt("GW_ENT_LIMIT_BOTS_DAILY", static_cast<int>(c.entitlements_bots_daily_limit)));
+  c.entitlements_ai_daily_limit = static_cast<uint64_t>(envInt("GW_ENT_LIMIT_AI_DAILY", static_cast<int>(c.entitlements_ai_daily_limit)));
   c.ws_mock_stream_enabled = envBool("GW_WS_MOCK_STREAM_ENABLED", c.ws_mock_stream_enabled);
   c.ws_mock_stream_auto_on_unavailable = envBool("GW_WS_MOCK_STREAM_AUTO_ON_UNAVAILABLE", c.ws_mock_stream_auto_on_unavailable);
   c.app_env = envStr("GW_ENV", c.app_env);

@@ -1,10 +1,11 @@
 #pragma once
 
 #include "config.hpp"
+#include "entitlements_client.hpp"
 #include "quizcore_client.hpp"
 
 namespace controllers {
 
-void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore);
+void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore, EntitlementsClient& entitlementsClient);
 
 }  // namespace controllers

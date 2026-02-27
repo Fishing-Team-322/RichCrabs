@@ -50,6 +50,7 @@ add_executable(defay1x9
   src/main.cpp
   src/config.cpp
   src/quizcore_client_grpc.cpp
+  src/entitlements_client_grpc.cpp
   src/game_manager.cpp
   src/ws_gateway.cpp
   src/csrf.cpp
@@ -61,6 +62,7 @@ add_executable(defay1x9
   src/controllers/ProfileController.cpp
   src/controllers/GamesController.cpp
   src/controllers/BotsController.cpp
+  src/controllers/EntitlementsController.cpp
   src/controllers/QuizController.cpp
   src/controllers/TelegramWebhookClient.cpp
   src/controllers/TelegramController.cpp
@@ -71,10 +73,12 @@ add_executable(defay1x9
   include/controllers/ProfileController.hpp
   include/controllers/GamesController.hpp
   include/controllers/BotsController.hpp
+  include/controllers/EntitlementsController.hpp
   include/controllers/QuizController.hpp
   include/controllers/TelegramWebhookClient.hpp
   include/controllers/TelegramController.hpp
   include/controllers/AdminController.hpp
+  include/entitlements_client.hpp
   ${PROTO_SRCS}
   ${GRPC_SRCS}
   ${GRPC_HDRS}

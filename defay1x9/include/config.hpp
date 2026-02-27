@@ -33,6 +33,11 @@ struct Config final {
   int grpc_deadline_ms_update_quiz = 1500;
   int grpc_deadline_ms_publish_quiz = 1500;
   int grpc_deadline_ms_start_ai_quiz_job = 1500;
+  int grpc_deadline_ms_entitlements = 1200;
+  std::string redis_url = "redis://redis:6379";
+  uint64_t entitlements_rooms_daily_limit = 10;
+  uint64_t entitlements_bots_daily_limit = 20;
+  uint64_t entitlements_ai_daily_limit = 30;
   bool ws_mock_stream_enabled = false;
   bool ws_mock_stream_auto_on_unavailable = true;
   std::string app_env = "development";
