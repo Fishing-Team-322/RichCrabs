@@ -90,6 +90,14 @@
   color: #fff;
 }
 
+.roomButton:focus-visible,
+.roomLink:focus-visible,
+.roomForm input:focus-visible,
+.roomForm select:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
 .roomError {
   background: #fee2e2;
   color: #991b1b;

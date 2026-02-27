@@ -100,14 +100,14 @@
 }
 
 .quizConnectionBadge.quality-degraded {
-  background: #fef9c3;
-  color: #854d0e;
+  background: #fef3c7;
+  color: #78350f;
   border-color: #fde047;
 }
 
 .quizConnectionBadge.quality-poor,
 .quizConnectionBadge.quality-offline {
   background: #fee2e2;
-  color: #991b1b;
+  color: #7f1d1d;
   border-color: #fca5a5;
 }
