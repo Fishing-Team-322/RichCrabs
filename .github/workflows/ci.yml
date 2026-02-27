@@ -59,6 +59,48 @@ jobs:
         run: cargo check --manifest-path richcrab/Cargo.toml -p smoke_load
 
 
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        continue-on-error: true
+        run: |
+          if npm run | grep -qE '^  lint$'; then
+            npm run lint
+          else
+            echo 'lint script is not defined, skipping.'
+          fi
+      - name: Type check (fail-fast)
+        run: npm run typecheck
+      - name: Test with coverage (fail-fast)
+        run: npm run test
+      - name: Build
+        run: npm run build
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - name: Upload frontend coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+          if-no-files-found: warn
+
+
   load_test:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

@@ -68,3 +68,20 @@ npm run build
 # локальный предпросмотр production-сборки
 npm run preview
 ```
+
+## Локальные проверки frontend (как в CI)
+
+```bash
+cd frontend
+npm ci
+
+# опционально: выполнится только если script lint добавлен
+npm run lint
+
+# обязательные fail-fast проверки
+npm run typecheck
+npm run test
+npm run build
+```
+
+`npm run typecheck` и `npm run test` запускаются последовательно и должны завершаться успешно перед сборкой. Тесты формируют отчеты покрытия в `frontend/coverage`, сборка — артефакт в `frontend/dist`.
