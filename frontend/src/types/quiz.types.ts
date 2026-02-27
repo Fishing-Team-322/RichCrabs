@@ -24,6 +24,8 @@ export interface QuizAnswerResultDto {
 
 export type QuizStatus = 'draft' | 'published' | 'archived'
 export type QuizDifficulty = 'easy' | 'medium' | 'hard'
+export type QuizQuestionFormat = 'single' | 'multi'
+export type QuizGenerationStatus = 'queued' | 'running' | 'done' | 'failed'
 
 export interface QuizEditorOptionDto {
   id: string
@@ -77,4 +79,19 @@ export interface QuizListItemDto {
 export interface QuizListParams {
   status?: QuizStatus
   search?: string
+}
+
+export interface GenerateQuizDraftRequestDto {
+  topic: string
+  difficulty: QuizDifficulty
+  questionCount: number
+  language: string
+  format: QuizQuestionFormat
+}
+
+export interface GenerateQuizJobDto {
+  jobId: string
+  status: QuizGenerationStatus
+  draftId?: string
+  error?: string
 }

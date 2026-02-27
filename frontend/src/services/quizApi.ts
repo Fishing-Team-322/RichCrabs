@@ -2,6 +2,8 @@ import { apiFetch } from './api'
 import type {
   CreateQuizRequestDto,
   CreateQuizResponseDto,
+  GenerateQuizDraftRequestDto,
+  GenerateQuizJobDto,
   PublishQuizRequestDto,
   QuizAnswerResultDto,
   QuizDraftDto,
@@ -20,6 +22,12 @@ export interface QuizApi {
   list: (params?: QuizListParams) => Promise<QuizListItemDto[]>
   draft: () => Promise<QuizDraftDto>
   createDraft: () => Promise<QuizDraftDto>
+  startGeneration: (payload: GenerateQuizDraftRequestDto) => Promise<GenerateQuizJobDto>
+  getGenerationStatus: (jobId: string) => Promise<GenerateQuizJobDto>
+  generateDraft: (
+    payload: GenerateQuizDraftRequestDto,
+    onStatus?: (status: GenerateQuizJobDto['status']) => void,
+  ) => Promise<QuizDraftDto>
   getDraft: (quizId: string) => Promise<QuizDraftDto>
   saveDraft: (quizId: string, payload: SaveQuizDraftRequestDto) => Promise<QuizDraftDto>
   publish: (quizId: string, payload?: PublishQuizRequestDto) => Promise<QuizDraftDto>
@@ -39,6 +47,11 @@ const toQueryString = (params: Record<string, string | undefined>): string => {
   const raw = searchParams.toString()
   return raw ? `?${raw}` : ''
 }
+
+const sleep = async (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
 
 export const quizApi: QuizApi = {
   create: (payload: CreateQuizRequestDto) =>
@@ -73,6 +86,40 @@ export const quizApi: QuizApi = {
     apiFetch<QuizDraftDto>(`${QUIZZES_BASE}/draft`, {
       method: 'POST',
     }),
+
+  startGeneration: (payload: GenerateQuizDraftRequestDto) =>
+    apiFetch<GenerateQuizJobDto>(`${QUIZZES_BASE}/generate`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getGenerationStatus: (jobId: string) =>
+    apiFetch<GenerateQuizJobDto>(`${QUIZZES_BASE}/generate/${encodeURIComponent(jobId)}`),
+
+  generateDraft: async (payload: GenerateQuizDraftRequestDto, onStatus) => {
+    const started = await quizApi.startGeneration(payload)
+    let currentJob = started
+    onStatus?.(currentJob.status)
+
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      if (currentJob.status === 'done') {
+        if (!currentJob.draftId) {
+          throw new Error('Генерация завершена, но ID черновика отсутствует.')
+        }
+        return quizApi.getDraft(currentJob.draftId)
+      }
+
+      if (currentJob.status === 'failed') {
+        throw new Error(currentJob.error || 'Генерация квиза завершилась с ошибкой.')
+      }
+
+      await sleep(1500)
+      currentJob = await quizApi.getGenerationStatus(currentJob.jobId)
+      onStatus?.(currentJob.status)
+    }
+
+    throw new Error('Превышено время ожидания генерации. Попробуйте ещё раз.')
+  },
 
   getDraft: (quizId: string) => apiFetch<QuizDraftDto>(`${QUIZZES_BASE}/${encodeURIComponent(quizId)}/draft`),
 
