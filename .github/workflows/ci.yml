@@ -67,8 +67,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-rust-stable-${{ hashFiles('richcrab/Cargo.lock') }}
       - name: Install sqlx-cli
-        run: cargo install sqlx-cli --no-default-features --features rustls,postgres
+        uses: taiki-e/install-action@v2
+        with:
+          tool: sqlx-cli
       - name: Run migrations
         run: sqlx migrate run --source richcrab/migrations
       - name: Format check
@@ -123,5 +127,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-rust-stable-${{ hashFiles('richcrab/Cargo.lock') }}
       - name: Run load test placeholder
         run: cargo test --manifest-path richcrab/Cargo.toml -p smoke_load --test load_smoke -- --ignored
