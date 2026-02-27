@@ -1,30 +1,32 @@
-.ui-card{background:linear-gradient(160deg,rgba(16,23,56,.95),rgba(11,16,46,.9));border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:var(--shadow-soft)}
+.ui-card{background:linear-gradient(165deg,rgba(24,16,40,.92),rgba(13,9,24,.92));border:1px solid var(--border);border-radius:18px;padding:16px;box-shadow:var(--shadow-soft)}
 .ui-button{height:40px;padding:0 16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text-primary);font-weight:600;cursor:pointer;transition:var(--transition);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
 .ui-button:hover{background:var(--surface-hover);border-color:var(--border-strong)}
-.ui-button:focus-visible,.ui-tab:focus-visible,.ui-input:focus-visible,.ui-select:focus-visible{outline:3px solid #1d4ed8;outline-offset:2px}
+.ui-button:focus-visible,.ui-tab:focus-visible,.ui-input:focus-visible,.ui-select:focus-visible{outline:3px solid #7c3aed;outline-offset:2px}
 .ui-button:disabled,.ui-button.is-disabled{cursor:not-allowed;background:var(--disabled);opacity:.7}
 .ui-button.is-loading{opacity:.85}
-.ui-button.primary{background:linear-gradient(90deg,var(--primary),#5f46db);border-color:transparent}
-.ui-button.primary:hover{filter:brightness(1.06);box-shadow:var(--shadow-glow)}
+.ui-button.primary{position:relative;overflow:hidden;background:linear-gradient(102deg,var(--primary) 0%,var(--accent-pink) 58%,var(--accent-blue) 100%);border-color:transparent;box-shadow:0 12px 26px rgba(139,92,246,.34)}
+.ui-button.primary::after{content:'';position:absolute;inset:0;transform:translateX(-130%);background:linear-gradient(110deg,transparent 18%,rgba(255,255,255,.42) 48%,transparent 82%);opacity:0;pointer-events:none}
+.ui-button.primary:hover{filter:brightness(1.06);transform:translateY(-1px);box-shadow:0 0 0 1px rgba(163,122,255,.42),0 14px 34px rgba(139,92,246,.42)}
+.ui-button.primary:hover::after{opacity:1;animation:sheenSweep 900ms ease}
 .ui-button.ghost{background:transparent}
 .ui-field{display:grid;gap:6px}
 .ui-label{font-size:12px;color:var(--text-secondary)}
-.ui-input,.ui-select{width:100%;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text-primary);padding:0 12px;transition:var(--transition)}
+.ui-input,.ui-select{width:100%;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--surface-strong);color:var(--text-primary);padding:0 12px;transition:var(--transition)}
 .ui-input:hover,.ui-select:hover{border-color:var(--border-strong)}
-.ui-input:focus,.ui-select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(131,93,255,.2)}
+.ui-input:focus,.ui-select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(139,92,246,.22)}
 .ui-input.error,.ui-select.error{border-color:var(--danger)}
 .ui-input:disabled,.ui-select:disabled{background:var(--disabled)}
-.ui-help{font-size:12px;color:var(--danger)}
+.ui-help{font-size:12px;color:#ffb7ca}
 .ui-tabs{display:flex;gap:8px;flex-wrap:wrap}
-.ui-tab{padding:8px 12px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text-secondary);cursor:pointer}
-.ui-tab.active{background:rgba(131,93,255,.2);color:var(--text-primary);border-color:var(--primary)}
-.ui-tableWrap{overflow:auto;border:1px solid var(--border);border-radius:12px}
+.ui-tab{padding:8px 12px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.01);color:var(--text-secondary);cursor:pointer}
+.ui-tab.active{background:linear-gradient(90deg,rgba(139,92,246,.35),rgba(236,72,153,.22));color:var(--text-primary);border-color:var(--border-strong)}
+.ui-tableWrap{overflow:auto;border:1px solid var(--border);border-radius:14px;background:rgba(8,6,20,.75)}
 .ui-table{width:100%;border-collapse:collapse;min-width:600px}
 .ui-table th,.ui-table td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left}
 .ui-table th{color:var(--text-secondary);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
 .ui-badge{display:inline-flex;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--border)}
-.ui-badge.success{background:rgba(58,210,139,.15);color:#8df1bf}
-.ui-badge.warning{background:rgba(248,181,75,.15);color:#ffd489}
+.ui-badge.success{background:rgba(58,210,139,.15);color:var(--success)}
+.ui-badge.warning{background:rgba(248,181,75,.15);color:var(--warning)}
 .ui-badge.danger{background:rgba(255,111,142,.15);color:#ffafc3}
 .ui-badge.neutral{background:rgba(157,174,255,.14);color:var(--text-secondary)}
 .ui-empty{padding:24px;text-align:center;color:var(--text-secondary);border:1px dashed var(--border);border-radius:12px}
@@ -42,4 +44,6 @@
 .ui-skeleton::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);animation:ui-shimmer 1.5s infinite}
 @keyframes ui-shimmer{100%{transform:translateX(100%)}}
 .ui-progress{height:8px;border-radius:999px;background:rgba(157,174,255,.18);overflow:hidden}
-.ui-progress-value{height:100%;background:linear-gradient(90deg,var(--primary),#5f46db);transition:width .25s ease}
+.ui-progress-value{height:100%;background:linear-gradient(90deg,var(--primary),#ec4899);transition:width .25s ease}
+
+@media (prefers-reduced-motion: reduce){.ui-button.primary:hover::after{animation:none !important}}
