@@ -66,8 +66,37 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
 
   drogon::app().registerHandler(
       "/api/v1/games/{1}",
-      [](const drogon::HttpRequestPtr&, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string) {
-        cb(notImplemented("GET /api/v1/games/{pin}"));
+      [&quizCore, conf](const drogon::HttpRequestPtr& req,
+                        std::function<void(const drogon::HttpResponsePtr&)>&& cb,
+                        std::string pin) {
+        auto session = security::VerifySessionFromRequest(req, conf.session);
+        if (!session) {
+          cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
+          return;
+        }
+        if (session->room_id.empty()) {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "room_id is not present in session"));
+          return;
+        }
+
+        const auto requestId = requestIdFromRequest(req);
+        auto state = quizCore.getRoomState(session->room_id, requestId);
+        if (!state) {
+          cb(api::jsonErrorResponse(api::mapRpcError(QuizCoreRpcStatus::kUnavailable, "get_room_state")));
+          return;
+        }
+
+        Json::Value body;
+        body["pin"] = pin;
+        body["state"] = state->state;
+        for (const auto& player : state->players) {
+          Json::Value row;
+          row["playerId"] = player.player_id;
+          row["name"] = player.display_name;
+          row["score"] = player.score;
+          body["players"].append(row);
+        }
+        cb(drogon::HttpResponse::newHttpJsonResponse(body));
       },
       {drogon::Get});
 
@@ -248,17 +277,87 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
 
   drogon::app().registerHandler(
       "/api/v1/games/{1}/leave",
-      [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string) {
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string) {
+        auto session = security::VerifySessionFromRequest(req, conf.session);
+        if (!session) {
+          cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
+          return;
+        }
+        if (session->role != "player") {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "only player can leave game"));
+          return;
+        }
+        if (session->room_id.empty() || session->player_id.empty()) {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "room_id or player_id is not present in session"));
+          return;
+        }
         if (!RequireCsrf(req, conf, cb)) return;
-        cb(notImplemented("POST /api/v1/games/{pin}/leave"));
+
+        const auto requestId = requestIdFromRequest(req);
+        auto result = quizCore.leaveRoom(session->room_id, session->player_id, requestId);
+        if (result.status != QuizCoreRpcStatus::kOk) {
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "leave_room")));
+          return;
+        }
+        if (!result.left) {
+          cb(api::jsonErrorResponse(api::mapRpcError(QuizCoreRpcStatus::kFailedPrecondition, "leave_room")));
+          return;
+        }
+
+        auto response = drogon::HttpResponse::newHttpResponse();
+        response->setStatusCode(drogon::k204NoContent);
+        security::ClearSessionCookie(response, conf.session);
+        security::ClearCsrfCookie(response, conf.csrf);
+        cb(response);
       },
       {drogon::Post});
 
   drogon::app().registerHandler(
       "/api/v1/games/{1}/kick",
-      [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string) {
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string) {
+        auto session = security::VerifySessionFromRequest(req, conf.session);
+        if (!session) {
+          cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
+          return;
+        }
+        if (session->role != "host") {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "only host can kick player"));
+          return;
+        }
+        if (session->room_id.empty() || session->user_id.empty()) {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "room_id or user_id is not present in session"));
+          return;
+        }
         if (!RequireCsrf(req, conf, cb)) return;
-        cb(notImplemented("POST /api/v1/games/{pin}/kick"));
+
+        std::string parseError;
+        auto body = api::parseJsonBody(req, parseError);
+        if (!body) {
+          cb(api::jsonErrorResponse(400, api::ErrorCode::kInvalidJson, parseError));
+          return;
+        }
+
+        api::JsonValidator validator(*body);
+        auto playerId = validator.requiredUuid("playerId");
+        if (!validator.ok()) {
+          cb(api::validationErrorResponse(validator.issues()));
+          return;
+        }
+
+        const auto requestId = requestIdFromRequest(req);
+        auto result = quizCore.kickPlayer(session->room_id, session->user_id, *playerId, requestId);
+        if (result.status != QuizCoreRpcStatus::kOk) {
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "kick_player")));
+          return;
+        }
+        if (!result.kicked) {
+          cb(api::jsonErrorResponse(api::mapRpcError(QuizCoreRpcStatus::kFailedPrecondition, "kick_player")));
+          return;
+        }
+
+        auto response = drogon::HttpResponse::newHttpResponse();
+        response->setStatusCode(drogon::k204NoContent);
+        cb(response);
       },
       {drogon::Post});
 }

@@ -32,6 +32,16 @@ struct QuizCoreJoinRoomResult final {
   std::string player_id;
 };
 
+struct QuizCoreLeaveRoomResult final {
+  QuizCoreRpcStatus status = QuizCoreRpcStatus::kUnknown;
+  bool left = false;
+};
+
+struct QuizCoreKickPlayerResult final {
+  QuizCoreRpcStatus status = QuizCoreRpcStatus::kUnknown;
+  bool kicked = false;
+};
+
 struct QuizCorePlayerState final {
   std::string player_id;
   std::string display_name;
@@ -90,6 +100,13 @@ public:
   virtual bool startGame(const std::string& roomId,
                          const std::string& requestedByUserId,
                          const std::string& requestId = "") = 0;
+  virtual QuizCoreLeaveRoomResult leaveRoom(const std::string& roomId,
+                                            const std::string& playerId,
+                                            const std::string& requestId = "") = 0;
+  virtual QuizCoreKickPlayerResult kickPlayer(const std::string& roomId,
+                                              const std::string& requestedByUserId,
+                                              const std::string& playerId,
+                                              const std::string& requestId = "") = 0;
   virtual std::optional<QuizCoreRoomState> getRoomState(const std::string& roomId,
                                                         const std::string& requestId = "") = 0;
   virtual QuizCoreRegisterBotResult registerBot(const std::string& userId,
@@ -136,6 +153,13 @@ public:
   bool startGame(const std::string& roomId,
                  const std::string& requestedByUserId,
                  const std::string& requestId = "") override;
+  QuizCoreLeaveRoomResult leaveRoom(const std::string& roomId,
+                                    const std::string& playerId,
+                                    const std::string& requestId = "") override;
+  QuizCoreKickPlayerResult kickPlayer(const std::string& roomId,
+                                      const std::string& requestedByUserId,
+                                      const std::string& playerId,
+                                      const std::string& requestId = "") override;
   std::optional<QuizCoreRoomState> getRoomState(const std::string& roomId,
                                                 const std::string& requestId = "") override;
   QuizCoreRegisterBotResult registerBot(const std::string& userId,
