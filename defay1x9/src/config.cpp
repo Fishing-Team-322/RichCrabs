@@ -44,6 +44,10 @@ Config Config::LoadFromEnv() {
   c.grpc_deadline_ms_issue_join_ticket = envInt("GW_GRPC_DEADLINE_MS_ISSUE_JOIN_TICKET", c.grpc_deadline_ms_issue_join_ticket);
   c.grpc_deadline_ms_join_room = envInt("GW_GRPC_DEADLINE_MS_JOIN_ROOM", c.grpc_deadline_ms_join_room);
   c.grpc_deadline_ms_start_game = envInt("GW_GRPC_DEADLINE_MS_START_GAME", c.grpc_deadline_ms_start_game);
+  c.grpc_deadline_ms_pause_game = envInt("GW_GRPC_DEADLINE_MS_PAUSE_GAME", c.grpc_deadline_ms_pause_game);
+  c.grpc_deadline_ms_resume_game = envInt("GW_GRPC_DEADLINE_MS_RESUME_GAME", c.grpc_deadline_ms_resume_game);
+  c.grpc_deadline_ms_next_question = envInt("GW_GRPC_DEADLINE_MS_NEXT_QUESTION", c.grpc_deadline_ms_next_question);
+  c.grpc_deadline_ms_submit_answer = envInt("GW_GRPC_DEADLINE_MS_SUBMIT_ANSWER", c.grpc_deadline_ms_submit_answer);
   c.grpc_deadline_ms_get_room_state = envInt("GW_GRPC_DEADLINE_MS_GET_ROOM_STATE", c.grpc_deadline_ms_get_room_state);
   c.ws_mock_stream_enabled = envBool("GW_WS_MOCK_STREAM_ENABLED", c.ws_mock_stream_enabled);
   c.ws_mock_stream_auto_on_unavailable = envBool("GW_WS_MOCK_STREAM_AUTO_ON_UNAVAILABLE", c.ws_mock_stream_auto_on_unavailable);

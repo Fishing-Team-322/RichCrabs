@@ -31,12 +31,20 @@ using richcrab::v1::LeaveRoomRequest;
 using richcrab::v1::LeaveRoomResponse;
 using richcrab::v1::ListBotsRequest;
 using richcrab::v1::ListBotsResponse;
+using richcrab::v1::NextQuestionRequest;
+using richcrab::v1::NextQuestionResponse;
+using richcrab::v1::PauseGameRequest;
+using richcrab::v1::PauseGameResponse;
 using richcrab::v1::RegisterBotRequest;
 using richcrab::v1::RegisterBotResponse;
 using richcrab::v1::RemoveBotRequest;
 using richcrab::v1::RemoveBotResponse;
+using richcrab::v1::ResumeGameRequest;
+using richcrab::v1::ResumeGameResponse;
 using richcrab::v1::StartGameRequest;
 using richcrab::v1::StartGameResponse;
+using richcrab::v1::SubmitAnswerRequest;
+using richcrab::v1::SubmitAnswerResponse;
 using richcrab::v1::Health;
 using richcrab::v1::PingRequest;
 using richcrab::v1::PingResponse;
@@ -83,11 +91,19 @@ public:
        int deadlineMsIssueJoinTicket,
        int deadlineMsJoinRoom,
        int deadlineMsStartGame,
+       int deadlineMsPauseGame,
+       int deadlineMsResumeGame,
+       int deadlineMsNextQuestion,
+       int deadlineMsSubmitAnswer,
        int deadlineMsGetRoomState)
       : deadline_ms_create_room(deadlineMsCreateRoom),
         deadline_ms_issue_join_ticket(deadlineMsIssueJoinTicket),
         deadline_ms_join_room(deadlineMsJoinRoom),
         deadline_ms_start_game(deadlineMsStartGame),
+        deadline_ms_pause_game(deadlineMsPauseGame),
+        deadline_ms_resume_game(deadlineMsResumeGame),
+        deadline_ms_next_question(deadlineMsNextQuestion),
+        deadline_ms_submit_answer(deadlineMsSubmitAnswer),
         deadline_ms_get_room_state(deadlineMsGetRoomState) {
     auto gameChannel = grpc::CreateChannel(gameAddr, grpc::InsecureChannelCredentials());
     auto joinChannel = grpc::CreateChannel(joinAddr, grpc::InsecureChannelCredentials());
@@ -106,6 +122,10 @@ public:
   int deadline_ms_issue_join_ticket;
   int deadline_ms_join_room;
   int deadline_ms_start_game;
+  int deadline_ms_pause_game;
+  int deadline_ms_resume_game;
+  int deadline_ms_next_question;
+  int deadline_ms_submit_answer;
   int deadline_ms_get_room_state;
 };
 
@@ -116,6 +136,10 @@ QuizCoreClientGrpc::QuizCoreClientGrpc(const std::string& gameAddr,
                                        int deadlineMsIssueJoinTicket,
                                        int deadlineMsJoinRoom,
                                        int deadlineMsStartGame,
+                                       int deadlineMsPauseGame,
+                                       int deadlineMsResumeGame,
+                                       int deadlineMsNextQuestion,
+                                       int deadlineMsSubmitAnswer,
                                        int deadlineMsGetRoomState)
     : impl_(std::make_unique<Impl>(gameAddr,
                                    joinAddr,
@@ -124,6 +148,10 @@ QuizCoreClientGrpc::QuizCoreClientGrpc(const std::string& gameAddr,
                                    deadlineMsIssueJoinTicket,
                                    deadlineMsJoinRoom,
                                    deadlineMsStartGame,
+                                   deadlineMsPauseGame,
+                                   deadlineMsResumeGame,
+                                   deadlineMsNextQuestion,
+                                   deadlineMsSubmitAnswer,
                                    deadlineMsGetRoomState)) {}
 
 QuizCoreClientGrpc::~QuizCoreClientGrpc() = default;
@@ -290,6 +318,95 @@ QuizCoreKickPlayerResult QuizCoreClientGrpc::kickPlayer(const std::string& roomI
   out.status = mapStatus(status);
   if (!status.ok() || resp.has_error()) return out;
   out.kicked = resp.kicked();
+  return out;
+}
+
+QuizCorePauseGameResult QuizCoreClientGrpc::pauseGame(const std::string& roomId,
+                                                      const std::string& requestedByUserId,
+                                                      const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_pause_game));
+  PauseGameRequest req;
+  req.mutable_room_id()->set_value(roomId);
+  req.mutable_requested_by()->set_value(requestedByUserId);
+
+  PauseGameResponse resp;
+  const auto status = impl_->game->PauseGame(&ctx, req, &resp);
+
+  QuizCorePauseGameResult out;
+  out.status = mapStatus(status);
+  if (!status.ok() || resp.has_error()) return out;
+  out.paused = resp.paused();
+  return out;
+}
+
+QuizCoreResumeGameResult QuizCoreClientGrpc::resumeGame(const std::string& roomId,
+                                                        const std::string& requestedByUserId,
+                                                        const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_resume_game));
+  ResumeGameRequest req;
+  req.mutable_room_id()->set_value(roomId);
+  req.mutable_requested_by()->set_value(requestedByUserId);
+
+  ResumeGameResponse resp;
+  const auto status = impl_->game->ResumeGame(&ctx, req, &resp);
+
+  QuizCoreResumeGameResult out;
+  out.status = mapStatus(status);
+  if (!status.ok() || resp.has_error()) return out;
+  out.resumed = resp.resumed();
+  return out;
+}
+
+QuizCoreNextQuestionResult QuizCoreClientGrpc::nextQuestion(const std::string& roomId,
+                                                            const std::string& requestedByUserId,
+                                                            const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_next_question));
+  NextQuestionRequest req;
+  req.mutable_room_id()->set_value(roomId);
+  req.mutable_requested_by()->set_value(requestedByUserId);
+
+  NextQuestionResponse resp;
+  const auto status = impl_->game->NextQuestion(&ctx, req, &resp);
+
+  QuizCoreNextQuestionResult out;
+  out.status = mapStatus(status);
+  if (!status.ok() || resp.has_error()) return out;
+  out.advanced = resp.advanced();
+  return out;
+}
+
+QuizCoreSubmitAnswerResult QuizCoreClientGrpc::submitAnswer(const std::string& roomId,
+                                                            const std::string& playerId,
+                                                            const std::string& questionId,
+                                                            const std::string& answer,
+                                                            const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_submit_answer));
+  SubmitAnswerRequest req;
+  req.mutable_room_id()->set_value(roomId);
+  req.mutable_player_id()->set_value(playerId);
+  req.set_question_id(questionId);
+  req.set_answer(answer);
+
+  SubmitAnswerResponse resp;
+  const auto status = impl_->game->SubmitAnswer(&ctx, req, &resp);
+
+  QuizCoreSubmitAnswerResult out;
+  out.status = mapStatus(status);
+  if (!status.ok() || resp.has_error()) return out;
+  out.accepted = resp.accepted();
+  out.score_delta = resp.score_delta();
   return out;
 }
 
