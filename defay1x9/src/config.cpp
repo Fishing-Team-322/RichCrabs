@@ -69,6 +69,7 @@ Config Config::LoadFromEnv() {
   c.ws_mock_stream_enabled = envBool("GW_WS_MOCK_STREAM_ENABLED", c.ws_mock_stream_enabled);
   c.ws_mock_stream_auto_on_unavailable = envBool("GW_WS_MOCK_STREAM_AUTO_ON_UNAVAILABLE", c.ws_mock_stream_auto_on_unavailable);
   c.app_env = envStr("GW_ENV", c.app_env);
+  c.auth_local_smoke_fallback_enabled = envBool("GW_AUTH_LOCAL_SMOKE_FALLBACK", c.auth_local_smoke_fallback_enabled);
   const auto adminEmails = envStr("ADMIN_EMAILS", "");
   if (!adminEmails.empty()) {
     std::stringstream ss(adminEmails);
