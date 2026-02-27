@@ -60,8 +60,8 @@ const InviteJoinPage = () => {
   }, [navigate, token])
 
   return (
-    <section className="roomsPage">
-      <article className="pageCard">
+    <section className="roomsPage joinPage">
+      <article className="pageCard joinCard">
         <h1>Вход по invite-ссылке</h1>
         {error ? <div className="roomError">{error}</div> : <p>Проверяем invite-token и подключаем к игре…</p>}
       </article>

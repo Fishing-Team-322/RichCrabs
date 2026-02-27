@@ -1,7 +1,4 @@
-.roomsPage {
-  display: grid;
-  gap: 16px;
-}
+.roomsPage { display: grid; gap: 16px; }
 
 .roomsHeader {
   display: flex;
@@ -12,31 +9,21 @@
 }
 
 .roomsActions,
-.roomsInline {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-}
+.roomsInline { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
-.roomsGrid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
+.roomsGrid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 
 .roomCard {
-  border: 1px solid #dbe4ef;
-  border-radius: 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
   padding: 14px;
   display: grid;
   gap: 8px;
+  background: linear-gradient(165deg, rgba(24, 16, 40, 0.9), rgba(13, 9, 24, 0.9));
+  box-shadow: var(--shadow-soft);
 }
 
-.roomMeta {
-  color: #64748b;
-  font-size: 14px;
-}
+.roomMeta { color: var(--text-secondary); font-size: 14px; }
 
 .roomStatus {
   display: inline-flex;
@@ -46,82 +33,86 @@
   font-weight: 700;
   text-transform: uppercase;
   width: fit-content;
+  border: 1px solid transparent;
 }
 
-.roomStatus.waiting { background: #e0f2fe; color: #0c4a6e; }
-.roomStatus.active { background: #dcfce7; color: #166534; }
-.roomStatus.paused { background: #fef9c3; color: #713f12; }
-.roomStatus.finished { background: #e2e8f0; color: #334155; }
+.roomStatus.waiting { background: rgba(96, 165, 250, 0.2); color: #bfdbfe; border-color: rgba(96,165,250,.4); }
+.roomStatus.active { background: rgba(34, 197, 94, 0.2); color: #bbf7d0; border-color: rgba(134,239,172,.45); }
+.roomStatus.paused { background: rgba(234, 179, 8, 0.2); color: #fde68a; border-color: rgba(250,204,21,.45); }
+.roomStatus.finished { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; border-color: rgba(203,213,225,.32); }
 
-.roomForm {
-  display: grid;
-  gap: 12px;
-}
+.roomForm { display: grid; gap: 12px; }
 
-.roomForm label {
-  display: grid;
-  gap: 6px;
-  color: #334155;
-}
+.roomForm label { display: grid; gap: 6px; color: var(--text-secondary); }
 
 .roomForm input,
 .roomForm select {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
   min-height: 40px;
   padding: 0 12px;
+  background: var(--surface-strong);
+  color: var(--text-primary);
 }
 
 .roomButton,
 .roomLink {
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  color: #1e293b;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  border-radius: 999px;
   padding: 8px 12px;
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .roomButton.primary {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: linear-gradient(90deg, var(--primary), var(--accent-pink));
+  border-color: transparent;
   color: #fff;
 }
+
+.roomButton:hover,
+.roomLink:hover { border-color: var(--border-strong); background: var(--surface-hover); }
 
 .roomButton:focus-visible,
 .roomLink:focus-visible,
 .roomForm input:focus-visible,
 .roomForm select:focus-visible {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid #7c3aed;
   outline-offset: 2px;
 }
 
-.roomError {
-  background: #fee2e2;
-  color: #991b1b;
-  border-radius: 8px;
-  padding: 10px;
-}
+.roomError { background: rgba(185, 28, 28, 0.18); color: #ffd0da; border-radius: 10px; padding: 10px; border: 1px solid rgba(255,111,142,.32); }
 
-.roomInfoRow {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
+.roomInfoRow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
 .roomQr {
   display: grid;
   gap: 8px;
   width: fit-content;
   padding: 10px;
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed var(--border-strong);
   border-radius: 12px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.02);
 }
+
 .roomForm input.error,
-.roomForm select.error {
-  border-color: #dc2626;
+.roomForm select.error { border-color: #ff8eb1; }
+
+.joinPage {
+  min-height: 100vh;
+  padding: 20px 14px;
+  align-items: center;
+}
+
+.joinCard {
+  width: min(720px, 100%);
+  margin: 0 auto;
+}
+
+.joinCard .roomButton.primary {
+  min-width: 180px;
 }
