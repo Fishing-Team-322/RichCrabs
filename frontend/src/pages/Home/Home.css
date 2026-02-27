@@ -34,6 +34,7 @@
 .homeNavLinks { display: flex; gap: 20px; }
 .homeNavLinks a { color: var(--text-secondary); transition: color 0.2s ease; }
 .homeNavLinks a:hover { color: var(--text-primary); }
+.homeNavControls { display: flex; gap: 8px; align-items: center; }
 
 .homeHero {
   max-width: 1180px;
@@ -158,4 +159,35 @@
 @media (max-width: 680px) {
   .homeNav { border-radius: 16px; flex-wrap: wrap; gap: 10px; }
   .homeNavLinks { width: 100%; justify-content: space-between; order: 3; padding-bottom: 4px; }
+  .homeNavControls { width: 100%; }
+}
+
+
+:root[data-theme='light'] .homePage {
+  background:
+    radial-gradient(circle at 80% 10%, rgba(168, 85, 247, 0.15), transparent 35%),
+    radial-gradient(circle at 10% 45%, rgba(96, 165, 250, 0.12), transparent 40%),
+    radial-gradient(circle at 50% 100%, rgba(236, 72, 153, 0.08), transparent 45%),
+    linear-gradient(180deg, #f4f6ff 0%, #eef2ff 55%, #e9efff 100%);
+}
+
+:root[data-theme='light'] .homeNav {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(126, 96, 206, 0.26);
+}
+
+:root[data-theme='light'] .homeHero,
+:root[data-theme='light'] .homeGlassCard,
+:root[data-theme='light'] .homeFaqItem,
+:root[data-theme='light'] .homeFooter {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.92), rgba(246, 243, 255, 0.92));
+  border-color: rgba(126, 96, 206, 0.22);
+  box-shadow: 0 18px 34px rgba(87, 76, 130, 0.15);
+}
+
+:root[data-theme='light'] .homeMuted,
+:root[data-theme='light'] .planPrice span,
+:root[data-theme='light'] .pricingCard li,
+:root[data-theme='light'] .homeFooterLinks {
+  color: #5e5484;
 }

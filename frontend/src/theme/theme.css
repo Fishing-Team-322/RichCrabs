@@ -25,6 +25,24 @@
   --transition: all .2s ease;
 }
 
+
+:root[data-theme='light'] {
+  --bg-base: #f4f6ff;
+  --bg-base-alt: #eef2ff;
+  --bg-elevated: #ffffff;
+  --surface: rgba(255, 255, 255, 0.92);
+  --surface-hover: rgba(255, 255, 255, 1);
+  --surface-strong: rgba(255, 255, 255, 0.98);
+  --border: rgba(126, 96, 206, 0.22);
+  --border-strong: rgba(126, 96, 206, 0.42);
+  --text-primary: #261b46;
+  --text-secondary: #5e5484;
+  --disabled: rgba(151, 145, 176, 0.35);
+  --overlay: rgba(34, 21, 70, 0.2);
+  --shadow-soft: 0 18px 38px rgba(87, 76, 130, 0.18);
+  --shadow-glow: 0 0 0 1px rgba(139, 92, 246, 0.2), 0 12px 30px rgba(139, 92, 246, 0.22);
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -37,6 +55,14 @@ body {
     linear-gradient(180deg, var(--bg-base) 0%, var(--bg-base-alt) 100%);
   font-family: Inter, 'Segoe UI', system-ui, sans-serif;
   min-height: 100vh;
+}
+
+:root[data-theme='light'] body {
+  background:
+    radial-gradient(circle at 8% 8%, rgba(236, 72, 153, 0.09), transparent 32%),
+    radial-gradient(circle at 88% 10%, rgba(96, 165, 250, 0.12), transparent 38%),
+    radial-gradient(circle at 50% 100%, rgba(139, 92, 246, 0.08), transparent 44%),
+    linear-gradient(180deg, var(--bg-base) 0%, var(--bg-base-alt) 100%);
 }
 
 a { color: inherit; }
@@ -106,4 +132,13 @@ a { color: inherit; }
 
 @media (max-width: 760px) {
   .authPage { padding: 12px; }
+}
+
+
+:root[data-theme='light'] .pageCard,
+:root[data-theme='light'] .quizPanel,
+:root[data-theme='light'] .authCard,
+:root[data-theme='light'] .ui-card {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.94), rgba(246, 243, 255, 0.94));
+  border-color: rgba(126, 96, 206, 0.22);
 }

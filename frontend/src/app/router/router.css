@@ -93,3 +93,17 @@
   .contentMain, .topbar, .breadcrumbs { margin-left: 12px; margin-right: 12px; padding-left: 12px; padding-right: 12px; }
   .contentMain { padding-top: 4px; }
 }
+
+
+:root[data-theme='light'] .sidebarNav {
+  background: rgba(255, 255, 255, 0.8);
+  border-right-color: rgba(126, 96, 206, 0.22);
+}
+
+:root[data-theme='light'] .topbar {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+:root[data-theme='light'] .navItem:hover {
+  background: rgba(126, 96, 206, 0.08);
+}

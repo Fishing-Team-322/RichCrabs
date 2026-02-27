@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuth from '../../hooks/useAuth'
@@ -11,13 +11,24 @@ import './Home.css'
 
 type HomeItem = { title: string; description: string }
 
+const THEME_STORAGE_KEY = 'richcrabs-theme'
+
 const HomePage: React.FC = () => {
   const { isAuthenticated, profile } = useAuth()
   const { t } = useTranslation()
   const [openFaq, setOpenFaq] = useState(0)
+  const [theme, setTheme] = useState<'dark' | 'light'>(
+    () => (typeof window !== 'undefined' && window.localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark'),
+  )
 
   const features = t('home.features', { returnObjects: true }) as HomeItem[]
   const faq = t('home.faq', { returnObjects: true }) as HomeItem[]
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.setAttribute('data-theme', theme)
+    localStorage.setItem(THEME_STORAGE_KEY, theme)
+  }, [theme])
 
   const plans = useMemo(
     () => [
@@ -52,9 +63,18 @@ const HomePage: React.FC = () => {
             <a href="#pricing">Pricing</a>
             <a href="#faq">FAQ</a>
           </nav>
-          <Link className="ui-button primary" to={isAuthenticated ? routes.profile : routes.authLogin}>
-            {isAuthenticated ? t('common.profile') : t('common.login')}
-          </Link>
+          <div className="homeNavControls">
+            <button
+              type="button"
+              className="ui-button"
+              onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+            >
+              {theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+            </button>
+            <Link className="ui-button primary" to={isAuthenticated ? routes.profile : routes.authLogin}>
+              {isAuthenticated ? t('common.profile') : t('common.login')}
+            </Link>
+          </div>
         </div>
       </header>
 
