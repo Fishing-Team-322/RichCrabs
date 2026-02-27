@@ -182,9 +182,7 @@ fn remaining_round_duration(round: &QuestionRound) -> Duration {
     if round.ends_at <= now {
         Duration::ZERO
     } else {
-        (round.ends_at - now)
-            .to_std()
-            .unwrap_or_else(|_| Duration::ZERO)
+        (round.ends_at - now).to_std().unwrap_or(Duration::ZERO)
     }
 }
 
