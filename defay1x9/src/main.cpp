@@ -7,6 +7,8 @@
 #include "controllers/BotsController.hpp"
 #include "controllers/GamesController.hpp"
 #include "controllers/ProfileController.hpp"
+#include "controllers/QuizController.hpp"
+#include "controllers/TelegramController.hpp"
 #include "controllers/ServiceController.hpp"
 #include "csrf.hpp"
 #include "quizcore_client.hpp"
@@ -36,8 +38,10 @@ int main() {
   controllers::RegisterServiceRoutes(conf, quizCore);
   controllers::RegisterAuthRoutes(conf);
   controllers::RegisterProfileRoutes(conf);
+  controllers::RegisterQuizRoutes(conf, quizCore);
   controllers::RegisterGamesRoutes(conf, quizCore);
   controllers::RegisterBotsRoutes(conf, quizCore);
+  controllers::RegisterTelegramRoutes(conf, quizCore);
   controllers::RegisterAdminRoutes(conf);
 
   drogon::app().addListener(conf.listen_host, conf.listen_port).run();

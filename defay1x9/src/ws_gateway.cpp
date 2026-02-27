@@ -28,6 +28,12 @@ namespace {
 using richcrab::v1::GameService;
 using richcrab::v1::GetRoomStateRequest;
 using richcrab::v1::GetRoomStateResponse;
+using richcrab::v1::ResumeGameRequest;
+using richcrab::v1::ResumeGameResponse;
+using richcrab::v1::PauseGameRequest;
+using richcrab::v1::PauseGameResponse;
+using richcrab::v1::NextQuestionRequest;
+using richcrab::v1::NextQuestionResponse;
 using richcrab::v1::RoomEvent;
 using richcrab::v1::StartGameRequest;
 using richcrab::v1::StartGameResponse;
@@ -435,6 +441,85 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
     Json::Value out;
     out["type"] = WsGateway::Protocol::kServerStartGameResult;
     out["started"] = resp.started();
+    conn->send(JsonString(out));
+    return;
+  }
+
+
+  if (t == WsGateway::Protocol::kClientPauseGame) {
+    if (connSession->role != "host") {
+      SendError(conn, "forbidden_not_host", "only host can pause game");
+      return;
+    }
+
+    grpc::ClientContext ctx;
+    AttachRequestId(ctx, requestId);
+    PauseGameRequest req;
+    req.mutable_room_id()->set_value(connSession->room_id);
+    req.mutable_requested_by()->set_value(connSession->user_id);
+
+    PauseGameResponse resp;
+    const auto status = gameStub->PauseGame(&ctx, req, &resp);
+    if (!status.ok() || resp.has_error()) {
+      SendRpcFailure(conn, "pause_game_failed", "pause_game rpc failed", status, resp.has_error());
+      return;
+    }
+
+    Json::Value out;
+    out["type"] = WsGateway::Protocol::kServerPauseGameResult;
+    out["paused"] = resp.paused();
+    conn->send(JsonString(out));
+    return;
+  }
+
+  if (t == WsGateway::Protocol::kClientResumeGame) {
+    if (connSession->role != "host") {
+      SendError(conn, "forbidden_not_host", "only host can resume game");
+      return;
+    }
+
+    grpc::ClientContext ctx;
+    AttachRequestId(ctx, requestId);
+    ResumeGameRequest req;
+    req.mutable_room_id()->set_value(connSession->room_id);
+    req.mutable_requested_by()->set_value(connSession->user_id);
+
+    ResumeGameResponse resp;
+    const auto status = gameStub->ResumeGame(&ctx, req, &resp);
+    if (!status.ok() || resp.has_error()) {
+      SendRpcFailure(conn, "resume_game_failed", "resume_game rpc failed", status, resp.has_error());
+      return;
+    }
+
+    Json::Value out;
+    out["type"] = WsGateway::Protocol::kServerResumeGameResult;
+    out["resumed"] = resp.resumed();
+    conn->send(JsonString(out));
+    return;
+  }
+
+  if (t == WsGateway::Protocol::kClientNextQuestion) {
+    if (connSession->role != "host") {
+      SendError(conn, "forbidden_not_host", "only host can move to next question");
+      return;
+    }
+
+    grpc::ClientContext ctx;
+    AttachRequestId(ctx, requestId);
+    NextQuestionRequest req;
+    req.mutable_room_id()->set_value(connSession->room_id);
+    req.mutable_requested_by()->set_value(connSession->user_id);
+
+    NextQuestionResponse resp;
+    const auto status = gameStub->NextQuestion(&ctx, req, &resp);
+    if (!status.ok() || resp.has_error()) {
+      SendRpcFailure(conn, "next_question_failed", "next_question rpc failed", status, resp.has_error());
+      return;
+    }
+
+    Json::Value out;
+    out["type"] = WsGateway::Protocol::kServerNextQuestionResult;
+    out["advanced"] = resp.advanced();
     conn->send(JsonString(out));
     return;
   }
