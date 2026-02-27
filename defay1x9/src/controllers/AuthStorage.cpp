@@ -37,7 +37,9 @@ std::optional<drogon::orm::DbClientPtr> authDb(const Config& conf) {
   if (g_db) return g_db;
   const auto parsed = parsePg(conf.database_url);
   if (!parsed) return std::nullopt;
-  g_db = drogon::orm::DbClient::newPgClient(parsed->host, parsed->port, parsed->db, parsed->user, parsed->password, 1, "auth-db");
+  const auto connInfo = "host=" + parsed->host + " port=" + std::to_string(parsed->port) + " dbname=" + parsed->db +
+                        " user=" + parsed->user + " password=" + parsed->password + " application_name=auth-db";
+  g_db = drogon::orm::DbClient::newPgClient(connInfo, 1, false);
   return g_db;
 }
 
@@ -188,35 +190,35 @@ bool UpdateProfile(const Config& conf,
     return false;
   }
   try {
-    drogon::orm::Result result;
+    std::optional<drogon::orm::Result> result;
     if (displayName.has_value() && avatarUrl.has_value()) {
-      result = (*db)->execSqlSync(
+      result.emplace((*db)->execSqlSync(
           "UPDATE gateway_users SET display_name=$2, avatar_url=$3, updated_at=NOW() "
           "WHERE id = $1 RETURNING id, email, display_name, avatar_url, role, banned",
           userId,
           *displayName,
-          *avatarUrl);
+          *avatarUrl));
     } else if (displayName.has_value()) {
-      result = (*db)->execSqlSync(
+      result.emplace((*db)->execSqlSync(
           "UPDATE gateway_users SET display_name=$2, updated_at=NOW() "
           "WHERE id = $1 RETURNING id, email, display_name, avatar_url, role, banned",
           userId,
-          *displayName);
+          *displayName));
     } else if (avatarUrl.has_value()) {
-      result = (*db)->execSqlSync(
+      result.emplace((*db)->execSqlSync(
           "UPDATE gateway_users SET avatar_url=$2, updated_at=NOW() "
           "WHERE id = $1 RETURNING id, email, display_name, avatar_url, role, banned",
           userId,
-          *avatarUrl);
+          *avatarUrl));
     } else {
       error = "nothing to update";
       return false;
     }
-    if (result.empty()) {
+    if (result->empty()) {
       error = "user not found";
       return false;
     }
-    updated = mapUser(result[0]);
+    updated = mapUser((*result)[0]);
     return true;
   } catch (const std::exception& ex) {
     error = ex.what();

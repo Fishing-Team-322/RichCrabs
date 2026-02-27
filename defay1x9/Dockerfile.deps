@@ -1,3 +1,0 @@
-# Deprecated: dependency-only image is no longer used.
-# Gateway build is now fully handled by defay1x9/Dockerfile with BuildKit cache mounts.
-FROM scratch

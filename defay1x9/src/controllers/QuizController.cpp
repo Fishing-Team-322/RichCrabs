@@ -123,6 +123,78 @@ std::optional<std::vector<QuizCoreQuizQuestion>> parseQuestions(const Json::Valu
   return out;
 }
 
+<<<<<<< HEAD
+=======
+struct PgConn final {
+  std::string host;
+  std::string db;
+  std::string user;
+  std::string password;
+  unsigned short port = 5432;
+};
+
+struct StoredAiJob final {
+  std::string job_id;
+  std::string owner_user_id;
+  std::string status;
+  std::optional<QuizCoreQuiz> quiz;
+  std::optional<std::string> error_code;
+  std::optional<std::string> error_message;
+};
+
+std::optional<PgConn> parsePg(const std::string& url) {
+  static const std::regex kUri(R"(^postgres(?:ql)?:\/\/([^:]+):([^@]+)@([^:\/]+)(?::(\d+))?\/(.+)$)");
+  std::smatch m;
+  if (!std::regex_match(url, m, kUri)) return std::nullopt;
+  PgConn c;
+  c.user = m[1].str();
+  c.password = m[2].str();
+  c.host = m[3].str();
+  if (m[4].matched) c.port = static_cast<unsigned short>(std::stoi(m[4].str()));
+  c.db = m[5].str();
+  return c;
+}
+
+std::mutex g_aiJobDbMu;
+drogon::orm::DbClientPtr g_aiJobDb;
+
+std::optional<drogon::orm::DbClientPtr> aiJobDb(const Config& conf) {
+  std::lock_guard lk(g_aiJobDbMu);
+  if (g_aiJobDb) return g_aiJobDb;
+  const auto parsed = parsePg(conf.database_url);
+  if (!parsed) return std::nullopt;
+  const auto connInfo = "host=" + parsed->host + " port=" + std::to_string(parsed->port) + " dbname=" + parsed->db +
+                        " user=" + parsed->user + " password=" + parsed->password + " application_name=quiz-ai-jobs-db";
+  g_aiJobDb = drogon::orm::DbClient::newPgClient(connInfo, 1, false);
+  return g_aiJobDb;
+}
+
+bool ensureAiJobSchema(const Config& conf, std::string& error) {
+  const auto db = aiJobDb(conf);
+  if (!db) {
+    error = "cannot parse DATABASE_URL for ai jobs storage";
+    return false;
+  }
+  try {
+    (*db)->execSqlSync(
+        "CREATE TABLE IF NOT EXISTS gateway_ai_quiz_jobs ("
+        "job_id TEXT PRIMARY KEY,"
+        "owner_user_id TEXT NOT NULL,"
+        "status TEXT NOT NULL,"
+        "quiz JSONB,"
+        "error_code TEXT,"
+        "error_message TEXT,"
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        ");");
+    return true;
+  } catch (const std::exception& ex) {
+    error = ex.what();
+    return false;
+  }
+}
+
+>>>>>>> origin/main
 std::string normalizeAiJobStatus(const std::string& raw) {
   std::string normalized;
   normalized.reserve(raw.size());

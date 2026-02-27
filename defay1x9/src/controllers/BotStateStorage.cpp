@@ -40,7 +40,9 @@ std::optional<drogon::orm::DbClientPtr> botDb(const Config& conf) {
   if (g_db) return g_db;
   const auto parsed = parsePg(conf.database_url);
   if (!parsed) return std::nullopt;
-  g_db = drogon::orm::DbClient::newPgClient(parsed->host, parsed->port, parsed->db, parsed->user, parsed->password, 1, "bot-state-db");
+  const auto connInfo = "host=" + parsed->host + " port=" + std::to_string(parsed->port) + " dbname=" + parsed->db +
+                        " user=" + parsed->user + " password=" + parsed->password + " application_name=bot-state-db";
+  g_db = drogon::orm::DbClient::newPgClient(connInfo, 1, false);
   return g_db;
 }
 

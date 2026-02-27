@@ -403,7 +403,7 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
         Json::Value payload;
         Json::CharReaderBuilder b;
         std::string errs;
-        std::istringstream iss(req->body());
+        std::istringstream iss(std::string(req->body()));
         if (!Json::parseFromStream(b, iss, &payload, &errs)) {
           cb(api::jsonErrorResponse(400, api::ErrorCode::kInvalidJson, "invalid telegram update json"));
           return;
