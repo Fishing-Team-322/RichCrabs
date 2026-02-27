@@ -48,4 +48,4 @@ docker compose down -v --remove-orphans
 - Rust jobs (`test`, `load_test`) используют `Swatinem/rust-cache@v2` с ключом, привязанным к `richcrab/Cargo.lock` и версии toolchain (`stable`).
 - Python job (`gateway_py`) использует `actions/setup-python@v5` с `cache: pip` и `cache-dependency-path: gateway_py/requirements*.txt`.
 - Frontend job (`frontend`) использует `actions/setup-node@v4` с `cache: npm` и `cache-dependency-path: frontend/package-lock.json`.
-- `sqlx-cli` в CI ставится через prebuilt action (`taiki-e/install-action@v2`), чтобы не компилировать бинарь при каждом прогоне.
+- `sqlx-cli` в `test` job кешируется как `~/.cargo/bin/sqlx` вместе с cargo registry/git cache; установка выполняется только если бинарь отсутствует (например, при смене ключа кеша).

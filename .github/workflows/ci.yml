@@ -69,10 +69,21 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ runner.os }}-rust-stable-${{ hashFiles('richcrab/Cargo.lock') }}
-      - name: Install sqlx-cli
-        uses: taiki-e/install-action@v2
+      - name: Cache sqlx-cli + cargo install artifacts
+        uses: actions/cache@v4
         with:
-          tool: sqlx-cli
+          path: |
+            ~/.cargo/bin/sqlx
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ~/.cargo/git/checkouts/
+          key: ${{ runner.os }}-rust-stable-sqlx-cli-0.8.6-${{ hashFiles('richcrab/Cargo.lock') }}
+      - name: Install sqlx-cli (if cache miss)
+        run: |
+          if ! command -v sqlx >/dev/null 2>&1; then
+            cargo install sqlx-cli --version 0.8.6 --locked --no-default-features --features rustls,postgres
+          fi
       - name: Run migrations
         run: sqlx migrate run --source richcrab/migrations
       - name: Format check
