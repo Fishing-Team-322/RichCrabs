@@ -215,7 +215,7 @@ impl BotServiceImpl {
     async fn set_webhook(
         &self,
         token: &str,
-        telegram_bot_id: i64,
+        bot_id: Uuid,
         webhook_secret: &str,
     ) -> Result<(), Status> {
         if self.webhook_base_url.trim().is_empty() {
@@ -224,8 +224,9 @@ impl BotServiceImpl {
             ));
         }
 
+        let bot_key = format!("bot_{}", bot_id.simple());
         let webhook_url = format!(
-            "{}/tg/{telegram_bot_id}/{webhook_secret}",
+            "{}/api/v1/telegram/webhook/{bot_key}/{webhook_secret}",
             self.webhook_base_url.trim_end_matches('/')
         );
         let response = self
@@ -351,7 +352,7 @@ impl proto::richcrab::v1::bot_service_server::BotService for BotServiceImpl {
             .map_err(|e| Status::internal(format!("create failed: {e}")))?;
 
         if let Err(e) = self
-            .set_webhook(&req.endpoint, bot.telegram_bot_id, &webhook_secret)
+            .set_webhook(&req.endpoint, bot.id, &webhook_secret)
             .await
         {
             let _ = self.repository.remove_by_user(bot.id, actor_id).await;

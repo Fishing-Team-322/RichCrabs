@@ -1,6 +1,6 @@
 mod repository;
 
-use std::{collections::HashMap, env, net::SocketAddr, sync::Arc};
+use std::{env, net::SocketAddr};
 
 use axum::{
     extract::{Path, State},
@@ -10,40 +10,11 @@ use axum::{
     Json, Router,
 };
 use repository::BotIngressRepository;
-use serde::Deserialize;
 use sqlx::postgres::PgPoolOptions;
-use tokio::sync::RwLock;
-use tracing::info;
 
 #[derive(Clone)]
 struct AppState {
     repository: BotIngressRepository,
-    game_client:
-        proto::richcrab::v1::game_service_client::GameServiceClient<tonic::transport::Channel>,
-    room_state: Arc<RwLock<HashMap<i64, RoomContext>>>,
-}
-
-#[derive(Debug, Clone)]
-struct RoomContext {
-    room_id: String,
-    pin: String,
-    invite_token: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct TelegramUpdate {
-    message: Option<TelegramMessage>,
-}
-
-#[derive(Debug, Deserialize)]
-struct TelegramMessage {
-    text: Option<String>,
-    chat: TelegramChat,
-}
-
-#[derive(Debug, Deserialize)]
-struct TelegramChat {
-    id: i64,
 }
 
 #[derive(serde::Serialize)]
@@ -58,7 +29,6 @@ async fn main() -> anyhow::Result<()> {
     shared::observability::init_metrics();
 
     let database_url = env::var(shared::config::DATABASE_URL)?;
-    let game_addr = env::var(shared::config::SERVICE_ADDR_GAME)?;
     let ingress_addr = env::var(shared::config::SERVICE_ADDR_BOT_INGRESS)
         .unwrap_or_else(|_| "0.0.0.0:8090".to_string());
 
@@ -66,22 +36,16 @@ async fn main() -> anyhow::Result<()> {
         .max_connections(5)
         .connect(&database_url)
         .await?;
-    let game_endpoint = if game_addr.starts_with("http://") || game_addr.starts_with("https://") {
-        game_addr
-    } else {
-        format!("http://{game_addr}")
-    };
-    let game_client =
-        proto::richcrab::v1::game_service_client::GameServiceClient::connect(game_endpoint).await?;
 
     let state = AppState {
         repository: BotIngressRepository::new(pool),
-        game_client,
-        room_state: Arc::new(RwLock::new(HashMap::new())),
     };
 
     let app = Router::new()
-        .route("/tg/:telegram_bot_id/:webhook_secret", post(handle_webhook))
+        .route(
+            "/api/v1/telegram/webhook/:bot_id/:webhook_secret",
+            post(handle_webhook),
+        )
         .route("/health", get(health))
         .route("/metrics", get(shared::observability::metrics_handler))
         .with_state(state);
@@ -93,23 +57,17 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn handle_webhook(
-    Path((telegram_bot_id, webhook_secret)): Path<(i64, String)>,
+    Path((bot_id, webhook_secret)): Path<(String, String)>,
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(update): Json<TelegramUpdate>,
 ) -> impl IntoResponse {
     let metrics = shared::observability::init_metrics();
     metrics
         .tg_updates_total
         .with_label_values(&["received"])
         .inc();
-    let Some(bot) = state
-        .repository
-        .find_secret(telegram_bot_id)
-        .await
-        .ok()
-        .flatten()
-    else {
+
+    let Some(bot) = state.repository.find_secret(&bot_id).await.ok().flatten() else {
         return (
             StatusCode::NOT_FOUND,
             Json(SimpleResponse {
@@ -144,95 +102,11 @@ async fn handle_webhook(
         }
     }
 
-    let message_text = update
-        .message
-        .as_ref()
-        .and_then(|msg| msg.text.as_ref())
-        .map(|text| text.trim().to_string());
-
-    let Some(text) = message_text else {
-        return (
-            StatusCode::OK,
-            Json(SimpleResponse {
-                ok: true,
-                message: "ignored non-text update".to_string(),
-            }),
-        );
-    };
-
-    let mut game_client = state.game_client.clone();
-    info!(request_id = %uuid::Uuid::new_v4(), room_id = "", user_id = %bot.user_id, bot_id = %bot.id, "telegram webhook update");
-    let response_message = if text.starts_with("/newgame") {
-        match game_client
-            .create_room(proto::richcrab::v1::CreateRoomRequest {
-                owner_user_id: Some(proto::richcrab::v1::UserId {
-                    value: bot.user_id.to_string(),
-                }),
-                quiz_id: Some(proto::richcrab::v1::QuizId {
-                    value: "default".to_string(),
-                }),
-                title: format!("Telegram room {}", bot.username),
-            })
-            .await
-        {
-            Ok(resp) => {
-                let payload = resp.into_inner();
-                let room_id = payload.room_id.map(|id| id.value).unwrap_or_default();
-                let context = RoomContext {
-                    room_id,
-                    pin: payload.pin,
-                    invite_token: payload.invite_token,
-                };
-                let chat_id = update.message.map(|msg| msg.chat.id).unwrap_or_default();
-                state
-                    .room_state
-                    .write()
-                    .await
-                    .insert(chat_id, context.clone());
-                format!(
-                    "new game created: pin={} invite={}",
-                    context.pin, context.invite_token
-                )
-            }
-            Err(err) => format!("failed to create room: {err}"),
-        }
-    } else if text.starts_with("/invite") {
-        let chat_id = update.message.map(|msg| msg.chat.id).unwrap_or_default();
-        if let Some(ctx) = state.room_state.read().await.get(&chat_id) {
-            format!("invite={} pin={}", ctx.invite_token, ctx.pin)
-        } else {
-            "no active room, run /newgame first".to_string()
-        }
-    } else if text.starts_with("/start") {
-        let chat_id = update.message.map(|msg| msg.chat.id).unwrap_or_default();
-        let room = state.room_state.read().await.get(&chat_id).cloned();
-        if let Some(room) = room {
-            match game_client
-                .start_game(proto::richcrab::v1::StartGameRequest {
-                    room_id: Some(proto::richcrab::v1::RoomId {
-                        value: room.room_id,
-                    }),
-                    requested_by: Some(proto::richcrab::v1::UserId {
-                        value: bot.user_id.to_string(),
-                    }),
-                })
-                .await
-            {
-                Ok(_) => "game started".to_string(),
-                Err(err) => format!("failed to start game: {err}"),
-            }
-        } else {
-            "no active room, run /newgame first".to_string()
-        }
-    } else {
-        "unknown command".to_string()
-    };
-
     (
-        StatusCode::OK,
+        StatusCode::GONE,
         Json(SimpleResponse {
-            ok: true,
-            message: response_message,
+            ok: false,
+            message: "webhook processing moved to gateway".to_string(),
         }),
     )
 }

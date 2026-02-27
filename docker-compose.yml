@@ -92,7 +92,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://richcrab:richcrab@postgres:5432/richcrab}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-local-dev-encryption-key-change-me}
-      TELEGRAM_WEBHOOK_BASE_URL: ${TELEGRAM_WEBHOOK_BASE_URL:-http://bot_ingress:8090}
+      TELEGRAM_WEBHOOK_BASE_URL: ${TELEGRAM_WEBHOOK_BASE_URL:-http://gateway:8080}
       LOG_LEVEL: ${LOG_LEVEL:-info}
 
       # bind-адреса (ОК для самого сервиса, который слушает порт)

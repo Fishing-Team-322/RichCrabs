@@ -1864,10 +1864,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/QuizTelegramErrorResponse'
 
-  /telegram/webhook/{botId}/{secret}:
+  /api/v1/telegram/webhook/{botId}/{secret}:
     post:
       tags: [Telegram]
-      summary: Telegram webhook ingress (no CSRF/cookie required)
+      summary: Unified Telegram webhook ingress (gateway-owned, no CSRF/cookie required)
       security: []
       parameters:
         - name: botId
