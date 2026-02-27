@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import json
 import os
 import uuid
@@ -447,13 +448,31 @@ async def ws(ws: WebSocket):
         return
     await ws.send_json({"type": "hello", "roomId": s.room_id, "role": s.role})
 
+    def _next_stream_event(stream):
+        try:
+            return next(stream)
+        except StopIteration:
+            return None
+
     async def events_loop():
         req = game_pb2.SubscribeRoomEventsRequest(room_id=common_pb2.RoomId(value=s.room_id))
         if s.player_id:
             req.subscriber_player_id.value = s.player_id
-        stream = clients.game.SubscribeRoomEvents(req)
-        for ev in stream:
-            await ws.send_json({"type": "room_event", "event": json.loads(str(ev).replace("\n", " "))})
+        try:
+            stream = iter(clients.game.SubscribeRoomEvents(req))
+            while True:
+                ev = await asyncio.to_thread(_next_stream_event, stream)
+                if ev is None:
+                    return
+                await ws.send_json({"type": "room_event", "event": json.loads(str(ev).replace("\n", " "))})
+        except grpc.RpcError as ex:
+            try:
+                c, b = map_grpc_err(ex, "subscribe_room_events")
+            except Exception:
+                c, b = 500, {"error": "internal", "message": "room event stream failed"}
+            await ws.send_json({"type": "error", "error": b.get("error", "grpc_error"), "message": b.get("message", "room event stream failed"), "details": {"status": c}})
+
+    events_task = asyncio.create_task(events_loop())
 
     try:
         while True:
@@ -482,4 +501,12 @@ async def ws(ws: WebSocket):
             else:
                 await ws.send_json({"type": "error", "error": "unsupported_message_type", "message": "unsupported client message type"})
     except WebSocketDisconnect:
+        events_task.cancel()
         return
+    finally:
+        if not events_task.done():
+            events_task.cancel()
+        try:
+            await events_task
+        except (asyncio.CancelledError, WebSocketDisconnect):
+            pass
