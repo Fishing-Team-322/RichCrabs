@@ -1,0 +1,17 @@
+export const colors = {
+  bgBase: '#05071a',
+  bgElevated: '#0b1030',
+  bgSurface: '#11183b',
+  bgSurfaceHover: '#1a2454',
+  border: 'rgba(157, 174, 255, 0.22)',
+  borderStrong: 'rgba(157, 174, 255, 0.4)',
+  textPrimary: '#f8f9ff',
+  textSecondary: 'rgba(228, 233, 255, 0.72)',
+  primary: '#835dff',
+  primaryHover: '#9a7cff',
+  success: '#3ad28b',
+  warning: '#f8b54b',
+  danger: '#ff6f8e',
+  disabled: 'rgba(108, 120, 172, 0.45)',
+  overlay: 'rgba(3, 6, 24, 0.72)',
+} as const
