@@ -209,12 +209,12 @@ void sendTelegramReply(const std::shared_ptr<controllers::TelegramWebhookClient>
 
 namespace controllers {
 
-void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore) {
+void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, EntitlementsClient& entitlementsClient) {
   auto webhookClient = std::make_shared<TelegramWebhookClient>();
 
   drogon::app().registerHandler(
       "/api/v1/telegram/bots/connect",
-      [&quizCore, conf, webhookClient](const drogon::HttpRequestPtr& req,
+      [&quizCore, &entitlementsClient, conf, webhookClient](const drogon::HttpRequestPtr& req,
                                        std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         if (!RequireCsrf(req, conf, cb)) return;
 
@@ -239,6 +239,18 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore) {
 
         const auto requestId = requestIdFromRequest(req);
         const auto ownerUserId = resolveUserId(req, conf);
+        const auto entitlement = entitlementsClient.checkAndConsume(ownerUserId, "REGISTER_BOT");
+        if (!entitlement.allowed) {
+          Json::Value details;
+          details["error"] = "limit_exceeded";
+          if (entitlement.error->limit.has_value()) details["limit"] = *entitlement.error->limit;
+          if (entitlement.error->retry_at.has_value()) details["retryAt"] = *entitlement.error->retry_at;
+          cb(api::jsonErrorResponse(429,
+                                    api::ErrorCode::kTooManyAttempts,
+                                    entitlement.error->gateway_error.message,
+                                    details));
+          return;
+        }
         const std::string botId = "tg_" + util::random_hex(10);
         const std::string secret = util::random_hex(24);
         const std::string webhookPath = "/telegram/webhook/" + botId + "/" + secret;

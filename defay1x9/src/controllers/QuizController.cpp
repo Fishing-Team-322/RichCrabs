@@ -117,7 +117,7 @@ std::optional<std::vector<QuizCoreQuizQuestion>> parseQuestions(const Json::Valu
 
 namespace controllers {
 
-void RegisterQuizRoutes(const Config& conf, QuizCoreClient& quizCore) {
+void RegisterQuizRoutes(const Config& conf, QuizCoreClient& quizCore, EntitlementsClient& entitlementsClient) {
   drogon::app().registerHandler(
       "/api/v1/quizzes",
       [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
@@ -295,7 +295,7 @@ void RegisterQuizRoutes(const Config& conf, QuizCoreClient& quizCore) {
 
   drogon::app().registerHandler(
       "/api/v1/quizzes/ai-generate",
-      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+      [&quizCore, &entitlementsClient, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         if (!RequireCsrf(req, conf, cb)) return;
 
         std::string parseError;
@@ -321,6 +321,18 @@ void RegisterQuizRoutes(const Config& conf, QuizCoreClient& quizCore) {
         }
 
         const auto userId = resolveUserId(req, conf);
+        const auto entitlement = entitlementsClient.checkAndConsume(userId, "AI_GENERATE");
+        if (!entitlement.allowed) {
+          Json::Value details;
+          details["error"] = "limit_exceeded";
+          if (entitlement.error->limit.has_value()) details["limit"] = *entitlement.error->limit;
+          if (entitlement.error->retry_at.has_value()) details["retryAt"] = *entitlement.error->retry_at;
+          cb(api::jsonErrorResponse(429,
+                                    api::ErrorCode::kTooManyAttempts,
+                                    entitlement.error->gateway_error.message,
+                                    details));
+          return;
+        }
         const auto rpc = quizCore.startAiQuizJob(userId, *prompt, desiredQuestionCount);
         if (isRpcDegradedStatus(rpc.status)) {
           cb(degradedQuizResponse("startAiQuizJob", rpc.error_message));

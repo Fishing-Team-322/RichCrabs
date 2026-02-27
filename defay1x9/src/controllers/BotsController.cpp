@@ -7,10 +7,10 @@
 
 namespace controllers {
 
-void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
+void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore, EntitlementsClient& entitlementsClient) {
   drogon::app().registerHandler(
       "/api/v1/bots",
-      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+      [&quizCore, &entitlementsClient, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         if (!RequireCsrf(req, conf, cb)) return;
 
         std::string parseError;
@@ -26,6 +26,18 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
         auto endpoint = validator.requiredString("endpoint");
         if (!validator.ok()) {
           cb(api::validationErrorResponse(validator.issues()));
+          return;
+        }
+        const auto entitlement = entitlementsClient.checkAndConsume(resolveUserId(req, conf), "REGISTER_BOT");
+        if (!entitlement.allowed) {
+          Json::Value details;
+          details["error"] = "limit_exceeded";
+          if (entitlement.error->limit.has_value()) details["limit"] = *entitlement.error->limit;
+          if (entitlement.error->retry_at.has_value()) details["retryAt"] = *entitlement.error->retry_at;
+          cb(api::jsonErrorResponse(429,
+                                    api::ErrorCode::kTooManyAttempts,
+                                    entitlement.error->gateway_error.message,
+                                    details));
           return;
         }
         const auto requestId = requestIdFromRequest(req);
