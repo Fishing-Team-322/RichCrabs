@@ -5,11 +5,13 @@ import { routes } from '../../app/router/routeMap'
 import { Button, Input } from '../../components/ui'
 import { validateLogin, type LoginFormData } from '../../shared/validation/formSchemas'
 import { useNotifications } from '../../app/providers/NotificationProvider'
+import { useTranslation } from 'react-i18next'
 
 const Login = () => {
   const navigate = useNavigate()
   const { signIn, isLoading } = useAuth()
   const notifications = useNotifications()
+  const { t } = useTranslation()
   const [form, setForm] = useState<LoginFormData>({ email: '', password: '' })
   const [errors, setErrors] = useState<Partial<Record<'email' | 'password' | 'root', string>>>({})
 
@@ -36,8 +38,9 @@ const Login = () => {
 
   return (
     <section className="authCard">
-      <h1>Вход</h1>
-      <p className="homeMuted">Войдите в аккаунт RichCrabs, чтобы продолжить.</p>
+      <h1>{t('auth.loginTitle')}</h1>
+      <p className="homeMuted">{t('auth.loginSubtitle')}</p>
+      <Link to={routes.home} className="accountAction">{t('common.backToHome')}</Link>
       <form onSubmit={(event) => void onSubmit(event)} className="homePage">
         <Input
           label="Email"

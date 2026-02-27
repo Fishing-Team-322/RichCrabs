@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { botsApi } from '../../services/botsApi'
 import { Skeleton } from '../../components/ui'
 import { useNotifications } from '../../app/providers/NotificationProvider'
@@ -21,6 +22,7 @@ const operationLabel = (operation: BotRuntimeOperationDto) => {
 }
 
 const TelegramBots = () => {
+  const { t } = useTranslation()
   const notifications = useNotifications()
   const [token, setToken] = useState('')
   const [tokenError, setTokenError] = useState('')
@@ -134,8 +136,8 @@ const TelegramBots = () => {
   return (
     <section className="telegramBotsPage">
       <article className="pageCard">
-        <h1>Telegram-боты</h1>
-        <p className="telegramBotsMuted">Подключите bot token, чтобы создавать комнаты и выдавать приглашения через Telegram.</p>
+        <h1>{t('bots.title')}</h1>
+        <p className="telegramBotsMuted">{t('bots.subtitle')}</p>
         <div className="telegramBotsWarning">⚠️ Пользовательский код бота не исполняется. Используется общий runtime платформы RichCrabs.</div>
         {error && <div className="telegramBotsError">{error}</div>}
         {success && <div className="telegramBotsSuccess">{success}</div>}

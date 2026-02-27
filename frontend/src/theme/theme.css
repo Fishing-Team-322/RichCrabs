@@ -20,7 +20,23 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; color: var(--text-primary); background: radial-gradient(circle at top right, rgba(131,93,255,.2), transparent 40%), var(--bg-base); font-family: Inter, 'Segoe UI', system-ui, sans-serif; }
+body {
+  margin: 0;
+  color: var(--text-primary);
+  background:
+    radial-gradient(circle at top right, rgba(131,93,255,.3), transparent 45%),
+    radial-gradient(circle at 20% 85%, rgba(0,191,255,.14), transparent 50%),
+    repeating-linear-gradient(120deg, rgba(255,255,255,.05) 0 2px, transparent 2px 42px),
+    var(--bg-base);
+  background-size: auto, auto, 280% 280%, auto;
+  animation: linesMotion 20s linear infinite;
+  font-family: Inter, 'Segoe UI', system-ui, sans-serif;
+}
+
+@keyframes linesMotion {
+  from { background-position: 0 0, 0 0, 0 0, 0 0; }
+  to { background-position: 0 0, 0 0, 320px -320px, 0 0; }
+}
 a { color: inherit; }
 
 .appShell { min-height: 100vh; display: grid; grid-template-columns: 240px 1fr; }
@@ -38,6 +54,8 @@ a { color: inherit; }
 .accountMeta{display:grid;text-align:right}
 .accountEmail{font-size:12px;color:var(--text-secondary)}
 .accountBlock{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.languageSwitcher{display:flex;align-items:center;gap:8px;color:var(--text-secondary);font-size:13px}
+.languageSwitcher select{border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-primary);padding:4px 8px}
 
 @media (max-width: 980px) {
   .appShell { grid-template-columns: 1fr; }

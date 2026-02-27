@@ -1,4 +1,5 @@
 import type { RoomStateDto, Team } from '../../types/room.types'
+import { useTranslation } from 'react-i18next'
 
 interface LobbyProps {
   state: RoomStateDto
@@ -8,14 +9,16 @@ interface LobbyProps {
   connectionLabel: string
 }
 
-const Lobby = ({ state, canStart, playerTeam, onStart, connectionLabel }: LobbyProps) => (
-  <article className="pageCard quizRuntimeCard">
+const Lobby = ({ state, canStart, playerTeam, onStart, connectionLabel }: LobbyProps) => {
+  const { t } = useTranslation()
+
+  return <article className="pageCard quizRuntimeCard">
     <div className="quizRuntimeHeader">
-      <h1>Лобби комнаты {state.pin}</h1>
+      <h1>{t('quiz.lobby', { pin: state.pin })}</h1>
       <span className="quizConnectionState">{connectionLabel}</span>
     </div>
 
-    <p className="roomMeta">Ожидаем начало игры. Ваша команда: {playerTeam ?? '—'}</p>
+    <p className="roomMeta">{t('quiz.waiting', { team: playerTeam ?? '—' })}</p>
 
     <div className="quizTeamsGrid">
       <section className="quizTeamBlock teamA">
@@ -45,6 +48,6 @@ const Lobby = ({ state, canStart, playerTeam, onStart, connectionLabel }: LobbyP
       {canStart ? 'Начать игру' : 'Старт доступен только хосту'}
     </button>
   </article>
-)
+}
 
 export default Lobby

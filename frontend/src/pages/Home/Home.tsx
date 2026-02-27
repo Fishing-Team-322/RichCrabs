@@ -1,40 +1,52 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import useAuth from '../../hooks/useAuth'
 import { routes } from '../../app/router/routeMap'
 import { Badge } from '../../components/ui'
 import './Home.css'
 
-const featureItems = [
-  { title: 'AI-генерация квизов', description: 'Собирайте вопросы за минуты: тема, сложность, формат и готовый набор раундов.' },
-  { title: 'Игровые комнаты', description: 'Открывайте приватные и публичные комнаты, приглашайте игроков по PIN, invite или QR.' },
-  { title: 'Telegram-боты', description: 'Подключайте ботов для запуска игр, рассылок и приёма ответов прямо в Telegram.' },
-]
-
 const HomePage: React.FC = () => {
   const { isAuthenticated, profile } = useAuth()
+  const { t } = useTranslation()
+
+  const features = t('home.features', { returnObjects: true }) as Array<{ title: string; description: string }>
+  const faq = t('home.faq', { returnObjects: true }) as Array<{ title: string; description: string }>
 
   return (
     <div className="homePage">
       <section className="pageCard homeHero">
         <div>
-          <Badge tone="neutral">RichCrabs UI platform</Badge>
-          <h1 className="homeTitle">{isAuthenticated ? `С возвращением, ${profile?.name ?? 'игрок'}!` : 'Современный набор для квизов и игровых комнат'}</h1>
-          <p className="homeMuted">Единый интерфейс для квизов, комнат, платежей и Telegram-ботов в фирменном dark-дизайне.</p>
+          <Badge tone="neutral">{t('home.badge')}</Badge>
+          <h1 className="homeTitle">
+            {isAuthenticated
+              ? t('home.titleAuth', { name: profile?.name ?? 'player' })
+              : t('home.titleGuest')}
+          </h1>
+          <p className="homeMuted">{t('home.subtitle')}</p>
         </div>
         <div className="homeActions">
-          <Link to={routes.quizzesNew} className="ui-button primary">Создать квиз</Link>
-          <Link to={routes.join} className="ui-button">Присоединиться</Link>
-          <Link to={routes.subscriptions} className="ui-button">Тарифы</Link>
+          <Link to={routes.quizzesNew} className="ui-button primary">{t('home.actions.createQuiz')}</Link>
+          <Link to={routes.join} className="ui-button">{t('home.actions.join')}</Link>
+          <Link to={routes.subscriptions} className="ui-button">{t('home.actions.plans')}</Link>
         </div>
+      </section>
+
+      <section className="homeCenterGrid">
+        {features.map((feature) => (
+          <article key={feature.title} className="pageCard homeFeatureItem">
+            <h3>{feature.title}</h3>
+            <p className="homeMuted">{feature.description}</p>
+          </article>
+        ))}
       </section>
 
       <section className="homeGrid">
         <article className="pageCard">
-          <h2>Возможности</h2>
+          <h2>{t('home.featuresTitle')}</h2>
           <div className="homeFeatureList">
-            {featureItems.map((feature) => (
-              <div key={feature.title} className="homeFeatureItem">
+            {features.map((feature) => (
+              <div key={`list-${feature.title}`} className="homeFeatureItem compact">
                 <h3>{feature.title}</h3>
                 <p className="homeMuted">{feature.description}</p>
               </div>
@@ -43,10 +55,11 @@ const HomePage: React.FC = () => {
         </article>
 
         <article className="pageCard">
-          <h2>FAQ</h2>
+          <h2>{t('home.faqTitle')}</h2>
           <div className="homeFaq">
-            <div className="homeFaqItem"><h3>PIN / invite / QR?</h3><p className="homeMuted">Все три варианта входа доступны сразу в комнате.</p></div>
-            <div className="homeFaqItem"><h3>Адаптивность</h3><p className="homeMuted">Desktop, tablet и mobile теперь с единым UI-kit.</p></div>
+            {faq.map((item) => (
+              <div className="homeFaqItem" key={item.title}><h3>{item.title}</h3><p className="homeMuted">{item.description}</p></div>
+            ))}
           </div>
         </article>
       </section>

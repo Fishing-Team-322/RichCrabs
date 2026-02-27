@@ -6,6 +6,7 @@ import { joinApi } from '../../services/joinApi'
 import { playerSession } from '../../services/playerSession'
 import { AppError } from '../../services/api'
 import { validateJoinByInvite, validateJoinByPin, type JoinByInviteFormData, type JoinByPinFormData } from '../../shared/validation/formSchemas'
+import { useTranslation } from 'react-i18next'
 import '../rooms/rooms.css'
 
 type JoinMethod = 'pin' | 'invite'
@@ -30,6 +31,7 @@ const JoinPage = () => {
   const [inviteErrors, setInviteErrors] = useState<Partial<Record<'playerName' | 'inviteToken' | 'root', string>>>({})
   const navigate = useNavigate()
   const notifications = useNotifications()
+  const { t } = useTranslation()
 
   const onSubmitPin = async (event: FormEvent) => {
     event.preventDefault()
@@ -80,37 +82,37 @@ const JoinPage = () => {
   return (
     <section className="roomsPage">
       <article className="pageCard roomForm">
-        <h1>Вход в комнату</h1>
+        <h1>{t('join.title')}</h1>
         <div className="roomsActions">
-          <button className={`roomButton ${tab === 'pin' ? 'primary' : ''}`} type="button" onClick={() => setTab('pin')}>Ввод PIN</button>
-          <button className={`roomButton ${tab === 'invite' ? 'primary' : ''}`} type="button" onClick={() => setTab('invite')}>Invite-token</button>
+          <button className={`roomButton ${tab === 'pin' ? 'primary' : ''}`} type="button" onClick={() => setTab('pin')}>{t('join.pinTab')}</button>
+          <button className={`roomButton ${tab === 'invite' ? 'primary' : ''}`} type="button" onClick={() => setTab('invite')}>{t('join.inviteTab')}</button>
         </div>
 
         {tab === 'pin' ? (
           <form className="roomForm" onSubmit={(event) => void onSubmitPin(event)}>
-            <label>Имя игрока
+            <label>{t('join.playerName')}
               <input value={pinForm.playerName} onChange={(event) => setPinForm((prev) => ({ ...prev, playerName: event.target.value }))} className={pinErrors.playerName ? 'error' : ''} placeholder="Например: Alice" />
               {pinErrors.playerName && <span className="ui-help">{pinErrors.playerName}</span>}
             </label>
-            <label>PIN комнаты
+            <label>{t('join.roomPin')}
               <input value={pinForm.pin} onChange={(event) => setPinForm((prev) => ({ ...prev, pin: event.target.value }))} className={pinErrors.pin ? 'error' : ''} placeholder="123456" />
               {pinErrors.pin && <span className="ui-help">{pinErrors.pin}</span>}
             </label>
             {pinErrors.root && <div className="roomError">{pinErrors.root}</div>}
-            <button className="roomButton primary" type="submit" disabled={loading}>{loading ? 'Подключаем...' : 'Войти в игру'}</button>
+            <button className="roomButton primary" type="submit" disabled={loading}>{loading ? t('join.joining') : t('join.joinButton')}</button>
           </form>
         ) : (
           <form className="roomForm" onSubmit={(event) => void onSubmitInvite(event)}>
-            <label>Имя игрока
+            <label>{t('join.playerName')}
               <input value={inviteForm.playerName} onChange={(event) => setInviteForm((prev) => ({ ...prev, playerName: event.target.value }))} className={inviteErrors.playerName ? 'error' : ''} placeholder="Например: Alice" />
               {inviteErrors.playerName && <span className="ui-help">{inviteErrors.playerName}</span>}
             </label>
-            <label>Invite-token
+            <label>{t('join.inviteToken')}
               <input value={inviteForm.inviteToken} onChange={(event) => setInviteForm((prev) => ({ ...prev, inviteToken: event.target.value }))} className={inviteErrors.inviteToken ? 'error' : ''} placeholder="token из ссылки invite" />
               {inviteErrors.inviteToken && <span className="ui-help">{inviteErrors.inviteToken}</span>}
             </label>
             {inviteErrors.root && <div className="roomError">{inviteErrors.root}</div>}
-            <button className="roomButton primary" type="submit" disabled={loading}>{loading ? 'Подключаем...' : 'Войти в игру'}</button>
+            <button className="roomButton primary" type="submit" disabled={loading}>{loading ? t('join.joining') : t('join.joinButton')}</button>
           </form>
         )}
       </article>

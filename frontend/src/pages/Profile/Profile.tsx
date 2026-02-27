@@ -2,6 +2,8 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { profileApi } from '../../services/profileApi'
 import { useAppDispatch } from '../../store/hooks'
 import { setProfile } from '../../store/slices'
+import { useTranslation } from 'react-i18next'
+import LanguageSwitcher from '../../components/LanguageSwitcher'
 import type { SessionDto, UserDto } from '../../types/auth.types'
 import './profile.css'
 
@@ -14,6 +16,7 @@ const planLabel = (plan?: string) => {
 }
 
 const Profile = () => {
+  const { t } = useTranslation()
   const dispatch = useAppDispatch()
   const [profile, setLocalProfile] = useState<UserDto | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -118,18 +121,19 @@ const Profile = () => {
   }
 
   if (isLoading) {
-    return <section className="pageCard">Загружаем профиль...</section>
+    return <section className="pageCard">{t('profile.loading')}</section>
   }
 
   if (error || !profile) {
-    return <section className="pageCard">{error || 'Профиль не найден.'}</section>
+    return <section className="pageCard">{error || t('profile.notFound')}</section>
   }
 
   return (
     <section className="profilePage">
       <div className="profileGrid">
         <article className="pageCard">
-          <h1>Профиль</h1>
+          <h1>{t('profile.title')}</h1>
+          <LanguageSwitcher />
           <div className="profileBasic">
             {profile.avatarUrl ? <img src={profile.avatarUrl} alt={profile.name} className="profileAvatar" /> : <div className="profileAvatar fallback">{profile.name[0]}</div>}
             <div>

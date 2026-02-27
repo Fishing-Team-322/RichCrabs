@@ -1,34 +1,37 @@
 import { Link, NavLink, Outlet, matchPath, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Header from './Header/Header'
 import { routes } from '../app/router/routeMap'
 
-const internalNavigation = [
-  { to: routes.quizzes, label: 'Квизы' },
-  { to: routes.rooms, label: 'Комнаты' },
-  { to: routes.profile, label: 'Профиль' },
-  { to: routes.subscriptions, label: 'Подписки' },
-  { to: routes.bots, label: 'Боты' },
-  { to: routes.adminDashboard, label: 'Админ' },
-]
-
-const breadcrumbMap = [
-  { pattern: routes.quizzes, label: 'Квизы' },
-  { pattern: routes.quizzesNew, label: 'Новый квиз' },
-  { pattern: routes.quizzesEdit, label: 'Редактирование квиза' },
-  { pattern: routes.quizzesPublish, label: 'Публикация квиза' },
-  { pattern: routes.rooms, label: 'Комнаты' },
-  { pattern: routes.roomsNew, label: 'Новая комната' },
-  { pattern: routes.roomDetails, label: 'Комната' },
-  { pattern: routes.quizRuntime, label: 'Игра' },
-  { pattern: routes.profile, label: 'Профиль' },
-  { pattern: routes.subscriptions, label: 'Подписки' },
-  { pattern: routes.bots, label: 'Боты' },
-  { pattern: routes.adminDashboard, label: 'Админ дашборд' },
-  { pattern: routes.adminSecurity, label: 'Админ безопасность' },
-]
 
 const Layout = () => {
   const location = useLocation()
+  const { t } = useTranslation()
+
+  const internalNavigation = [
+    { to: routes.quizzes, label: 'Квизы' },
+    { to: routes.rooms, label: 'Комнаты' },
+    { to: routes.profile, label: t('common.profile') },
+    { to: routes.subscriptions, label: 'Подписки' },
+    { to: routes.bots, label: 'Боты' },
+    { to: routes.adminDashboard, label: 'Админ' },
+  ]
+
+  const breadcrumbMap = [
+    { pattern: routes.quizzes, label: 'Квизы' },
+    { pattern: routes.quizzesNew, label: 'Новый квиз' },
+    { pattern: routes.quizzesEdit, label: 'Редактирование квиза' },
+    { pattern: routes.quizzesPublish, label: 'Публикация квиза' },
+    { pattern: routes.rooms, label: 'Комнаты' },
+    { pattern: routes.roomsNew, label: 'Новая комната' },
+    { pattern: routes.roomDetails, label: 'Комната' },
+    { pattern: routes.quizRuntime, label: 'Игра' },
+    { pattern: routes.profile, label: t('common.profile') },
+    { pattern: routes.subscriptions, label: 'Подписки' },
+    { pattern: routes.bots, label: 'Боты' },
+    { pattern: routes.adminDashboard, label: 'Админ дашборд' },
+    { pattern: routes.adminSecurity, label: 'Админ безопасность' },
+  ]
 
   const breadcrumbs = breadcrumbMap.filter((crumb) =>
     Boolean(matchPath({ path: crumb.pattern, end: true }, location.pathname)),
@@ -50,7 +53,7 @@ const Layout = () => {
       <div className="contentWrap">
         <Header />
         <div className="breadcrumbs">
-          <Link to={routes.home}>Главная</Link>
+          <Link to={routes.home}>{t('common.home')}</Link>
           {breadcrumbs.map((crumb) => (
             <span key={crumb.pattern}>/ {crumb.label}</span>
           ))}

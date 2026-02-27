@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { billingApi } from '../../services/billingApi'
 import type { BillingPaymentStatusDto, BillingPlanDto, SubscriptionDto } from '../../types/billing.types'
 import './subscriptions.css'
@@ -45,6 +46,7 @@ const renderLimitValue = (plan: BillingPlanDto, key: string) => {
 }
 
 const Subscriptions = () => {
+  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [plans, setPlans] = useState<BillingPlanDto[]>([])
@@ -187,13 +189,13 @@ const Subscriptions = () => {
   }
 
   if (loading) {
-    return <section className="pageCard">Загружаем биллинг...</section>
+    return <section className="pageCard">{t('subscriptions.loading')}</section>
   }
 
   return (
     <section className="subscriptionsPage">
       <article className="pageCard">
-        <h1>Подписка и биллинг</h1>
+        <h1>{t('subscriptions.title')}</h1>
         {callbackMessage && <div className="subsNotice">{callbackMessage}</div>}
         {error && <div className="subsError">{error}</div>}
 

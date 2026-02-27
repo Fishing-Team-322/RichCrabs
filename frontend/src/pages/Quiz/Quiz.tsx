@@ -4,6 +4,7 @@ import Question from './Question'
 import Result from './Result'
 import { routes } from '../../app/router/routeMap'
 import { useGames } from '../../hooks/useGames'
+import { useTranslation } from 'react-i18next'
 import '../rooms/rooms.css'
 import './quiz.css'
 
@@ -23,6 +24,7 @@ const QUALITY_LABEL: Record<string, string> = {
 }
 
 const Quiz = () => {
+  const { t } = useTranslation()
   const { roomId = '' } = useParams()
   const {
     token,
@@ -47,9 +49,9 @@ const Quiz = () => {
     return (
       <section className="roomsPage">
         <article className="pageCard roomForm">
-          <h1>Игровой экран</h1>
+          <h1>{t('quiz.gameScreen')}</h1>
           <div className="roomError">
-            Сессия игрока не найдена. Выполните вход через <Link to={routes.join}>страницу join</Link>.
+            {t('quiz.noSession')} <Link to={routes.join}>join</Link>.
           </div>
         </article>
       </section>
@@ -60,7 +62,7 @@ const Quiz = () => {
     return (
       <section className="roomsPage">
         <article className="pageCard roomForm">
-          <h1>Подключаемся к игре...</h1>
+          <h1>{t('quiz.connecting')}</h1>
           <p className="roomMeta">{connectionLabel}</p>
           {error && <div className="roomError">{error}</div>}
         </article>
@@ -71,7 +73,7 @@ const Quiz = () => {
   return (
     <section className="roomsPage">
       <div className={`quizConnectionBadge quality-${connectionQuality}`}>
-        Связь: {QUALITY_LABEL[connectionQuality]}
+        {t('quiz.connection')}: {QUALITY_LABEL[connectionQuality]}
         {latencyMs !== null && ` · ${latencyMs}мс`}
       </div>
 
