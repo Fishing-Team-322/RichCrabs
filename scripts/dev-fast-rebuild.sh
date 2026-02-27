@@ -8,8 +8,10 @@ set -euo pipefail
 SERVICE="${SERVICE:-gateway}"
 DEPS_IMAGE="${GATEWAY_DEPS_IMAGE:-devhack/gateway-deps:local}"
 
+
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
+
 
 if ! docker image inspect "$DEPS_IMAGE" >/dev/null 2>&1; then
   echo "[gateway] deps image '$DEPS_IMAGE' not found locally"

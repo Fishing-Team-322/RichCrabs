@@ -1,7 +1,24 @@
 # syntax=docker/dockerfile:1.7-labs
 
-ARG GATEWAY_DEPS_IMAGE=devhack/gateway-deps:local
-FROM ${GATEWAY_DEPS_IMAGE} AS builder
+FROM ubuntu:22.04 AS builder
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+  git curl zip unzip tar ca-certificates \
+  build-essential pkg-config ccache \
+  cmake ninja-build \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+RUN git clone --depth 1 https://github.com/microsoft/vcpkg.git \
+  && /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+ENV VCPKG_ROOT=/opt/vcpkg
+ENV VCPKG_FEATURE_FLAGS=manifests
+ENV VCPKG_BINARY_SOURCES="clear;files,/root/.cache/vcpkg/bincache,readwrite"
+ENV VCPKG_DEFAULT_TRIPLET=x64-linux-release
+ENV VCPKG_DEFAULT_HOST_TRIPLET=x64-linux-release
+
 
 WORKDIR /repo/defay1x9
 
@@ -18,7 +35,8 @@ ENV VCPKG_BINARY_SOURCES="clear;files,/opt/vcpkg-bincache,read"
 RUN --mount=type=cache,target=/opt/vcpkg/downloads,id=vcpkg-downloads \
     --mount=type=cache,target=/opt/vcpkg/buildtrees,id=vcpkg-buildtrees-x64-linux-release \
     --mount=type=cache,target=/opt/vcpkg/packages,id=vcpkg-packages-x64-linux-release \
-    --mount=type=cache,target=/root/.cache/ccache,id=gateway-ccache \
+
+    --mount=type=cache,target=/root/.cache/vcpkg/bincache,id=vcpkg-bincache \
     cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_C_COMPILER_LAUNCHER=ccache \
