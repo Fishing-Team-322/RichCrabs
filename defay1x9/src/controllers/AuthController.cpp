@@ -38,9 +38,8 @@ Json::Value todoDetails(const std::string& todo, const std::string& sourceError)
 
 void setAuthSession(const StoredUser& user, const Config& conf, const drogon::HttpResponsePtr& response) {
   security::SessionClaims claims;
+  claims.session_type = "auth";
   claims.role = "host";
-  claims.pin = "AUTH";
-  claims.room_id = "AUTH";
   claims.user_id = user.id;
 
   const std::string sessionToken = security::IssueSessionToken(claims, conf.session.ttl_seconds);

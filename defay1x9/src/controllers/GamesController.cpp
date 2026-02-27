@@ -121,6 +121,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         }
 
         security::SessionClaims claims;
+        claims.session_type = "game";
         claims.role = "host";
         claims.pin = out->pin;
         claims.room_id = out->room_id;
@@ -226,6 +227,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         }
 
         security::SessionClaims claims;
+        claims.session_type = "game";
         claims.role = "player";
         claims.pin = pin;
         claims.room_id = out->room_id;
@@ -298,6 +300,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         }
 
         security::SessionClaims claims;
+        claims.session_type = "game";
         claims.role = "player";
         claims.pin = out->room_id;
         claims.room_id = out->room_id;
