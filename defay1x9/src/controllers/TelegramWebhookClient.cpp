@@ -26,15 +26,14 @@ void TelegramWebhookClient::setWebhook(const std::string& botToken,
                                        const std::string& requestId,
                                        std::function<void(TelegramSetWebhookResult)> cb) const {
   auto client = drogon::HttpClient::newHttpClient("https://api.telegram.org");
-  auto req = drogon::HttpRequest::newHttpJsonRequest(Json::Value(Json::objectValue));
-  req->setMethod(drogon::Post);
-  req->setPath("/bot" + botToken + "/setWebhook");
-
   Json::Value payload;
   payload["url"] = webhookUrl;
   payload["secret_token"] = secret;
   payload["drop_pending_updates"] = true;
-  req->setJsonObject(payload);
+
+  auto req = drogon::HttpRequest::newHttpJsonRequest(payload);
+  req->setMethod(drogon::Post);
+  req->setPath("/bot" + botToken + "/setWebhook");
 
   spdlog::info("telegram_set_webhook_start request_id={} token_masked={} webhook_url={}",
                requestId,
@@ -102,17 +101,16 @@ void TelegramWebhookClient::sendMessage(const std::string& botToken,
                                         const std::string& requestId,
                                         std::function<void(TelegramSendMessageResult)> cb) const {
   auto client = drogon::HttpClient::newHttpClient("https://api.telegram.org");
-  auto req = drogon::HttpRequest::newHttpJsonRequest(Json::Value(Json::objectValue));
-  req->setMethod(drogon::Post);
-  req->setPath("/bot" + botToken + "/sendMessage");
-
   Json::Value payload;
   payload["chat_id"] = chatId;
   payload["text"] = text;
   if (replyToMessageId.has_value()) {
     payload["reply_to_message_id"] = Json::Int64(*replyToMessageId);
   }
-  req->setJsonObject(payload);
+
+  auto req = drogon::HttpRequest::newHttpJsonRequest(payload);
+  req->setMethod(drogon::Post);
+  req->setPath("/bot" + botToken + "/sendMessage");
 
   spdlog::info("telegram_send_message_start request_id={} token_masked={} chat_id={}",
                requestId,

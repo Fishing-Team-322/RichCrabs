@@ -165,13 +165,9 @@ std::optional<drogon::orm::DbClientPtr> aiJobDb(const Config& conf) {
   if (g_aiJobDb) return g_aiJobDb;
   const auto parsed = parsePg(conf.database_url);
   if (!parsed) return std::nullopt;
-  g_aiJobDb = drogon::orm::DbClient::newPgClient(parsed->host,
-                                                  parsed->port,
-                                                  parsed->db,
-                                                  parsed->user,
-                                                  parsed->password,
-                                                  1,
-                                                  "quiz-ai-jobs-db");
+  const auto connInfo = "host=" + parsed->host + " port=" + std::to_string(parsed->port) + " dbname=" + parsed->db +
+                        " user=" + parsed->user + " password=" + parsed->password + " application_name=quiz-ai-jobs-db";
+  g_aiJobDb = drogon::orm::DbClient::newPgClient(connInfo, 1, false);
   return g_aiJobDb;
 }
 
