@@ -5,6 +5,10 @@ import { restoreSession } from '../../store/slices'
 import Layout from '../../components/Layout'
 import Login from '../../pages/auth/Login'
 import Register from '../../pages/auth/Register'
+import QuizzesList from '../../pages/quizzes/QuizzesList'
+import QuizCreate from '../../pages/quizzes/QuizCreate'
+import QuizEdit from '../../pages/quizzes/QuizEdit'
+import QuizPublish from '../../pages/quizzes/QuizPublish'
 import HomePage from '../../pages/Home/Home'
 import AuthGuard from './guards/AuthGuard'
 import GuestGuard from './guards/GuestGuard'
@@ -54,16 +58,10 @@ const AppRouter: React.FC = () => {
 
         <Route element={<AuthGuard />}>
           <Route element={<Layout />}>
-            <Route path={routes.quizzes} element={<AppPage title="Квизы" description="Список доступных квизов." />} />
-            <Route path={routes.quizzesNew} element={<AppPage title="Новый квиз" description="Создание нового квиза." />} />
-            <Route
-              path={routes.quizzesEdit}
-              element={<AppPage title="Редактирование квиза" description="Редактирование выбранного квиза." />}
-            />
-            <Route
-              path={routes.quizzesPublish}
-              element={<AppPage title="Публикация квиза" description="Публикация и настройки доступа." />}
-            />
+            <Route path={routes.quizzes} element={<QuizzesList />} />
+            <Route path={routes.quizzesNew} element={<QuizCreate />} />
+            <Route path={routes.quizzesEdit} element={<QuizEdit />} />
+            <Route path={routes.quizzesPublish} element={<QuizPublish />} />
             <Route path={routes.rooms} element={<AppPage title="Комнаты" description="Список игровых комнат." />} />
             <Route path={routes.roomsNew} element={<AppPage title="Новая комната" description="Создание игровой комнаты." />} />
             <Route path={routes.roomDetails} element={<AppPage title="Комната" description="Детали игровой комнаты." />} />

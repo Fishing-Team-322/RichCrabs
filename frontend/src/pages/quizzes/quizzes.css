@@ -1,0 +1,111 @@
+.quizPage {
+  display: grid;
+  gap: 16px;
+}
+
+.quizPanel {
+  background: #fff;
+  border: 1px solid #dbe4ef;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.quizToolbar,
+.quizGrid,
+.quizQuestionHeader,
+.quizQuestionActions,
+.quizInlineFields {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.quizGrid {
+  align-items: stretch;
+}
+
+.quizGrid > * {
+  flex: 1 1 220px;
+}
+
+.quizInput,
+.quizSelect,
+.quizButton,
+.quizTextArea {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.quizTextArea {
+  min-height: 90px;
+  width: 100%;
+}
+
+.quizButton {
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.quizButton.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.quizButton.danger {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.quizList {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.quizListItem {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quizQuestionCard {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.quizOptionRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.quizMuted {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.quizError {
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.quizSuccess {
+  background: #dcfce7;
+  color: #166534;
+  border-radius: 8px;
+  padding: 10px;
+}
