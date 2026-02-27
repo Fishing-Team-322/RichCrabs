@@ -14,8 +14,8 @@ const Lobby = ({ state, canStart, playerTeam, onStart, connectionLabel }: LobbyP
 
   return <article className="pageCard quizRuntimeCard">
     <div className="quizRuntimeHeader">
-      <h1>{t('quiz.lobby', { pin: state.pin })}</h1>
-      <span className="quizConnectionState">{connectionLabel}</span>
+      <h2>{t('quiz.lobby', { pin: state.pin })}</h2>
+      <span className="quizConnectionState" role="status" aria-live="polite">{connectionLabel}</span>
     </div>
 
     <p className="roomMeta">{t('quiz.waiting', { team: playerTeam ?? '—' })}</p>

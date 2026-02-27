@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { IconX } from "./Icons";
+import { useDialogA11y } from '../hooks/useDialogA11y'
 
 export function TokenModal(props: {
   open: boolean;
@@ -7,15 +8,23 @@ export function TokenModal(props: {
   onSave: (token: string) => void;
 }) {
   const [draft, setDraft] = useState<string>(localStorage.getItem("admin_token") || "");
+  const { dialogRef, titleId } = useDialogA11y<HTMLDivElement>(props.open, props.onClose)
 
   if (!props.open) return null;
 
   return (
     <div className="modalOverlay" onMouseDown={props.onClose}>
-      <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="modalHead">
           <div>
-            <div className="modalTitle">Admin token</div>
+            <div className="modalTitle" id={titleId}>Admin token</div>
             <div className="modalSub">Stored locally in this browser</div>
           </div>
           <button className="iconBtn" onClick={props.onClose} aria-label="Close">

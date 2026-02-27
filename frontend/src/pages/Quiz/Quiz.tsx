@@ -71,13 +71,15 @@ const Quiz = () => {
   }
 
   return (
-    <section className="roomsPage">
-      <div className={`quizConnectionBadge quality-${connectionQuality}`}>
+    <main className="roomsPage" aria-labelledby="quiz-runtime-title">
+      <h1 id="quiz-runtime-title" className="srOnly">Экран игры</h1>
+
+      <div className={`quizConnectionBadge quality-${connectionQuality}`} role="status" aria-live="polite">
         {t('quiz.connection')}: {QUALITY_LABEL[connectionQuality]}
         {latencyMs !== null && ` · ${latencyMs}мс`}
       </div>
 
-      {error && <div className="roomError">{error}</div>}
+      {error && <div className="roomError" role="alert">{error}</div>}
 
       {screen === 'lobby' && (
         <Lobby
@@ -109,7 +111,7 @@ const Quiz = () => {
       {screen === 'scoreboard' && <Result mode="scoreboard" scores={gameState.scores} players={gameState.players} />}
 
       {screen === 'final' && <Result mode="final" scores={gameState.scores} players={gameState.players} />}
-    </section>
+    </main>
   )
 }
 

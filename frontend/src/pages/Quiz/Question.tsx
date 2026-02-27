@@ -28,7 +28,9 @@ const Question = ({
         <h2>{question.text}</h2>
         <p className="roomMeta">Ваша команда: {playerTeam ?? '—'}</p>
       </div>
-      <div className="quizTimer">⏱ {Math.max(timerSec, 0)}с</div>
+      <div className="quizTimer" role="timer" aria-live="polite" aria-label={`Осталось ${Math.max(timerSec, 0)} секунд`}>
+        ⏱ {Math.max(timerSec, 0)}с
+      </div>
     </div>
 
     <div className="quizScoreLine">
@@ -47,8 +49,8 @@ const Question = ({
       })}
     </div>
 
-    {hasAnswered && <p className="roomMeta">Ответ отправлен. Ожидайте результат.</p>}
-    {!canAnswer && !hasAnswered && <p className="roomMeta">Сейчас отвечает другая команда или время вышло.</p>}
+    {hasAnswered && <p className="roomMeta" role="status" aria-live="polite">Ответ отправлен. Ожидайте результат.</p>}
+    {!canAnswer && !hasAnswered && <p className="roomMeta" role="status" aria-live="polite">Сейчас отвечает другая команда или время вышло.</p>}
   </article>
 )
 

@@ -20,7 +20,7 @@ const Result = ({ mode, scores, answerResult, players }: ResultProps) => {
       <h2>{titleByMode[mode]}</h2>
 
       {mode === 'feedback' && answerResult && (
-        <div className={`quizFeedback ${answerResult.correct ? 'correct' : 'incorrect'}`}>
+        <div className={`quizFeedback ${answerResult.correct ? 'correct' : 'incorrect'}`} role="status" aria-live="polite">
           {answerResult.correct ? 'Верно! ✅' : `Неверно. Правильный вариант: ${answerResult.correctAnswer + 1}`}
         </div>
       )}
