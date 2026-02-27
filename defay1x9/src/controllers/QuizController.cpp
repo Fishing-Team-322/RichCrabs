@@ -1,8 +1,17 @@
 #include "controllers/QuizController.hpp"
 
 #include <drogon/drogon.h>
+#include <drogon/orm/DbClient.h>
 
+#include <json/reader.h>
+#include <json/writer.h>
+
+#include <algorithm>
+#include <cctype>
+#include <mutex>
 #include <optional>
+#include <regex>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -111,6 +120,205 @@ std::optional<std::vector<QuizCoreQuizQuestion>> parseQuestions(const Json::Valu
   }
 
   return out;
+}
+
+struct PgConn final {
+  std::string host;
+  std::string db;
+  std::string user;
+  std::string password;
+  unsigned short port = 5432;
+};
+
+struct StoredAiJob final {
+  std::string job_id;
+  std::string owner_user_id;
+  std::string status;
+  std::optional<QuizCoreQuiz> quiz;
+  std::optional<std::string> error_code;
+  std::optional<std::string> error_message;
+};
+
+std::optional<PgConn> parsePg(const std::string& url) {
+  static const std::regex kUri(R"(^postgres(?:ql)?:\/\/([^:]+):([^@]+)@([^:\/]+)(?::(\d+))?\/(.+)$)");
+  std::smatch m;
+  if (!std::regex_match(url, m, kUri)) return std::nullopt;
+  PgConn c;
+  c.user = m[1].str();
+  c.password = m[2].str();
+  c.host = m[3].str();
+  if (m[4].matched) c.port = static_cast<unsigned short>(std::stoi(m[4].str()));
+  c.db = m[5].str();
+  return c;
+}
+
+std::mutex g_aiJobDbMu;
+drogon::orm::DbClientPtr g_aiJobDb;
+
+std::optional<drogon::orm::DbClientPtr> aiJobDb(const Config& conf) {
+  std::lock_guard lk(g_aiJobDbMu);
+  if (g_aiJobDb) return g_aiJobDb;
+  const auto parsed = parsePg(conf.database_url);
+  if (!parsed) return std::nullopt;
+  g_aiJobDb = drogon::orm::DbClient::newPgClient(parsed->host,
+                                                  parsed->port,
+                                                  parsed->db,
+                                                  parsed->user,
+                                                  parsed->password,
+                                                  1,
+                                                  "quiz-ai-jobs-db");
+  return g_aiJobDb;
+}
+
+bool ensureAiJobSchema(const Config& conf, std::string& error) {
+  const auto db = aiJobDb(conf);
+  if (!db) {
+    error = "cannot parse DATABASE_URL for ai jobs storage";
+    return false;
+  }
+  try {
+    (*db)->execSqlSync(
+        "CREATE TABLE IF NOT EXISTS gateway_ai_quiz_jobs ("
+        "job_id TEXT PRIMARY KEY,"
+        "owner_user_id TEXT NOT NULL,"
+        "status TEXT NOT NULL,"
+        "quiz JSONB,"
+        "error_code TEXT,"
+        "error_message TEXT,"
+        "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        ");");
+    return true;
+  } catch (const std::exception& ex) {
+    error = ex.what();
+    return false;
+  }
+}
+
+std::string normalizeAiJobStatus(const std::string& raw) {
+  std::string normalized;
+  normalized.reserve(raw.size());
+  for (char ch : raw) normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+  if (normalized == "accepted") return "queued";
+  if (normalized.empty() || normalized == "not_implemented") return "queued";
+  return normalized;
+}
+
+std::optional<QuizCoreQuiz> parseQuizJson(const std::string& rawQuiz) {
+  Json::CharReaderBuilder reader;
+  Json::Value root;
+  std::string errs;
+  std::istringstream input(rawQuiz);
+  if (!Json::parseFromStream(reader, input, &root, &errs) || !root.isObject()) return std::nullopt;
+
+  QuizCoreQuiz quiz;
+  if (root.isMember("quizId") && root["quizId"].isString()) quiz.quiz_id = root["quizId"].asString();
+  if (root.isMember("ownerUserId") && root["ownerUserId"].isString()) quiz.owner_user_id = root["ownerUserId"].asString();
+  if (root.isMember("title") && root["title"].isString()) quiz.title = root["title"].asString();
+  if (root.isMember("description") && root["description"].isString()) quiz.description = root["description"].asString();
+
+  if (root.isMember("questions") && root["questions"].isArray()) {
+    for (const auto& row : root["questions"]) {
+      if (!row.isObject()) continue;
+      QuizCoreQuizQuestion q;
+      if (row.isMember("id") && row["id"].isString()) q.id = row["id"].asString();
+      if (row.isMember("text") && row["text"].isString()) q.text = row["text"].asString();
+      if (row.isMember("options") && row["options"].isArray()) {
+        for (const auto& option : row["options"]) {
+          if (option.isString()) q.options.push_back(option.asString());
+        }
+      }
+      if (row.isMember("correctIndex") && row["correctIndex"].isUInt()) {
+        q.correct_option_index = row["correctIndex"].asUInt();
+      }
+      quiz.questions.push_back(std::move(q));
+    }
+  }
+  return quiz;
+}
+
+std::optional<StoredAiJob> getStoredAiJob(const Config& conf,
+                                          const std::string& userId,
+                                          const std::string& jobId,
+                                          std::string& error) {
+  if (!ensureAiJobSchema(conf, error)) return std::nullopt;
+  const auto db = aiJobDb(conf);
+  if (!db) {
+    error = "cannot parse DATABASE_URL for ai jobs storage";
+    return std::nullopt;
+  }
+
+  try {
+    auto result = (*db)->execSqlSync(
+        "SELECT job_id, owner_user_id, status, quiz::text AS quiz_json, error_code, error_message "
+        "FROM gateway_ai_quiz_jobs WHERE job_id=$1 AND owner_user_id=$2",
+        jobId,
+        userId);
+    if (result.empty()) return std::nullopt;
+
+    StoredAiJob out;
+    out.job_id = result[0]["job_id"].as<std::string>();
+    out.owner_user_id = result[0]["owner_user_id"].as<std::string>();
+    out.status = result[0]["status"].as<std::string>();
+    if (!result[0]["error_code"].isNull()) out.error_code = result[0]["error_code"].as<std::string>();
+    if (!result[0]["error_message"].isNull()) out.error_message = result[0]["error_message"].as<std::string>();
+    if (!result[0]["quiz_json"].isNull()) out.quiz = parseQuizJson(result[0]["quiz_json"].as<std::string>());
+    return out;
+  } catch (const std::exception& ex) {
+    error = ex.what();
+    return std::nullopt;
+  }
+}
+
+bool upsertStoredAiJob(const Config& conf,
+                       const std::string& userId,
+                       const std::string& jobId,
+                       const std::string& status,
+                       const std::optional<QuizCoreQuiz>& quiz,
+                       const std::optional<std::string>& errorCode,
+                       const std::optional<std::string>& errorMessage,
+                       std::string& error) {
+  if (!ensureAiJobSchema(conf, error)) return false;
+  const auto db = aiJobDb(conf);
+  if (!db) {
+    error = "cannot parse DATABASE_URL for ai jobs storage";
+    return false;
+  }
+
+  std::optional<std::string> quizJson;
+  if (quiz.has_value()) {
+    Json::StreamWriterBuilder writer;
+    quizJson = Json::writeString(writer, quizToJson(*quiz));
+  }
+
+  try {
+    (*db)->execSqlSync(
+        "INSERT INTO gateway_ai_quiz_jobs (job_id, owner_user_id, status, quiz, error_code, error_message) "
+        "VALUES ($1, $2, $3, $4::jsonb, $5, $6) "
+        "ON CONFLICT (job_id) DO UPDATE SET "
+        "owner_user_id = EXCLUDED.owner_user_id,"
+        "status = EXCLUDED.status,"
+        "quiz = EXCLUDED.quiz,"
+        "error_code = EXCLUDED.error_code,"
+        "error_message = EXCLUDED.error_message,"
+        "updated_at = NOW()",
+        jobId,
+        userId,
+        normalizeAiJobStatus(status),
+        quizJson,
+        errorCode,
+        errorMessage);
+    return true;
+  } catch (const std::exception& ex) {
+    error = ex.what();
+    return false;
+  }
+}
+
+bool shouldUseFallback(const QuizCoreGetAiQuizJobResult& rpc) {
+  const auto normalizedStatus = normalizeAiJobStatus(rpc.status_text);
+  return rpc.status != QuizCoreRpcStatus::kOk || normalizedStatus == "queued" || normalizedStatus == "running" ||
+         normalizedStatus == "not_implemented" || !rpc.quiz.has_value();
 }
 
 }  // namespace
@@ -325,14 +533,13 @@ void RegisterQuizRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
         if (!entitlement.allowed) {
           Json::Value details;
           details["error"] = "limit_exceeded";
-          if (entitlement.error->limit.has_value()) details["limit"] = *entitlement.error->limit;
-          if (entitlement.error->retry_at.has_value()) details["retryAt"] = *entitlement.error->retry_at;
-          cb(api::jsonErrorResponse(429,
-                                    api::ErrorCode::kTooManyAttempts,
-                                    entitlement.error->gateway_error.message,
-                                    details));
+          if (entitlement.error.has_value() && entitlement.error->limit.has_value()) details["limit"] = *entitlement.error->limit;
+          if (entitlement.error.has_value() && entitlement.error->retry_at.has_value()) details["retryAt"] = *entitlement.error->retry_at;
+          const auto message = entitlement.error.has_value() ? entitlement.error->gateway_error.message : "ai limit exceeded";
+          cb(api::jsonErrorResponse(429, api::ErrorCode::kTooManyAttempts, message, details));
           return;
         }
+
         const auto rpc = quizCore.startAiQuizJob(userId, *prompt, desiredQuestionCount);
         if (isRpcDegradedStatus(rpc.status)) {
           cb(degradedQuizResponse("startAiQuizJob", rpc.error_message));
@@ -343,12 +550,95 @@ void RegisterQuizRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
           return;
         }
 
+        std::string storageError;
+        if (!upsertStoredAiJob(conf, userId, rpc.job_id, rpc.status_text, std::nullopt, std::nullopt, std::nullopt, storageError)) {
+          LOG_WARN << "ai job fallback storage failed: " << storageError;
+        }
+
         Json::Value out;
         out["jobId"] = rpc.job_id;
-        out["status"] = rpc.status_text;
+        out["status"] = normalizeAiJobStatus(rpc.status_text);
         cb(drogon::HttpResponse::newHttpJsonResponse(out));
       },
       {drogon::Post});
+
+  drogon::app().registerHandler(
+      "/api/v1/quizzes/ai-jobs/{1}",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string jobId) {
+        if (!RequireCsrf(req, conf, cb)) return;
+
+        const auto userId = resolveUserId(req, conf);
+        const auto rpc = quizCore.getAiQuizJob(jobId);
+
+        std::optional<StoredAiJob> stored;
+        if (shouldUseFallback(rpc) || isRpcDegradedStatus(rpc.status)) {
+          std::string storageError;
+          stored = getStoredAiJob(conf, userId, jobId, storageError);
+          if (!storageError.empty()) {
+            cb(api::jsonErrorResponse(503, api::ErrorCode::kGrpcUnavailable, "ai jobs storage unavailable"));
+            return;
+          }
+        }
+
+        if (!stored.has_value() && rpc.status != QuizCoreRpcStatus::kOk) {
+          cb(api::jsonErrorResponse(api::mapRpcError(rpc.status, "QuizService.GetAiQuizJob", rpc.error_code, rpc.error_message)));
+          return;
+        }
+
+        Json::Value out;
+        out["jobId"] = jobId;
+        if (stored.has_value()) {
+          out["status"] = normalizeAiJobStatus(stored->status);
+          if (stored->error_code.has_value()) out["errorCode"] = *stored->error_code;
+          if (stored->error_message.has_value()) out["errorMessage"] = *stored->error_message;
+        } else {
+          out["status"] = normalizeAiJobStatus(rpc.status_text);
+          if (rpc.quiz.has_value()) out["quiz"] = quizToJson(*rpc.quiz);
+        }
+        cb(drogon::HttpResponse::newHttpJsonResponse(out));
+      },
+      {drogon::Get});
+
+  drogon::app().registerHandler(
+      "/api/v1/quizzes/ai-jobs/{1}/result",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string jobId) {
+        if (!RequireCsrf(req, conf, cb)) return;
+
+        const auto userId = resolveUserId(req, conf);
+        const auto rpc = quizCore.getAiQuizJob(jobId);
+
+        std::optional<StoredAiJob> stored;
+        if (shouldUseFallback(rpc) || isRpcDegradedStatus(rpc.status)) {
+          std::string storageError;
+          stored = getStoredAiJob(conf, userId, jobId, storageError);
+          if (!storageError.empty()) {
+            cb(api::jsonErrorResponse(503, api::ErrorCode::kGrpcUnavailable, "ai jobs storage unavailable"));
+            return;
+          }
+        }
+
+        const std::string status = stored.has_value() ? normalizeAiJobStatus(stored->status) : normalizeAiJobStatus(rpc.status_text);
+        const std::optional<QuizCoreQuiz> quiz = stored.has_value() ? stored->quiz : rpc.quiz;
+
+        if (status != "done") {
+          Json::Value details;
+          details["error"] = "job_not_done";
+          details["status"] = status;
+          cb(api::jsonErrorResponse(409, api::ErrorCode::kNotImplemented, "ai job is not done", details));
+          return;
+        }
+        if (!quiz.has_value()) {
+          cb(api::jsonErrorResponse(503, api::ErrorCode::kGrpcUnavailable, "ai job result is unavailable"));
+          return;
+        }
+
+        Json::Value out;
+        out["jobId"] = jobId;
+        out["status"] = "done";
+        out["quiz"] = quizToJson(*quiz);
+        cb(drogon::HttpResponse::newHttpJsonResponse(out));
+      },
+      {drogon::Get});
 }
 
 }  // namespace controllers

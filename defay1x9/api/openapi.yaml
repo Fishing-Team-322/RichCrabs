@@ -1523,7 +1523,7 @@ paths:
               required: [prompt]
               properties:
                 prompt: { type: string }
-                numQuestions: { type: integer }
+                desiredQuestionCount: { type: integer, minimum: 1 }
                 difficulty: { type: string }
                 language: { type: string }
       responses:
@@ -1555,6 +1555,79 @@ paths:
                 $ref: '#/components/schemas/QuizTelegramErrorResponse'
         '5xx':
           description: Backend/internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+
+
+  /api/v1/quizzes/ai-jobs/{jobId}:
+    get:
+      tags: [Quizzes]
+      summary: Get AI quiz job status
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Current job status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobId, status]
+                properties:
+                  jobId: { type: string }
+                  status: { type: string, enum: [queued, running, done, failed] }
+                  quiz:
+                    $ref: '#/components/schemas/Quiz'
+                  errorCode: { type: string }
+                  errorMessage: { type: string }
+        '403':
+          description: CSRF required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+
+  /api/v1/quizzes/ai-jobs/{jobId}/result:
+    get:
+      tags: [Quizzes]
+      summary: Get AI quiz job result when done
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Generated quiz result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobId, status, quiz]
+                properties:
+                  jobId: { type: string }
+                  status: { type: string, enum: [done] }
+                  quiz:
+                    $ref: '#/components/schemas/Quiz'
+        '409':
+          description: Job is not done yet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '403':
+          description: CSRF required
           content:
             application/json:
               schema:

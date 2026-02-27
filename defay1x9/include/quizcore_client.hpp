@@ -190,6 +190,15 @@ struct QuizCoreStartAiQuizJobResult final {
   std::string status_text;
 };
 
+struct QuizCoreGetAiQuizJobResult final {
+  QuizCoreRpcStatus status = QuizCoreRpcStatus::kUnknown;
+  std::string error_code;
+  std::string error_message;
+  std::string job_id;
+  std::string status_text;
+  std::optional<QuizCoreQuiz> quiz;
+};
+
 class QuizCoreClient {
 public:
   virtual ~QuizCoreClient() = default;
@@ -263,6 +272,8 @@ public:
                                                       const std::string& prompt,
                                                       const std::optional<uint32_t>& desiredQuestionCount,
                                                       const std::string& requestId = "") = 0;
+  virtual QuizCoreGetAiQuizJobResult getAiQuizJob(const std::string& jobId,
+                                                  const std::string& requestId = "") = 0;
   virtual bool pingHealth(const std::string& requestId = "") = 0;
 };
 
@@ -361,6 +372,8 @@ public:
                                               const std::string& prompt,
                                               const std::optional<uint32_t>& desiredQuestionCount,
                                               const std::string& requestId = "") override;
+  QuizCoreGetAiQuizJobResult getAiQuizJob(const std::string& jobId,
+                                          const std::string& requestId = "") override;
   bool pingHealth(const std::string& requestId = "") override;
 
 private:
