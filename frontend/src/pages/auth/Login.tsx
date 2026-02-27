@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth'
 import { routes } from '../../app/router/routeMap'
+import { Button, Input } from '../../components/ui'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -21,42 +22,23 @@ const Login = () => {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault()
-    if (validationError) {
-      setFormError(validationError)
-      return
-    }
-
+    if (validationError) return setFormError(validationError)
     setFormError(null)
     const result = await signIn(email.trim(), password)
-
-    if (result.meta.requestStatus === 'fulfilled') {
-      navigate(routes.profile, { replace: true })
-    }
+    if (result.meta.requestStatus === 'fulfilled') navigate(routes.profile, { replace: true })
   }
 
   return (
     <section className="authCard">
       <h1>Вход</h1>
-      <p>Войдите в аккаунт RichCrabs, чтобы продолжить.</p>
-      <form onSubmit={onSubmit} className="authForm">
-        <label>
-          Email
-          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="name@example.com" />
-        </label>
-        <label>
-          Пароль
-          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••••" />
-        </label>
-
-        {(formError || error) && <div className="authError">{formError || error}</div>}
-
-        <button type="submit" disabled={isLoading}>
-          {isLoading ? 'Входим...' : 'Войти'}
-        </button>
+      <p className="homeMuted">Войдите в аккаунт RichCrabs, чтобы продолжить.</p>
+      <form onSubmit={onSubmit} className="homePage">
+        <Input label="Email" value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="name@example.com" />
+        <Input label="Пароль" value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••••" />
+        {(formError || error) && <div className="ui-help">{formError || error}</div>}
+        <Button variant="primary" type="submit" loading={isLoading} fullWidth>{isLoading ? 'Входим...' : 'Войти'}</Button>
       </form>
-      <p>
-        Нет аккаунта? <Link to={routes.authRegister}>Зарегистрироваться</Link>
-      </p>
+      <p className="homeMuted">Нет аккаунта? <Link to={routes.authRegister}>Зарегистрироваться</Link></p>
     </section>
   )
 }
