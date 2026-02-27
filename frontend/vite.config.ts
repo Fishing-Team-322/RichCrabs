@@ -1,8 +1,9 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
-import { visualizer } from 'rollup-plugin-visualizer'
 
-const chunkBudgetKb = Number(process.env.BUNDLE_BUDGET_KB || 300)
+const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {}
+
+const chunkBudgetKb = Number(env.BUNDLE_BUDGET_KB || 300)
 
 const budgetPlugin = () => ({
   name: 'bundle-budget-check',
@@ -11,7 +12,7 @@ const budgetPlugin = () => ({
 
     for (const item of Object.values(bundle)) {
       if (item.type !== 'chunk' || !item.code || item.fileName.includes('vendor')) continue
-      const sizeKb = Buffer.byteLength(item.code, 'utf8') / 1024
+      const sizeKb = new TextEncoder().encode(item.code).byteLength / 1024
       if (sizeKb > chunkBudgetKb) {
         violations.push(`${item.fileName}: ${sizeKb.toFixed(1)}KB > ${chunkBudgetKb}KB`)
       }
@@ -23,22 +24,32 @@ const budgetPlugin = () => ({
   },
 })
 
-export default defineConfig({
-  plugins: [
-    react(),
-    budgetPlugin(),
-    process.env.ANALYZE === 'true' && visualizer({ filename: 'dist/bundle-stats.html', gzipSize: true, brotliSize: true }),
-  ],
-  resolve: {
-    alias: {
-      'qrcode-react': 'qrcode.react',
+export default defineConfig(async () => {
+  const plugins: PluginOption[] = [react(), budgetPlugin()]
+
+  if (env.ANALYZE === 'true') {
+    const visualizerModule = await import('rollup-plugin-visualizer').catch(() => null)
+
+    if (visualizerModule) {
+      plugins.push(visualizerModule.visualizer({ filename: 'dist/bundle-stats.html', gzipSize: true, brotliSize: true }))
+    } else {
+      console.warn('[vite] ANALYZE=true, but rollup-plugin-visualizer is not installed. Skipping bundle stats plugin.')
+    }
+  }
+
+  return {
+    plugins,
+    resolve: {
+      alias: {
+        'qrcode-react': 'qrcode.react',
+      },
     },
-  },
-  build: {
-    chunkSizeWarningLimit: chunkBudgetKb,
-  },
-  server: {
-    port: 3000,
-    open: true,
-  },
+    build: {
+      chunkSizeWarningLimit: chunkBudgetKb,
+    },
+    server: {
+      port: 3000,
+      open: true,
+    },
+  }
 })

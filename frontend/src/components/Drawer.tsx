@@ -1,5 +1,5 @@
 
-import type { RoomDetails } from "../types";
+import type { RoomDetails } from '../features/monitoring/types';
 import { IconX } from "./Icons";
 import { useDialogA11y } from '../hooks/useDialogA11y'
 

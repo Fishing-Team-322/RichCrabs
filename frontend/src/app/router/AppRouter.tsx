@@ -6,6 +6,8 @@ import Layout from '../../components/Layout'
 import AuthGuard from './guards/AuthGuard'
 import GuestGuard from './guards/GuestGuard'
 import {
+  AdminDashboard,
+  AdminSecurity,
   CreateRoom,
   HomePage,
   InviteJoinPage,
@@ -25,18 +27,6 @@ import {
 } from './lazyPages'
 import { routes } from './routeMap'
 import './router.css'
-
-interface AppPageProps {
-  title: string
-  description: string
-}
-
-const AppPage: React.FC<AppPageProps> = ({ title, description }) => (
-  <section className="pageCard">
-    <h1>{title}</h1>
-    <p>{description}</p>
-  </section>
-)
 
 const LoadingFallback: React.FC = () => <div className="routeState">Загрузка роутов...</div>
 
@@ -80,14 +70,8 @@ const AppRouter: React.FC = () => {
             <Route path={routes.profile} element={<Profile />} />
             <Route path={routes.subscriptions} element={<Subscriptions />} />
             <Route path={routes.bots} element={<TelegramBots />} />
-            <Route
-              path={routes.adminDashboard}
-              element={<AppPage title="Admin Dashboard" description="Административная панель." />}
-            />
-            <Route
-              path={routes.adminSecurity}
-              element={<AppPage title="Admin Security" description="Раздел безопасности админки." />}
-            />
+            <Route path={routes.adminDashboard} element={<AdminDashboard />} />
+            <Route path={routes.adminSecurity} element={<AdminSecurity />} />
           </Route>
         </Route>
 

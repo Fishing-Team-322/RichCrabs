@@ -31,10 +31,8 @@ export type RoomDetails = {
   players: Player[];
 };
 
-/* ---- Security (Live Abuse Monitor) ---- */
-
 export type SecurityOverview = {
-  windowSec: number; // например "за 5 минут"
+  windowSec: number;
   rateLimitHits: number;
   invalidJoinTickets: number;
   replayDetected: number;
@@ -43,17 +41,17 @@ export type SecurityOverview = {
 };
 
 export type SecurityEventType =
-  | "rate_limit"
-  | "invalid_ticket"
-  | "replay"
-  | "suspicious_burst"
-  | "bad_webhook_secret"
-  | "ws_queue_drop";
+  | 'rate_limit'
+  | 'invalid_ticket'
+  | 'replay'
+  | 'suspicious_burst'
+  | 'bad_webhook_secret'
+  | 'ws_queue_drop';
 
 export type SecurityEvent = {
-  ts: string; // ISO
+  ts: string;
   type: SecurityEventType;
-  severity: "low" | "med" | "high";
+  severity: 'low' | 'med' | 'high';
   roomId?: string;
   ip?: string;
   deviceKey?: string;
