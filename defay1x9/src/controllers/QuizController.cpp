@@ -123,8 +123,6 @@ std::optional<std::vector<QuizCoreQuizQuestion>> parseQuestions(const Json::Valu
   return out;
 }
 
-<<<<<<< HEAD
-=======
 struct PgConn final {
   std::string host;
   std::string db;
@@ -194,7 +192,6 @@ bool ensureAiJobSchema(const Config& conf, std::string& error) {
   }
 }
 
->>>>>>> origin/main
 std::string normalizeAiJobStatus(const std::string& raw) {
   std::string normalized;
   normalized.reserve(raw.size());
