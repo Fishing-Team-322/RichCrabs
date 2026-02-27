@@ -1,0 +1,12 @@
+.homePage{display:grid;gap:16px}
+.homeHero{display:grid;gap:16px;align-items:end}
+.homeTitle{font-size:clamp(28px,4vw,46px);margin:8px 0}
+.homeMuted{color:var(--text-secondary)}
+.homeActions{display:flex;gap:10px;flex-wrap:wrap}
+.homeCenterGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;justify-items:center}
+.homeCenterGrid .homeFeatureItem{width:min(100%,360px)}
+.homeGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.homeFeatureList,.homeFaq,.homePlans{display:grid;gap:10px}
+.homeFeatureItem,.homeFaqItem,.homePlan{padding:12px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.02)}
+.homeFeatureItem.compact{width:100%}
+@media (max-width:980px){.homeCenterGrid{grid-template-columns:1fr}.homeGrid{grid-template-columns:1fr}}

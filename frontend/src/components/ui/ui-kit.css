@@ -1,0 +1,45 @@
+.ui-card{background:linear-gradient(160deg,rgba(16,23,56,.95),rgba(11,16,46,.9));border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:var(--shadow-soft)}
+.ui-button{height:40px;padding:0 16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text-primary);font-weight:600;cursor:pointer;transition:var(--transition);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
+.ui-button:hover{background:var(--surface-hover);border-color:var(--border-strong)}
+.ui-button:focus-visible,.ui-tab:focus-visible,.ui-input:focus-visible,.ui-select:focus-visible{outline:3px solid #1d4ed8;outline-offset:2px}
+.ui-button:disabled,.ui-button.is-disabled{cursor:not-allowed;background:var(--disabled);opacity:.7}
+.ui-button.is-loading{opacity:.85}
+.ui-button.primary{background:linear-gradient(90deg,var(--primary),#5f46db);border-color:transparent}
+.ui-button.primary:hover{filter:brightness(1.06);box-shadow:var(--shadow-glow)}
+.ui-button.ghost{background:transparent}
+.ui-field{display:grid;gap:6px}
+.ui-label{font-size:12px;color:var(--text-secondary)}
+.ui-input,.ui-select{width:100%;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text-primary);padding:0 12px;transition:var(--transition)}
+.ui-input:hover,.ui-select:hover{border-color:var(--border-strong)}
+.ui-input:focus,.ui-select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(131,93,255,.2)}
+.ui-input.error,.ui-select.error{border-color:var(--danger)}
+.ui-input:disabled,.ui-select:disabled{background:var(--disabled)}
+.ui-help{font-size:12px;color:var(--danger)}
+.ui-tabs{display:flex;gap:8px;flex-wrap:wrap}
+.ui-tab{padding:8px 12px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text-secondary);cursor:pointer}
+.ui-tab.active{background:rgba(131,93,255,.2);color:var(--text-primary);border-color:var(--primary)}
+.ui-tableWrap{overflow:auto;border:1px solid var(--border);border-radius:12px}
+.ui-table{width:100%;border-collapse:collapse;min-width:600px}
+.ui-table th,.ui-table td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left}
+.ui-table th{color:var(--text-secondary);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.ui-badge{display:inline-flex;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--border)}
+.ui-badge.success{background:rgba(58,210,139,.15);color:#8df1bf}
+.ui-badge.warning{background:rgba(248,181,75,.15);color:#ffd489}
+.ui-badge.danger{background:rgba(255,111,142,.15);color:#ffafc3}
+.ui-badge.neutral{background:rgba(157,174,255,.14);color:var(--text-secondary)}
+.ui-empty{padding:24px;text-align:center;color:var(--text-secondary);border:1px dashed var(--border);border-radius:12px}
+.ui-loader{width:18px;height:18px;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ui-toast-stack{position:fixed;right:16px;bottom:16px;display:grid;gap:8px;z-index:60}
+.ui-toast{padding:10px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--text-primary)}
+.ui-modal-backdrop{position:fixed;inset:0;background:var(--overlay);display:grid;place-items:center;z-index:50;padding:16px}
+.ui-modal{width:min(520px,100%);background:var(--bg-elevated);border:1px solid var(--border);border-radius:16px;padding:20px}
+@media (max-width:760px){.ui-button{width:100%}.ui-table{min-width:520px}}
+.ui-toast.success{border-color:rgba(33,136,79,.35);background:rgba(33,136,79,.16)}
+.ui-toast.error{border-color:rgba(185,28,28,.35);background:rgba(185,28,28,.14)}
+.ui-toast.info{border-color:var(--border-strong)}
+.ui-skeleton{position:relative;overflow:hidden;border-radius:10px;background:rgba(157,174,255,.18)}
+.ui-skeleton::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);animation:ui-shimmer 1.5s infinite}
+@keyframes ui-shimmer{100%{transform:translateX(100%)}}
+.ui-progress{height:8px;border-radius:999px;background:rgba(157,174,255,.18);overflow:hidden}
+.ui-progress-value{height:100%;background:linear-gradient(90deg,var(--primary),#5f46db);transition:width .25s ease}

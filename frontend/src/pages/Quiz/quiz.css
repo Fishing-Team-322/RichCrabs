@@ -1,0 +1,113 @@
+.quizRuntimeCard {
+  display: grid;
+  gap: 14px;
+}
+
+.quizRuntimeHeader,
+.quizQuestionTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.quizConnectionState {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.quizTeamsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.quizTeamBlock {
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.quizTeamBlock.teamA {
+  background: #eff6ff;
+}
+
+.quizTeamBlock.teamB {
+  background: #f5f3ff;
+}
+
+.quizTimer {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.quizOptions {
+  display: grid;
+  gap: 10px;
+}
+
+.quizScoreLine {
+  display: flex;
+  gap: 8px;
+}
+
+.quizTeamScore {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.quizTeamScore.activeTurn {
+  background: #dcfce7;
+  border-color: #16a34a;
+}
+
+.quizFeedback {
+  border-radius: 10px;
+  padding: 10px;
+  font-weight: 700;
+}
+
+.quizFeedback.correct {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.quizFeedback.incorrect {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.quizConnectionBadge {
+  align-self: flex-end;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  margin-bottom: 8px;
+}
+
+.quizConnectionBadge.quality-excellent {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
+.quizConnectionBadge.quality-degraded {
+  background: #fef3c7;
+  color: #78350f;
+  border-color: #fde047;
+}
+
+.quizConnectionBadge.quality-poor,
+.quizConnectionBadge.quality-offline {
+  background: #fee2e2;
+  color: #7f1d1d;
+  border-color: #fca5a5;
+}

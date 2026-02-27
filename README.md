@@ -32,4 +32,38 @@ docker compose up -d gateway
 docker compose down -v --remove-orphans
 ```
 
-Для ежедневной разработки это обычно не требуется.
+## Запуск фронтенда (обновляйте этот раздел при изменениях)
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Frontend будет доступен на `http://localhost:5173`.
+
+Дополнительно:
+
+```bash
+# production build
+cd frontend
+npm run build
+
+# локальный предпросмотр production-сборки
+npm run preview
+```
+
+Проверки качества фронтенда локально:
+
+```bash
+cd frontend
+npm ci
+
+# линтер выполняется только если добавлен script lint
+npm run lint --if-present
+
+# fail-fast: остановится на первой ошибке типов или тестов
+npm run typecheck && npm run test:coverage && npm run build
+```
+
+После `npm run test:coverage` отчёт покрытия будет доступен в `frontend/coverage`.
