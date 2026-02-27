@@ -17,6 +17,7 @@ struct Config final {
   std::string grpc_quiz_addr = "quiz:50053";
   std::string grpc_entitlements_addr = "entitlements:50054";
   std::string grpc_bot_addr = "bot:50055";
+  std::string grpc_auth_addr = "auth:50056";
   std::string default_user_id = "00000000-0000-0000-0000-000000000001";
 
   int grpc_deadline_ms_create_room = 1500;
@@ -35,6 +36,7 @@ struct Config final {
   int grpc_deadline_ms_publish_quiz = 1500;
   int grpc_deadline_ms_start_ai_quiz_job = 1500;
   int grpc_deadline_ms_entitlements = 1200;
+  int grpc_deadline_ms_auth = 1200;
   std::string redis_url = "redis://redis:6379";
   std::string database_url = "postgres://richcrab:richcrab@postgres:5432/richcrab";
   std::unordered_set<std::string> admin_emails;

@@ -186,6 +186,17 @@ void RegisterAuthRoutes(const Config& conf) {
       [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         if (!RequireCsrf(req, conf, cb)) return;
 
+        std::string storageError;
+        const auto session = security::VerifySessionFromRequest(req, conf.session);
+        const std::string userId = session ? session->user_id : "";
+        if (!Logout(conf, userId, storageError)) {
+          cb(api::jsonErrorResponse(503,
+                                    api::ErrorCode::kGrpcUnavailable,
+                                    "auth storage unavailable",
+                                    todoDetails("logout in auth service", storageError)));
+          return;
+        }
+
         auto response = drogon::HttpResponse::newHttpResponse();
         response->setStatusCode(drogon::k204NoContent);
         security::ClearSessionCookie(response, conf.session);

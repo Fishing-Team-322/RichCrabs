@@ -15,6 +15,7 @@ fn main() {
         "proto/entitlements.proto",
         "proto/bot.proto",
         "proto/richcrab.proto",
+        "proto/auth.proto",
     ];
 
     tonic_build::configure()

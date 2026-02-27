@@ -29,6 +29,7 @@ bool CreateUser(const Config& conf,
                 std::string& error,
                 bool& emailTaken);
 bool VerifyPassword(const Config& conf, const std::string& email, const std::string& password, StoredUser& user, std::string& error);
+bool Logout(const Config& conf, const std::string& userId, std::string& error);
 bool UpdateProfile(const Config& conf,
                    const std::string& userId,
                    const std::optional<std::string>& displayName,

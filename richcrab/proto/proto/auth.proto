@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package richcrab.v1;
+
+import "common.proto";
+
+service AuthService {
+  rpc EnsureSchema(EnsureSchemaRequest) returns (EnsureSchemaResponse);
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  rpc GetMe(GetMeRequest) returns (GetMeResponse);
+  rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
+  rpc SetUserBan(SetUserBanRequest) returns (SetUserBanResponse);
+  rpc GetAdminStats(GetAdminStatsRequest) returns (GetAdminStatsResponse);
+}
+
+message AuthUser {
+  string id = 1;
+  string email = 2;
+  string display_name = 3;
+  string avatar_url = 4;
+  string role = 5;
+  bool banned = 6;
+}
+
+message EnsureSchemaRequest {}
+message EnsureSchemaResponse {
+  bool ok = 1;
+  optional Error error = 2;
+}
+
+message RegisterRequest {
+  string email = 1;
+  string password = 2;
+  string display_name = 3;
+}
+
+message RegisterResponse {
+  bool created = 1;
+  bool email_taken = 2;
+  optional AuthUser user = 3;
+  optional Error error = 4;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  bool authenticated = 1;
+  optional AuthUser user = 2;
+  optional Error error = 3;
+}
+
+message LogoutRequest {
+  optional UserId user_id = 1;
+}
+
+message LogoutResponse {
+  bool ok = 1;
+  optional Error error = 2;
+}
+
+message GetMeRequest {
+  UserId user_id = 1;
+}
+
+message GetMeResponse {
+  bool found = 1;
+  optional AuthUser user = 2;
+  optional Error error = 3;
+}
+
+message UpdateProfileRequest {
+  UserId user_id = 1;
+  optional string display_name = 2;
+  optional string avatar_url = 3;
+}
+
+message UpdateProfileResponse {
+  bool updated = 1;
+  bool not_found = 2;
+  optional AuthUser user = 3;
+  optional Error error = 4;
+}
+
+message ChangePasswordRequest {
+  UserId user_id = 1;
+  string current_password = 2;
+  string new_password = 3;
+}
+
+message ChangePasswordResponse {
+  bool changed = 1;
+  bool mismatch = 2;
+  optional Error error = 3;
+}
+
+message SetUserBanRequest {
+  UserId user_id = 1;
+  bool banned = 2;
+  string reason = 3;
+}
+
+message SetUserBanResponse {
+  bool updated = 1;
+  bool found = 2;
+  optional Error error = 3;
+}
+
+message GetAdminStatsRequest {}
+
+message GetAdminStatsResponse {
+  int64 users_count = 1;
+  int64 games_count = 2;
+  int64 active_rooms = 3;
+  optional Error error = 4;
+}
