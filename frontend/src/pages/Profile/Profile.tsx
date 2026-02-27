@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { profileApi } from '../../services/profileApi'
 import { useAppDispatch } from '../../store/hooks'
 import { setProfile } from '../../store/slices'
