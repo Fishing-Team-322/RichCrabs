@@ -4,8 +4,8 @@
 .ui-button:focus-visible,.ui-tab:focus-visible,.ui-input:focus-visible,.ui-select:focus-visible{outline:3px solid #7c3aed;outline-offset:2px}
 .ui-button:disabled,.ui-button.is-disabled{cursor:not-allowed;background:var(--disabled);opacity:.7}
 .ui-button.is-loading{opacity:.85}
-.ui-button.primary{background:linear-gradient(90deg,var(--primary),var(--accent-pink) 60%,var(--accent-blue));border-color:transparent;box-shadow:0 10px 24px rgba(139,92,246,.36)}
-.ui-button.primary:hover{filter:brightness(1.05);box-shadow:var(--shadow-glow)}
+.ui-button.primary{background:linear-gradient(90deg,var(--primary),var(--accent-pink) 60%,var(--accent-blue));background-size:200% 200%;border-color:transparent;box-shadow:0 10px 24px rgba(139,92,246,.36);animation:gradientShift 4s ease-in-out infinite alternate}
+.ui-button.primary:hover{filter:brightness(1.05);box-shadow:var(--shadow-glow);animation:gradientShift 1.4s ease-in-out infinite alternate,glowPulse 2s ease-in-out infinite}
 .ui-button.ghost{background:transparent}
 .ui-field{display:grid;gap:6px}
 .ui-label{font-size:12px;color:var(--text-secondary)}
@@ -43,3 +43,5 @@
 @keyframes ui-shimmer{100%{transform:translateX(100%)}}
 .ui-progress{height:8px;border-radius:999px;background:rgba(157,174,255,.18);overflow:hidden}
 .ui-progress-value{height:100%;background:linear-gradient(90deg,var(--primary),#ec4899);transition:width .25s ease}
+
+@media (prefers-reduced-motion: reduce){.ui-button.primary{animation:none !important}}

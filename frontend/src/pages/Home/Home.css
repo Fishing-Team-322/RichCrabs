@@ -56,8 +56,8 @@
 .homeActions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
 
 .heroVisual { position: relative; min-height: 320px; }
-.blobMain { width: 100%; max-width: 460px; filter: drop-shadow(0 0 60px rgba(168, 85, 247, 0.36)); }
-.blobOrb { position: absolute; width: 44%; right: -2%; bottom: -8%; opacity: 0.82; }
+.blobMain { width: 100%; max-width: 460px; filter: drop-shadow(0 0 60px rgba(168, 85, 247, 0.36)); animation: floatY 8s ease-in-out infinite; }
+.blobOrb { position: absolute; width: 44%; right: -2%; bottom: -8%; opacity: 0.82; animation: floatY 6s ease-in-out infinite reverse; }
 
 .homeCenterGrid,
 .homePricingWrap,
@@ -70,12 +70,15 @@
 
 .homeCenterGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .homeGlassCard {
+  transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease;
   border-radius: 20px;
   padding: 22px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: linear-gradient(170deg, rgba(23, 17, 39, 0.9), rgba(11, 8, 22, 0.9));
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
+
+.homeGlassCard:hover { transform: translateY(-4px); border-color: rgba(203,185,255,.35); box-shadow: 0 22px 42px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08); }
 
 .sectionHeading { margin-bottom: 18px; }
 .sectionHeading h2 { margin: 10px 0 0; font-size: clamp(28px, 3.5vw, 44px); max-width: 18ch; }
@@ -190,4 +193,18 @@
 :root[data-theme='light'] .pricingCard li,
 :root[data-theme='light'] .homeFooterLinks {
   color: #5e5484;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .blobMain,
+  .blobOrb {
+    animation: none !important;
+  }
+
+  .homeGlassCard,
+  .homeGlassCard:hover {
+    transform: none !important;
+    transition: none !important;
+  }
 }

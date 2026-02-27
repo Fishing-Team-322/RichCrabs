@@ -142,3 +142,47 @@ a { color: inherit; }
   background: linear-gradient(165deg, rgba(255, 255, 255, 0.94), rgba(246, 243, 255, 0.94));
   border-color: rgba(126, 96, 206, 0.22);
 }
+
+
+.appShell,
+.homePage,
+.roomsPage,
+.quizPage,
+.profilePage,
+.subscriptionsPage,
+.telegramBotsPage,
+.authPage {
+  animation: fadeIn 0.45s ease;
+}
+
+.pageCard,
+.quizPanel,
+.authCard,
+.ui-card {
+  animation: slideUp 0.4s ease;
+}
+
+.pageCard:hover,
+.ui-card:hover {
+  transform: translateY(-2px);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .appShell,
+  .homePage,
+  .roomsPage,
+  .quizPage,
+  .profilePage,
+  .subscriptionsPage,
+  .telegramBotsPage,
+  .authPage,
+  .pageCard,
+  .quizPanel,
+  .authCard,
+  .ui-card {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
