@@ -42,3 +42,5 @@ compile_commands.json
 .vscode/
 
 *.env
+
+*/node_modules/
