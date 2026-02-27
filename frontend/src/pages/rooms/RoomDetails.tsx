@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { QRCodeSVG } from 'qrcode.react'
 import { routes } from '../../app/router/routeMap'
 import { roomsApi } from '../../services/roomsApi'
 import type { RoomDetailsDto } from '../../types/room.types'
@@ -31,6 +30,11 @@ const RoomDetails = () => {
     }
     return `${window.location.origin}${room.inviteLink}`
   }, [room])
+
+  const qrCodeUrl = useMemo(() => {
+    if (!inviteLink) return ''
+    return `https://api.qrserver.com/v1/create-qr-code/?size=168x168&margin=10&data=${encodeURIComponent(inviteLink)}`
+  }, [inviteLink])
 
   const copyText = async (text: string) => {
     try {
@@ -111,9 +115,9 @@ const RoomDetails = () => {
           </div>
 
 
-          {inviteLink && (
+          {qrCodeUrl && (
             <div className="roomQr">
-              <QRCodeSVG value={inviteLink} size={168} includeMargin />
+              <img src={qrCodeUrl} width={168} height={168} alt="QR invite-link" />
               <span className="roomMeta">QR для быстрого входа по invite-link</span>
             </div>
           )}
