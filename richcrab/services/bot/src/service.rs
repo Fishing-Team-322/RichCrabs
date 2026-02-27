@@ -11,6 +11,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use sqlx::PgPool;
 use tonic::{Request, Response, Status};
+use tracing::info;
 use uuid::Uuid;
 
 use crate::repository::{Bot, BotRepository};
@@ -118,6 +119,13 @@ impl BotServiceImpl {
     fn actor_user_id(metadata: &tonic::metadata::MetadataMap) -> Option<String> {
         metadata
             .get("x-user-id")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string)
+    }
+
+    fn actor_role(metadata: &tonic::metadata::MetadataMap) -> Option<String> {
+        metadata
+            .get("x-user-role")
             .and_then(|v| v.to_str().ok())
             .map(str::to_string)
     }
@@ -333,6 +341,8 @@ impl proto::richcrab::v1::bot_service_server::BotService for BotServiceImpl {
             username: me.username,
             token_encrypted: encrypted_token,
             webhook_secret: webhook_secret.clone(),
+            enabled: true,
+            disabled_at: None,
             created_at: now,
         };
         self.repository
@@ -416,7 +426,14 @@ impl proto::richcrab::v1::bot_service_server::BotService for BotServiceImpl {
         Ok(Response::new(proto::richcrab::v1::ListBotsResponse {
             bots: bots
                 .iter()
-                .map(|bot| Self::to_proto(bot, "registered".to_string()))
+                .map(|bot| {
+                    let status = if bot.enabled {
+                        "registered".to_string()
+                    } else {
+                        "disabled".to_string()
+                    };
+                    Self::to_proto(bot, status)
+                })
                 .collect(),
             error: None,
         }))
@@ -428,7 +445,10 @@ impl proto::richcrab::v1::bot_service_server::BotService for BotServiceImpl {
     ) -> Result<Response<proto::richcrab::v1::GetBotStatusResponse>, Status> {
         let actor = Self::actor_user_id(request.metadata())
             .ok_or_else(|| Status::invalid_argument("x-user-id metadata is required"))?;
+        let role = Self::actor_role(request.metadata()).unwrap_or_default();
         self.check_and_report(&actor, "BOT_COMMAND").await?;
+        let actor_id = Uuid::parse_str(&actor)
+            .map_err(|_| Status::invalid_argument("x-user-id must be uuid"))?;
 
         let id = request
             .into_inner()
@@ -444,6 +464,15 @@ impl proto::richcrab::v1::bot_service_server::BotService for BotServiceImpl {
             .map_err(|e| Status::internal(format!("read failed: {e}")))?;
 
         let bot = bot.ok_or_else(|| Status::not_found("bot not found"))?;
+        if bot.user_id != actor_id && role != "admin" {
+            return Err(Status::permission_denied("bot belongs to another user"));
+        }
+        if !bot.enabled {
+            return Ok(Response::new(proto::richcrab::v1::GetBotStatusResponse {
+                bot: Some(Self::to_proto(&bot, "disabled".to_string())),
+                error: None,
+            }));
+        }
         let token = self
             .decrypt_token(&bot.token_encrypted)
             .map_err(|e| Status::internal(e.to_string()))?;
@@ -456,5 +485,63 @@ impl proto::richcrab::v1::bot_service_server::BotService for BotServiceImpl {
             bot: Some(Self::to_proto(&bot, status)),
             error: None,
         }))
+    }
+
+    async fn update_bot_status(
+        &self,
+        request: Request<proto::richcrab::v1::UpdateBotStatusRequest>,
+    ) -> Result<Response<proto::richcrab::v1::UpdateBotStatusResponse>, Status> {
+        let actor = Self::actor_user_id(request.metadata())
+            .ok_or_else(|| Status::invalid_argument("x-user-id metadata is required"))?;
+        let role = Self::actor_role(request.metadata()).unwrap_or_default();
+        self.check_and_report(&actor, "BOT_COMMAND").await?;
+
+        let actor_id = Uuid::parse_str(&actor)
+            .map_err(|_| Status::invalid_argument("x-user-id must be uuid"))?;
+        let req = request.into_inner();
+        let id = req
+            .bot_id
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("bot_id is required"))?;
+        let parsed_id =
+            Uuid::parse_str(&id).map_err(|_| Status::invalid_argument("bot_id invalid"))?;
+
+        let existing = self
+            .repository
+            .find_by_id(parsed_id)
+            .await
+            .map_err(|e| Status::internal(format!("read failed: {e}")))?
+            .ok_or_else(|| Status::not_found("bot not found"))?;
+        if existing.user_id != actor_id && role != "admin" {
+            return Err(Status::permission_denied("bot belongs to another user"));
+        }
+
+        let updated = self
+            .repository
+            .update_enabled_with_audit(parsed_id, req.enabled, actor_id, req.reason.as_deref())
+            .await
+            .map_err(|e| Status::internal(format!("update failed: {e}")))?
+            .ok_or_else(|| Status::not_found("bot not found"))?;
+
+        info!(
+            bot_id = %updated.id,
+            actor_user_id = %actor_id,
+            enabled = updated.enabled,
+            "bot status changed"
+        );
+
+        Ok(Response::new(
+            proto::richcrab::v1::UpdateBotStatusResponse {
+                bot: Some(Self::to_proto(
+                    &updated,
+                    if updated.enabled {
+                        "registered".to_string()
+                    } else {
+                        "disabled".to_string()
+                    },
+                )),
+                error: None,
+            },
+        ))
     }
 }

@@ -59,7 +59,7 @@ Json::Value botToJson(const QuizCoreBot& bot, const std::optional<BotState>& sta
   out["version"] = bot.version;
   out["status"] = bot.status;
   out["registeredAt"] = static_cast<Json::Int64>(bot.registered_at);
-  out["enabled"] = state ? state->enabled : true;
+  out["enabled"] = state ? state->enabled : (bot.status != "disabled");
   out["metadata"] = state ? state->metadata : Json::Value(Json::objectValue);
   return out;
 }

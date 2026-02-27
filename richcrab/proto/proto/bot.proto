@@ -10,6 +10,7 @@ service BotService {
   rpc RemoveBot(RemoveBotRequest) returns (RemoveBotResponse);
   rpc ListBots(ListBotsRequest) returns (ListBotsResponse);
   rpc GetBotStatus(GetBotStatusRequest) returns (GetBotStatusResponse);
+  rpc UpdateBotStatus(UpdateBotStatusRequest) returns (UpdateBotStatusResponse);
 }
 
 message Bot {
@@ -52,6 +53,17 @@ message GetBotStatusRequest {
 }
 
 message GetBotStatusResponse {
+  optional Bot bot = 1;
+  optional Error error = 2;
+}
+
+message UpdateBotStatusRequest {
+  BotId bot_id = 1;
+  bool enabled = 2;
+  optional string reason = 3;
+}
+
+message UpdateBotStatusResponse {
   optional Bot bot = 1;
   optional Error error = 2;
 }

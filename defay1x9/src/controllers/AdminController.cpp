@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <optional>
 
 #include "controllers/AuthStorage.hpp"
 #include "controllers/ControllerUtils.hpp"
@@ -58,7 +59,7 @@ bool requireAdmin(const drogon::HttpRequestPtr& req,
 
 }  // namespace
 
-void RegisterAdminRoutes(const Config& conf) {
+void RegisterAdminRoutes(const Config& conf, QuizCoreClient& quizCore) {
   drogon::app().registerHandler(
       "/admin/api/stats",
       [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
@@ -154,14 +155,46 @@ void RegisterAdminRoutes(const Config& conf) {
 
   drogon::app().registerHandler(
       "/admin/api/bots/{1}/disable",
-      [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string botId) {
+      [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string botId) {
         if (!RequireCsrf(req, conf, cb)) return;
         if (!requireAdmin(req, conf, cb)) return;
 
-        Json::Value details;
-        details["todo"] = "implement rust RPC: disable bot";
-        details["botId"] = botId;
-        cb(api::jsonErrorResponse(503, api::ErrorCode::kNotImplemented, "bot disable rpc is not available", details));
+        std::string parseError;
+        auto body = api::parseJsonBody(req, parseError);
+        std::optional<std::string> reason;
+        if (body) {
+          api::JsonValidator validator(*body);
+          reason = validator.optionalString("reason");
+          if (!validator.ok()) {
+            cb(api::validationErrorResponse(validator.issues()));
+            return;
+          }
+        }
+
+        auto session = security::VerifySessionFromRequest(req, conf.session);
+        if (!session || session->user_id.empty()) {
+          cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
+          return;
+        }
+
+        const auto requestId = requestIdFromRequest(req);
+        auto result = quizCore.updateBotStatus(session->user_id, botId, false, reason, requestId, "admin");
+        if (result.status == QuizCoreRpcStatus::kNotFound) {
+          cb(api::jsonErrorResponse(404, api::ErrorCode::kNotFound, "bot not found"));
+          return;
+        }
+        if (result.status == QuizCoreRpcStatus::kPermissionDenied) {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "admin access required"));
+          return;
+        }
+        if (result.status != QuizCoreRpcStatus::kOk) {
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "update_bot_status", result.error_code, result.error_message)));
+          return;
+        }
+
+        auto response = drogon::HttpResponse::newHttpResponse();
+        response->setStatusCode(drogon::k204NoContent);
+        cb(response);
       },
       {drogon::Post});
 }
