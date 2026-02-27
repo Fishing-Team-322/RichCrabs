@@ -80,6 +80,7 @@ const JoinPage = () => {
 
       playerSession.saveToken(response.token)
       playerSession.savePlayerName(playerName.trim())
+      playerSession.savePlayerId(response.playerId)
       navigate(routes.quizRuntime.replace(':roomId', response.gameId))
     } catch (joinError: unknown) {
       setError(humanizeJoinError(joinError))
