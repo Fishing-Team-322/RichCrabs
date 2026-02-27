@@ -54,8 +54,9 @@ async fn connect_entitlements_with_retry(
 
 async fn connect_quiz_with_retry(
     quiz_addr: &str,
-) -> anyhow::Result<proto::richcrab::v1::quiz_service_client::QuizServiceClient<tonic::transport::Channel>>
-{
+) -> anyhow::Result<
+    proto::richcrab::v1::quiz_service_client::QuizServiceClient<tonic::transport::Channel>,
+> {
     let endpoint = format!("http://{quiz_addr}");
     let mut last_error = None;
 
