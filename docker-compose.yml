@@ -27,58 +27,42 @@ services:
       timeout: 3s
       retries: 20
 
-  # gateway:
-  #   build:
-  #     context: .
-  #     dockerfile: defay1x9/Dockerfile
-  #   image: devhack/gateway:local
-  #   ports:
-  #     - "8080:8080"
-  #   environment:
-  #     GW_LISTEN_HOST: "0.0.0.0"
-  #     GW_LISTEN_PORT: "8080"
-  #     GW_PUBLIC_BASE_URL: "http://localhost:8080"
-  #     GW_OPENAPI_PATH: "./api/openapi.yaml"
-  #     GW_GRPC_GAME_ADDR: "game:50051"
-  #     GW_GRPC_JOIN_ADDR: "join:50052"
-  #     GW_GRPC_QUIZ_ADDR: "quiz:50053"
-  #     GW_GRPC_ENTITLEMENTS_ADDR: "entitlements:50054"
-  #     GW_GRPC_BOT_ADDR: "bot:50055"
-  #     GW_GRPC_AUTH_ADDR: "auth:50056"
-  #     GW_DEFAULT_USER_ID: "00000000-0000-0000-0000-000000000001"
-  #     GW_SESSION_SIGNING_KEY: "dev-insecure-session-key"
-  #     GW_GRPC_DEADLINE_MS_CREATE_ROOM: "1500"
-  #     GW_GRPC_DEADLINE_MS_ISSUE_JOIN_TICKET: "1500"
-  #     GW_GRPC_DEADLINE_MS_JOIN_ROOM: "1500"
-  #     GW_GRPC_DEADLINE_MS_START_GAME: "1500"
-  #     GW_GRPC_DEADLINE_MS_GET_ROOM_STATE: "1000"
-  #     GW_GRPC_DEADLINE_MS_AUTH: "1200"
-  #     GW_CSRF_COOKIE_NAME: "XSRF-TOKEN"
-  #     GW_CSRF_HEADER_NAME: "X-XSRF-TOKEN"
-  #     GW_CSRF_COOKIE_SECURE: "false"
-  #     GW_CSRF_COOKIE_HTTPONLY: "false"
-  #     GW_CSRF_COOKIE_PATH: "/"
-  #     GW_SESSION_COOKIE_NAME: "QB-SESSION"
-  #     GW_SESSION_COOKIE_SECURE: "false"
-  #     GW_SESSION_COOKIE_HTTPONLY: "true"
-  #     GW_SESSION_COOKIE_PATH: "/"
-  #     GW_SESSION_TTL_SECONDS: "86400"
-  #   depends_on:
-  #     game:
-  #       condition: service_started
-  #     join:
-  #       condition: service_started
-  #     quiz:
-  #       condition: service_started
-  #     bot:
-  #       condition: service_started
-  #     entitlements:
-  #       condition: service_started
-  #     auth:
-  #       condition: service_started
-  #     postgres:
-  #       condition: service_healthy
-  #   restart: unless-stopped
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway_py/Dockerfile
+    image: richcrabs/gateway-py:local
+    ports:
+      - "8080:8080"
+    environment:
+      GW_LISTEN_HOST: "0.0.0.0"
+      GW_LISTEN_PORT: "8080"
+      GW_PUBLIC_BASE_URL: "http://localhost:8080"
+      GW_OPENAPI_PATH: "./api/openapi.yaml"
+      GW_GRPC_GAME_ADDR: "game:50051"
+      GW_GRPC_JOIN_ADDR: "join:50052"
+      GW_GRPC_QUIZ_ADDR: "quiz:50053"
+      GW_GRPC_ENTITLEMENTS_ADDR: "entitlements:50054"
+      GW_GRPC_BOT_ADDR: "bot:50055"
+      GW_GRPC_AUTH_ADDR: "auth:50056"
+      GW_REDIS_URL: "redis://redis:6379"
+      GW_SESSION_SIGNING_KEY: "dev-insecure-session-key"
+    depends_on:
+      game:
+        condition: service_started
+      join:
+        condition: service_started
+      quiz:
+        condition: service_started
+      bot:
+        condition: service_started
+      entitlements:
+        condition: service_started
+      auth:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
   entitlements:
     image: richcrabs/entitlements:local
