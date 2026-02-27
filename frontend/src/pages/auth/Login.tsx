@@ -37,11 +37,12 @@ const Login = () => {
   }
 
   return (
-    <section className="authCard">
+    <div className="authPage">
+      <section className="authCard">
       <h1>{t('auth.loginTitle')}</h1>
       <p className="homeMuted">{t('auth.loginSubtitle')}</p>
       <Link to={routes.home} className="accountAction">{t('common.backToHome')}</Link>
-      <form onSubmit={(event) => void onSubmit(event)} className="homePage">
+      <form onSubmit={(event) => void onSubmit(event)} className="authForm">
         <Input
           label="Email"
           error={errors.email}
@@ -66,7 +67,8 @@ const Login = () => {
       <p className="homeMuted">
         Нет аккаунта? <Link to={routes.authRegister}>Зарегистрироваться</Link>
       </p>
-    </section>
+      </section>
+    </div>
   )
 }
 
