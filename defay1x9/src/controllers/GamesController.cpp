@@ -3,14 +3,43 @@
 #include <drogon/drogon.h>
 #include <spdlog/spdlog.h>
 
+#include <vector>
+
 #include "controllers/ControllerUtils.hpp"
 #include "csrf.hpp"
 #include "http_api_utils.hpp"
+#include "redis_utils.hpp"
 #include "session.hpp"
 
 namespace controllers {
 
 namespace {
+
+constexpr uint64_t kRateLimitJoinPerIp = 40;
+constexpr uint64_t kRateLimitJoinByPin = 25;
+constexpr uint64_t kRateLimitJoinByInvite = 25;
+constexpr uint64_t kRateLimitCreatePerIp = 20;
+constexpr uint64_t kRateLimitCreatePerUser = 10;
+constexpr uint64_t kRateLimitWindowSec = 60;
+
+bool AllowRateLimit(const Config& conf,
+                    const std::vector<std::string>& keys,
+                    uint64_t limit,
+                    const std::function<void(const drogon::HttpResponsePtr&)>& cb) {
+  for (const auto& key : keys) {
+    const auto decision = RedisAllowFixedWindow(conf.redis_url, key, limit, kRateLimitWindowSec);
+    if (!decision.has_value()) continue;
+    if (!decision->allowed) {
+      Json::Value details;
+      details["scope"] = key;
+      details["limit"] = static_cast<Json::UInt64>(decision->limit);
+      details["count"] = static_cast<Json::UInt64>(decision->current);
+      cb(api::jsonErrorResponse(429, api::ErrorCode::kTooManyAttempts, "rate limit exceeded", details));
+      return false;
+    }
+  }
+  return true;
+}
 
 bool ValidateSessionPin(const security::SessionClaims& session,
                         const std::string& pathPin,
@@ -45,6 +74,20 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         auto title = validator.requiredString("title", "roomTitle");
         if (!validator.ok()) {
           cb(api::validationErrorResponse(validator.issues()));
+          return;
+        }
+
+        const auto ip = clientIpFromRequest(req);
+        if (!AllowRateLimit(conf,
+                            {"rl:create_game:ip:" + ip},
+                            kRateLimitCreatePerIp,
+                            cb)) {
+          return;
+        }
+        if (!AllowRateLimit(conf,
+                            {"rl:create_game:user:" + *ownerUserId},
+                            kRateLimitCreatePerUser,
+                            cb)) {
           return;
         }
 
@@ -151,6 +194,20 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
           return;
         }
 
+        const auto ip = clientIpFromRequest(req);
+        if (!AllowRateLimit(conf,
+                            {"rl:join:ip:" + ip, "rl:join:pin:" + pin},
+                            kRateLimitJoinPerIp,
+                            cb)) {
+          return;
+        }
+        if (!AllowRateLimit(conf,
+                            {"rl:join_by_pin:pin:" + pin},
+                            kRateLimitJoinByPin,
+                            cb)) {
+          return;
+        }
+
         const auto requestId = requestIdFromRequest(req);
         spdlog::info("join_by_pin request_id={} pin={} room_id=- player_id=-", requestId, pin);
         auto out = quizCore.joinRoomByPin(pin, *name, requestId);
@@ -172,6 +229,9 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
 
         Json::Value responseBody;
         responseBody["playerId"] = out->player_id;
+        responseBody["joinTicket"] = sessionToken;
+        responseBody["expiresInSec"] = conf.session.ttl_seconds;
+        responseBody["roomPin"] = pin;
         responseBody["team"] = "A";
         responseBody["role"] = "player";
         responseBody["wsUrl"] = conf.public_base_url + "/ws";
@@ -206,6 +266,20 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
           return;
         }
 
+        const auto ip = clientIpFromRequest(req);
+        if (!AllowRateLimit(conf,
+                            {"rl:join:ip:" + ip, "rl:join:token:" + inviteToken},
+                            kRateLimitJoinPerIp,
+                            cb)) {
+          return;
+        }
+        if (!AllowRateLimit(conf,
+                            {"rl:join_by_invite:token:" + inviteToken},
+                            kRateLimitJoinByInvite,
+                            cb)) {
+          return;
+        }
+
         const auto requestId = requestIdFromRequest(req);
         spdlog::info("join_by_invite request_id={} pin=- room_id=- player_id=-", requestId);
         auto out = quizCore.joinRoomByInvite(inviteToken, *name, requestId);
@@ -218,6 +292,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
 
         security::SessionClaims claims;
         claims.role = "player";
+        claims.pin = out->room_id;
         claims.room_id = out->room_id;
         claims.player_id = out->player_id;
 
@@ -226,6 +301,9 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
 
         Json::Value responseBody;
         responseBody["playerId"] = out->player_id;
+        responseBody["joinTicket"] = sessionToken;
+        responseBody["expiresInSec"] = conf.session.ttl_seconds;
+        responseBody["roomPin"] = "";
         responseBody["team"] = "A";
         responseBody["role"] = "player";
         responseBody["wsUrl"] = conf.public_base_url + "/ws";
@@ -237,6 +315,24 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         cb(response);
       },
       {drogon::Post});
+
+  drogon::app().registerHandler(
+      "/api/v1/presence/{1}",
+      [conf](const drogon::HttpRequestPtr& req,
+             std::function<void(const drogon::HttpResponsePtr&)>&& cb,
+             std::string actorId) {
+        auto session = security::VerifySessionFromRequest(req, conf.session);
+        if (!session || session->room_id.empty()) {
+          cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
+          return;
+        }
+        Json::Value out;
+        out["roomId"] = session->room_id;
+        out["actorId"] = actorId;
+        out["online"] = RedisIsPresenceOnline(conf.redis_url, session->room_id, actorId);
+        cb(drogon::HttpResponse::newHttpJsonResponse(out));
+      },
+      {drogon::Get});
 
   drogon::app().registerHandler(
       "/api/v1/games/{1}/start",

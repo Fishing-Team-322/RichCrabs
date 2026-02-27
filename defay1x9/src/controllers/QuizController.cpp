@@ -17,8 +17,13 @@
 
 #include "controllers/ControllerUtils.hpp"
 #include "http_api_utils.hpp"
+#include "redis_utils.hpp"
 
 namespace {
+
+constexpr uint64_t kRateLimitAiPerIp = 20;
+constexpr uint64_t kRateLimitAiPerUser = 12;
+constexpr uint64_t kRateLimitWindowSec = 60;
 
 bool isRpcDegradedStatus(QuizCoreRpcStatus status) {
   return status == QuizCoreRpcStatus::kUnavailable || status == QuizCoreRpcStatus::kUnknown ||
@@ -529,6 +534,18 @@ void RegisterQuizRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
         }
 
         const auto userId = resolveUserId(req, conf);
+        const auto ip = clientIpFromRequest(req);
+        const auto ipDecision = RedisAllowFixedWindow(conf.redis_url, "rl:ai_generate:ip:" + ip, kRateLimitAiPerIp, kRateLimitWindowSec);
+        if (ipDecision.has_value() && !ipDecision->allowed) {
+          cb(api::jsonErrorResponse(429, api::ErrorCode::kTooManyAttempts, "rate limit exceeded"));
+          return;
+        }
+        const auto userDecision = RedisAllowFixedWindow(conf.redis_url, "rl:ai_generate:user:" + userId, kRateLimitAiPerUser, kRateLimitWindowSec);
+        if (userDecision.has_value() && !userDecision->allowed) {
+          cb(api::jsonErrorResponse(429, api::ErrorCode::kTooManyAttempts, "rate limit exceeded"));
+          return;
+        }
+
         const auto entitlement = entitlementsClient.checkAndConsume(userId, "AI_GENERATE");
         if (!entitlement.allowed) {
           Json::Value details;
