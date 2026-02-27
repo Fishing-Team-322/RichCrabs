@@ -62,6 +62,7 @@ add_executable(defay1x9
   src/controllers/GamesController.cpp
   src/controllers/BotsController.cpp
   src/controllers/QuizController.cpp
+  src/controllers/TelegramWebhookClient.cpp
   src/controllers/TelegramController.cpp
   src/controllers/AdminController.cpp
   include/controllers/ControllerUtils.hpp
@@ -71,6 +72,7 @@ add_executable(defay1x9
   include/controllers/GamesController.hpp
   include/controllers/BotsController.hpp
   include/controllers/QuizController.hpp
+  include/controllers/TelegramWebhookClient.hpp
   include/controllers/TelegramController.hpp
   include/controllers/AdminController.hpp
   ${PROTO_SRCS}
