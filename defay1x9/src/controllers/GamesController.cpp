@@ -37,7 +37,8 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
         auto out = quizCore.createRoom(*ownerUserId, *quizId, *title, requestId);
         if (!out || out->status != QuizCoreRpcStatus::kOk) {
           const auto status = out ? out->status : QuizCoreRpcStatus::kUnavailable;
-          cb(api::jsonErrorResponse(api::mapRpcError(status, "create_room")));
+          cb(api::jsonErrorResponse(
+              api::mapRpcError(status, "create_room", out ? out->error_code : "", out ? out->error_message : "")));
           return;
         }
 
@@ -81,15 +82,15 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
 
         const auto requestId = requestIdFromRequest(req);
         auto state = quizCore.getRoomState(session->room_id, requestId);
-        if (!state) {
-          cb(api::jsonErrorResponse(api::mapRpcError(QuizCoreRpcStatus::kUnavailable, "get_room_state")));
+        if (!state.room_state) {
+          cb(api::jsonErrorResponse(api::mapRpcError(state.status, "get_room_state", state.error_code, state.error_message)));
           return;
         }
 
         Json::Value body;
         body["pin"] = pin;
-        body["state"] = state->state;
-        for (const auto& player : state->players) {
+        body["state"] = state.room_state->state;
+        for (const auto& player : state.room_state->players) {
           Json::Value row;
           row["playerId"] = player.player_id;
           row["name"] = player.display_name;
@@ -126,7 +127,8 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
         auto out = quizCore.joinRoomByPin(pin, *name, requestId);
         if (!out || out->status != QuizCoreRpcStatus::kOk) {
           const auto status = out ? out->status : QuizCoreRpcStatus::kUnavailable;
-          cb(api::jsonErrorResponse(api::mapRpcError(status, "join_room_by_pin")));
+          cb(api::jsonErrorResponse(api::mapRpcError(
+              status, "join_room_by_pin", out ? out->error_code : "", out ? out->error_message : "")));
           return;
         }
 
@@ -180,7 +182,8 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
         auto out = quizCore.joinRoomByInvite(inviteToken, *name, requestId);
         if (!out || out->status != QuizCoreRpcStatus::kOk) {
           const auto status = out ? out->status : QuizCoreRpcStatus::kUnavailable;
-          cb(api::jsonErrorResponse(api::mapRpcError(status, "join_room_by_invite")));
+          cb(api::jsonErrorResponse(api::mapRpcError(
+              status, "join_room_by_invite", out ? out->error_code : "", out ? out->error_message : "")));
           return;
         }
 
@@ -228,8 +231,17 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
         }
 
         spdlog::info("start_game request_id={} pin={} room_id={} player_id=-", requestId, session->pin, session->room_id);
-        if (!quizCore.startGame(session->room_id, session->user_id, requestId)) {
-          cb(api::jsonErrorResponse(409, api::ErrorCode::kValidationError, "game cannot be started in current state"));
+        const auto result = quizCore.startGame(session->room_id, session->user_id, requestId);
+        if (result.status != QuizCoreRpcStatus::kOk) {
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "start_game", result.error_code, result.error_message)));
+          return;
+        }
+        if (!result.started) {
+          cb(api::jsonErrorResponse(api::mapRpcError(
+              QuizCoreRpcStatus::kFailedPrecondition,
+              "start_game",
+              "FAILED_PRECONDITION",
+              "game cannot be started in current state")));
           return;
         }
 
@@ -256,15 +268,15 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
 
         const auto requestId = requestIdFromRequest(req);
         auto state = quizCore.getRoomState(session->room_id, requestId);
-        if (!state) {
-          cb(api::jsonErrorResponse(api::mapRpcError(QuizCoreRpcStatus::kUnavailable, "get_room_state")));
+        if (!state.room_state) {
+          cb(api::jsonErrorResponse(api::mapRpcError(state.status, "get_room_state", state.error_code, state.error_message)));
           return;
         }
 
         Json::Value body;
         body["pin"] = pin;
-        body["state"] = state->state;
-        for (const auto& player : state->players) {
+        body["state"] = state.room_state->state;
+        for (const auto& player : state.room_state->players) {
           Json::Value row;
           row["playerId"] = player.player_id;
           row["name"] = player.display_name;

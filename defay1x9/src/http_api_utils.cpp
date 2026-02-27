@@ -174,24 +174,31 @@ drogon::HttpResponsePtr validationErrorResponse(const std::vector<ValidationIssu
   return jsonErrorResponse(400, ErrorCode::kValidationError, "request validation failed", std::move(details));
 }
 
-GatewayError mapRpcError(QuizCoreRpcStatus status, const std::string& operation) {
+GatewayError mapRpcError(QuizCoreRpcStatus status,
+                         const std::string& operation,
+                         const std::string& errorCode,
+                         const std::string& errorMessage) {
+  const std::string suffix = errorMessage.empty() ? operation : operation + ": " + errorMessage;
   switch (status) {
     case QuizCoreRpcStatus::kInvalidArgument:
-      return {GatewayErrorKind::kBadGateway, ErrorCode::kGrpcUnavailable, "grpc call failed: " + operation, std::nullopt};
+      return {GatewayErrorKind::kBadRequest, ErrorCode::kValidationError, "rpc invalid argument: " + suffix, std::nullopt};
     case QuizCoreRpcStatus::kNotFound:
-      return {GatewayErrorKind::kBadGateway, ErrorCode::kGrpcUnavailable, "grpc call failed: " + operation, std::nullopt};
+      return {GatewayErrorKind::kNotFound, ErrorCode::kNotFound, "rpc not found: " + suffix, std::nullopt};
     case QuizCoreRpcStatus::kPermissionDenied:
-      return {GatewayErrorKind::kBadGateway, ErrorCode::kGrpcUnavailable, "grpc call failed: " + operation, std::nullopt};
+      return {GatewayErrorKind::kForbidden, ErrorCode::kForbidden, "rpc permission denied: " + suffix, std::nullopt};
     case QuizCoreRpcStatus::kFailedPrecondition:
-      return {GatewayErrorKind::kBadGateway, ErrorCode::kGrpcUnavailable, "grpc call failed: " + operation, std::nullopt};
+      return {GatewayErrorKind::kConflict, ErrorCode::kValidationError, "rpc precondition failed: " + suffix, std::nullopt};
     case QuizCoreRpcStatus::kDeadlineExceeded:
       return {GatewayErrorKind::kGatewayTimeout, ErrorCode::kGrpcTimeout, "grpc timeout: " + operation, std::nullopt};
     case QuizCoreRpcStatus::kUnavailable:
-      return {GatewayErrorKind::kBadGateway, ErrorCode::kGrpcUnavailable, "grpc unavailable: " + operation, std::nullopt};
+      return {GatewayErrorKind::kServiceUnavailable, ErrorCode::kGrpcUnavailable, "grpc unavailable: " + suffix, std::nullopt};
     case QuizCoreRpcStatus::kUnknown:
     case QuizCoreRpcStatus::kOk:
     default:
-      return {GatewayErrorKind::kBadGateway, ErrorCode::kGrpcUnavailable, "grpc unavailable: " + operation, std::nullopt};
+      return {GatewayErrorKind::kBadGateway,
+              ErrorCode::kGrpcUnavailable,
+              "grpc unavailable: " + (errorCode.empty() ? operation : operation + " (" + errorCode + ")"),
+              std::nullopt};
   }
 }
 

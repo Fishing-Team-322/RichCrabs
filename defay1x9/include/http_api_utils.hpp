@@ -88,7 +88,10 @@ struct GatewayError final {
   std::optional<Json::Value> details;
 };
 
-GatewayError mapRpcError(QuizCoreRpcStatus status, const std::string& operation);
+GatewayError mapRpcError(QuizCoreRpcStatus status,
+                         const std::string& operation,
+                         const std::string& errorCode = "",
+                         const std::string& errorMessage = "");
 int httpStatusCode(GatewayErrorKind kind);
 drogon::HttpResponsePtr jsonErrorResponse(const GatewayError& error);
 
