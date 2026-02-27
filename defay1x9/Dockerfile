@@ -15,9 +15,10 @@ RUN git clone --depth 1 https://github.com/microsoft/vcpkg.git \
 
 ENV VCPKG_ROOT=/opt/vcpkg
 ENV VCPKG_FEATURE_FLAGS=manifests
-ENV VCPKG_BINARY_SOURCES="clear;files,/root/.cache/vcpkg/bincache,readwrite"
 ENV VCPKG_DEFAULT_TRIPLET=x64-linux-release
 ENV VCPKG_DEFAULT_HOST_TRIPLET=x64-linux-release
+ENV CCACHE_DIR=/root/.cache/ccache
+ENV CCACHE_MAXSIZE=2G
 
 
 WORKDIR /repo/defay1x9
@@ -28,15 +29,13 @@ COPY richcrab/proto/proto/ /repo/richcrab/proto/proto/
 # На случай, если build/ попал в контекст до обновления .dockerignore
 RUN rm -rf /repo/defay1x9/build /repo/defay1x9/CMakeCache.txt
 
-# ВАЖНО: используем бинарный cache, собранный в deps-образе.
-# Даже если кто-то вызывает build --no-cache, тяжелая сборка vcpkg уже не должна идти тут с нуля.
-ENV VCPKG_BINARY_SOURCES="clear;files,/opt/vcpkg-bincache,read"
+ENV VCPKG_BINARY_SOURCES="clear;files,/root/.cache/vcpkg/bincache,readwrite"
 
 RUN --mount=type=cache,target=/opt/vcpkg/downloads,id=vcpkg-downloads \
     --mount=type=cache,target=/opt/vcpkg/buildtrees,id=vcpkg-buildtrees-x64-linux-release \
     --mount=type=cache,target=/opt/vcpkg/packages,id=vcpkg-packages-x64-linux-release \
-
     --mount=type=cache,target=/root/.cache/vcpkg/bincache,id=vcpkg-bincache \
+    --mount=type=cache,target=/root/.cache/ccache,id=ccache-x64-linux-release \
     cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -47,7 +46,9 @@ RUN --mount=type=cache,target=/opt/vcpkg/downloads,id=vcpkg-downloads \
       -DVCPKG_HOST_TRIPLET=x64-linux-release \
       -DVCPKG_OVERLAY_TRIPLETS=/repo/defay1x9/triplets
 
-RUN cmake --build /repo/defay1x9/build -j "$(nproc)"
+RUN --mount=type=cache,target=/root/.cache/ccache,id=ccache-x64-linux-release \
+    --mount=type=cache,target=/root/.cache/vcpkg/bincache,id=vcpkg-bincache \
+    cmake --build /repo/defay1x9/build -j "$(nproc)"
 
 # -------- runtime --------
 FROM ubuntu:22.04 AS runtime
