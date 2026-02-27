@@ -1680,7 +1680,7 @@ paths:
   /api/v1/quizzes/ai-generate:
     post:
       tags: [Quizzes]
-      summary: Start AI quiz generation (mock/degraded in gateway)
+      summary: Start AI quiz generation job
       security:
         - sessionCookie: []
         - csrfHeader: []
@@ -1692,7 +1692,7 @@ paths:
               $ref: '#/components/schemas/AiGenerateRequest'
       responses:
         '200':
-          description: Job accepted or degraded fallback
+          description: Job accepted
           content:
             application/json:
               schema:
@@ -1752,6 +1752,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '5xx':
+          description: Backend/internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
 
   /api/v1/quizzes/ai-jobs/{jobId}/result:
     get:
@@ -1778,6 +1790,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
         '503':
           description: Job result storage/backend unavailable
           content:
@@ -1786,6 +1804,12 @@ paths:
                 $ref: '#/components/schemas/QuizTelegramErrorResponse'
         '403':
           description: CSRF required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '5xx':
+          description: Backend/internal error
           content:
             application/json:
               schema:

@@ -5,10 +5,11 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::PgPool;
+use tokio::time::{sleep, Duration};
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
-use crate::repository::{Quiz, QuizRepository};
+use crate::repository::{AiQuizJob, Quiz, QuizRepository};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct FallbackQuestionBank {
@@ -199,6 +200,111 @@ impl QuizServiceImpl {
             .await
             .map_err(|e| Status::unavailable(format!("usage reporting failed: {e}")))?;
         Ok(())
+    }
+
+    fn build_generated_quiz(
+        owner_user_id: Uuid,
+        prompt: &str,
+        desired_question_count: usize,
+    ) -> proto::richcrab::v1::Quiz {
+        let normalized_prompt = prompt.trim();
+        let now = Utc::now();
+        let questions = (0..desired_question_count)
+            .map(|idx| proto::richcrab::v1::QuizQuestion {
+                id: format!("ai-{}", idx + 1),
+                text: format!("{} — вопрос {}", normalized_prompt, idx + 1),
+                options: vec![
+                    "Вариант A".to_string(),
+                    "Вариант B".to_string(),
+                    "Вариант C".to_string(),
+                    "Вариант D".to_string(),
+                ],
+                correct_option_index: Some((idx % 4) as u32),
+            })
+            .collect();
+
+        proto::richcrab::v1::Quiz {
+            quiz_id: Some(proto::richcrab::v1::QuizId {
+                value: Uuid::new_v4().to_string(),
+            }),
+            owner_user_id: Some(proto::richcrab::v1::UserId {
+                value: owner_user_id.to_string(),
+            }),
+            title: format!("AI Quiz: {}", normalized_prompt),
+            description: "Generated asynchronously by quiz worker".to_string(),
+            questions,
+            created_at: Some(prost_types::Timestamp {
+                seconds: now.timestamp(),
+                nanos: now.timestamp_subsec_nanos() as i32,
+            }),
+            updated_at: Some(prost_types::Timestamp {
+                seconds: now.timestamp(),
+                nanos: now.timestamp_subsec_nanos() as i32,
+            }),
+        }
+    }
+
+    fn quiz_to_json(quiz: &proto::richcrab::v1::Quiz) -> Value {
+        json!({
+            "quiz_id": quiz.quiz_id.as_ref().map(|v| v.value.clone()).unwrap_or_default(),
+            "owner_user_id": quiz.owner_user_id.as_ref().map(|v| v.value.clone()).unwrap_or_default(),
+            "title": quiz.title,
+            "description": quiz.description,
+            "questions": Self::questions_to_json(&quiz.questions),
+            "created_at": quiz.created_at.as_ref().map(|ts| ts.seconds).unwrap_or_default(),
+            "updated_at": quiz.updated_at.as_ref().map(|ts| ts.seconds).unwrap_or_default(),
+        })
+    }
+
+    fn quiz_from_json(value: &Value) -> Option<proto::richcrab::v1::Quiz> {
+        let quiz_id = value.get("quiz_id")?.as_str()?.to_string();
+        let owner_user_id = value.get("owner_user_id")?.as_str()?.to_string();
+        let title = value.get("title")?.as_str()?.to_string();
+        let description = value.get("description")?.as_str()?.to_string();
+        Some(proto::richcrab::v1::Quiz {
+            quiz_id: Some(proto::richcrab::v1::QuizId { value: quiz_id }),
+            owner_user_id: Some(proto::richcrab::v1::UserId {
+                value: owner_user_id,
+            }),
+            title,
+            description,
+            questions: Self::questions_from_json(value.get("questions").unwrap_or(&Value::Null)),
+            created_at: None,
+            updated_at: None,
+        })
+    }
+
+    fn spawn_ai_quiz_worker(
+        repository: QuizRepository,
+        job_id: Uuid,
+        owner_user_id: Uuid,
+        prompt: String,
+        desired_question_count: usize,
+    ) {
+        tokio::spawn(async move {
+            if let Err(err) = repository.set_ai_quiz_job_status(job_id, "running").await {
+                tracing::error!(?err, %job_id, "failed to mark ai job running");
+                return;
+            }
+
+            sleep(Duration::from_millis(300)).await;
+
+            let generated =
+                Self::build_generated_quiz(owner_user_id, &prompt, desired_question_count);
+            if let Err(err) = Self::validate_questions(&generated.questions) {
+                let _ = repository
+                    .fail_ai_quiz_job(job_id, &format!("generation failed validation: {err}"))
+                    .await;
+                return;
+            }
+
+            let result_json = Self::quiz_to_json(&generated);
+            if let Err(err) = repository.complete_ai_quiz_job(job_id, result_json).await {
+                let _ = repository
+                    .fail_ai_quiz_job(job_id, &format!("failed to persist generated quiz: {err}"))
+                    .await;
+            }
+        });
     }
 }
 
@@ -478,9 +584,43 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
         self.check_entitlement(&requester, "AI_GENERATE").await?;
         self.report_usage(&requester, "AI_GENERATE").await?;
 
+        let requester_uuid = Uuid::parse_str(&requester)
+            .map_err(|_| Status::invalid_argument("requested_by must be uuid"))?;
+        let desired_question_count = req.desired_question_count.unwrap_or(5).clamp(1, 20) as usize;
+        let prompt = req.prompt.trim().to_string();
+        if prompt.is_empty() {
+            return Err(Status::invalid_argument("prompt is required"));
+        }
+
+        let now = Utc::now();
+        let job = AiQuizJob {
+            id: Uuid::new_v4(),
+            owner_user_id: requester_uuid,
+            prompt: prompt.clone(),
+            desired_question_count: Some(desired_question_count as i32),
+            status: "queued".to_string(),
+            result_quiz_json: None,
+            error_message: None,
+            created_at: now,
+            updated_at: now,
+        };
+
+        self.repository
+            .create_ai_quiz_job(&job)
+            .await
+            .map_err(|e| Status::internal(format!("failed to create ai job: {e}")))?;
+
+        Self::spawn_ai_quiz_worker(
+            self.repository.clone(),
+            job.id,
+            requester_uuid,
+            prompt,
+            desired_question_count,
+        );
+
         Ok(Response::new(proto::richcrab::v1::StartAiQuizJobResponse {
-            job_id: Uuid::new_v4().to_string(),
-            status: "accepted".to_string(),
+            job_id: job.id.to_string(),
+            status: job.status,
             error: None,
         }))
     }
@@ -489,11 +629,34 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
         &self,
         request: Request<proto::richcrab::v1::GetAiQuizJobRequest>,
     ) -> Result<Response<proto::richcrab::v1::GetAiQuizJobResponse>, Status> {
+        let req = request.into_inner();
+        let job_uuid = Uuid::parse_str(&req.job_id)
+            .map_err(|_| Status::invalid_argument("job_id must be uuid"))?;
+
+        let job = self
+            .repository
+            .find_ai_quiz_job_by_id(job_uuid)
+            .await
+            .map_err(|e| Status::internal(format!("failed to read ai job: {e}")))?
+            .ok_or_else(|| Status::not_found("ai quiz job not found"))?;
+
+        let quiz = job.result_quiz_json.as_ref().and_then(Self::quiz_from_json);
+        let error = job.error_message.map(|message| proto::richcrab::v1::Error {
+            code: "FAILED_PRECONDITION".to_string(),
+            message,
+            details: Default::default(),
+            occurred_at: Some(prost_types::Timestamp {
+                seconds: Utc::now().timestamp(),
+                nanos: Utc::now().timestamp_subsec_nanos() as i32,
+            }),
+            retry_after: None,
+        });
+
         Ok(Response::new(proto::richcrab::v1::GetAiQuizJobResponse {
-            job_id: request.into_inner().job_id,
-            status: "not_implemented".to_string(),
-            quiz: None,
-            error: None,
+            job_id: job.id.to_string(),
+            status: job.status,
+            quiz,
+            error,
         }))
     }
 }
