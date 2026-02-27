@@ -49,6 +49,12 @@ Config Config::LoadFromEnv() {
   c.grpc_deadline_ms_next_question = envInt("GW_GRPC_DEADLINE_MS_NEXT_QUESTION", c.grpc_deadline_ms_next_question);
   c.grpc_deadline_ms_submit_answer = envInt("GW_GRPC_DEADLINE_MS_SUBMIT_ANSWER", c.grpc_deadline_ms_submit_answer);
   c.grpc_deadline_ms_get_room_state = envInt("GW_GRPC_DEADLINE_MS_GET_ROOM_STATE", c.grpc_deadline_ms_get_room_state);
+  c.grpc_deadline_ms_create_quiz = envInt("GW_GRPC_DEADLINE_MS_CREATE_QUIZ", c.grpc_deadline_ms_create_quiz);
+  c.grpc_deadline_ms_list_quizzes = envInt("GW_GRPC_DEADLINE_MS_LIST_QUIZZES", c.grpc_deadline_ms_list_quizzes);
+  c.grpc_deadline_ms_get_quiz = envInt("GW_GRPC_DEADLINE_MS_GET_QUIZ", c.grpc_deadline_ms_get_quiz);
+  c.grpc_deadline_ms_update_quiz = envInt("GW_GRPC_DEADLINE_MS_UPDATE_QUIZ", c.grpc_deadline_ms_update_quiz);
+  c.grpc_deadline_ms_publish_quiz = envInt("GW_GRPC_DEADLINE_MS_PUBLISH_QUIZ", c.grpc_deadline_ms_publish_quiz);
+  c.grpc_deadline_ms_start_ai_quiz_job = envInt("GW_GRPC_DEADLINE_MS_START_AI_QUIZ_JOB", c.grpc_deadline_ms_start_ai_quiz_job);
   c.ws_mock_stream_enabled = envBool("GW_WS_MOCK_STREAM_ENABLED", c.ws_mock_stream_enabled);
   c.ws_mock_stream_auto_on_unavailable = envBool("GW_WS_MOCK_STREAM_AUTO_ON_UNAVAILABLE", c.ws_mock_stream_auto_on_unavailable);
   c.app_env = envStr("GW_ENV", c.app_env);

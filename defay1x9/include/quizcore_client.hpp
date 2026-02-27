@@ -130,6 +130,66 @@ struct QuizCoreGetRoomStateResult final {
   std::optional<QuizCoreRoomState> room_state;
 };
 
+struct QuizCoreQuizQuestion final {
+  std::string id;
+  std::string text;
+  std::vector<std::string> options;
+  std::optional<uint32_t> correct_option_index;
+};
+
+struct QuizCoreQuiz final {
+  std::string quiz_id;
+  std::string owner_user_id;
+  std::string title;
+  std::string description;
+  std::vector<QuizCoreQuizQuestion> questions;
+};
+
+struct QuizCoreCreateQuizResult final {
+  QuizCoreRpcStatus status = QuizCoreRpcStatus::kUnknown;
+  std::string error_code;
+  std::string error_message;
+  std::optional<QuizCoreQuiz> quiz;
+};
+
+struct QuizCoreListQuizzesResult final {
+  QuizCoreRpcStatus status = QuizCoreRpcStatus::kUnknown;
+  std::string error_code;
+  std::string error_message;
+  std::vector<QuizCoreQuiz> quizzes;
+  std::string next_page_token;
+};
+
+struct QuizCoreGetQuizResult final {
+  QuizCoreRpcStatus status = QuizCoreRpcStatus::kUnknown;
+  std::string error_code;
+  std::string error_message;
+  std::optional<QuizCoreQuiz> quiz;
+};
+
+struct QuizCoreUpdateQuizResult final {
+  QuizCoreRpcStatus status = QuizCoreRpcStatus::kUnknown;
+  std::string error_code;
+  std::string error_message;
+  std::optional<QuizCoreQuiz> quiz;
+};
+
+struct QuizCorePublishQuizResult final {
+  QuizCoreRpcStatus status = QuizCoreRpcStatus::kUnknown;
+  std::string error_code;
+  std::string error_message;
+  std::optional<QuizCoreQuiz> quiz;
+  uint32_t published_version = 0;
+};
+
+struct QuizCoreStartAiQuizJobResult final {
+  QuizCoreRpcStatus status = QuizCoreRpcStatus::kUnknown;
+  std::string error_code;
+  std::string error_message;
+  std::string job_id;
+  std::string status_text;
+};
+
 class QuizCoreClient {
 public:
   virtual ~QuizCoreClient() = default;
@@ -183,6 +243,26 @@ public:
   virtual QuizCoreGetBotResult getBotStatus(const std::string& userId,
                                             const std::string& botId,
                                             const std::string& requestId = "") = 0;
+  virtual QuizCoreCreateQuizResult createQuiz(const std::string& ownerUserId,
+                                              const std::string& title,
+                                              const std::string& description,
+                                              const std::vector<QuizCoreQuizQuestion>& questions,
+                                              const std::string& requestId = "") = 0;
+  virtual QuizCoreListQuizzesResult listQuizzes(const std::optional<std::string>& ownerUserId,
+                                                uint32_t pageSize,
+                                                const std::string& pageToken,
+                                                const std::string& requestId = "") = 0;
+  virtual QuizCoreGetQuizResult getQuiz(const std::string& quizId,
+                                        const std::string& requestId = "") = 0;
+  virtual QuizCoreUpdateQuizResult updateQuiz(const QuizCoreQuiz& quiz,
+                                              const std::string& requestId = "") = 0;
+  virtual QuizCorePublishQuizResult publishQuiz(const std::string& quizId,
+                                                const std::string& requestedByUserId,
+                                                const std::string& requestId = "") = 0;
+  virtual QuizCoreStartAiQuizJobResult startAiQuizJob(const std::string& requestedByUserId,
+                                                      const std::string& prompt,
+                                                      const std::optional<uint32_t>& desiredQuestionCount,
+                                                      const std::string& requestId = "") = 0;
   virtual bool pingHealth(const std::string& requestId = "") = 0;
 };
 
@@ -190,6 +270,7 @@ class QuizCoreClientGrpc final : public QuizCoreClient {
 public:
   QuizCoreClientGrpc(const std::string& gameAddr,
                      const std::string& joinAddr,
+                     const std::string& quizAddr,
                      const std::string& botAddr,
                      int deadlineMsCreateRoom,
                      int deadlineMsIssueJoinTicket,
@@ -199,7 +280,13 @@ public:
                      int deadlineMsResumeGame,
                      int deadlineMsNextQuestion,
                      int deadlineMsSubmitAnswer,
-                     int deadlineMsGetRoomState);
+                     int deadlineMsGetRoomState,
+                     int deadlineMsCreateQuiz,
+                     int deadlineMsListQuizzes,
+                     int deadlineMsGetQuiz,
+                     int deadlineMsUpdateQuiz,
+                     int deadlineMsPublishQuiz,
+                     int deadlineMsStartAiQuizJob);
   ~QuizCoreClientGrpc() override;
 
   QuizCoreClientGrpc(const QuizCoreClientGrpc&) = delete;
@@ -254,6 +341,26 @@ public:
   QuizCoreGetBotResult getBotStatus(const std::string& userId,
                                     const std::string& botId,
                                     const std::string& requestId = "") override;
+  QuizCoreCreateQuizResult createQuiz(const std::string& ownerUserId,
+                                      const std::string& title,
+                                      const std::string& description,
+                                      const std::vector<QuizCoreQuizQuestion>& questions,
+                                      const std::string& requestId = "") override;
+  QuizCoreListQuizzesResult listQuizzes(const std::optional<std::string>& ownerUserId,
+                                        uint32_t pageSize,
+                                        const std::string& pageToken,
+                                        const std::string& requestId = "") override;
+  QuizCoreGetQuizResult getQuiz(const std::string& quizId,
+                                const std::string& requestId = "") override;
+  QuizCoreUpdateQuizResult updateQuiz(const QuizCoreQuiz& quiz,
+                                      const std::string& requestId = "") override;
+  QuizCorePublishQuizResult publishQuiz(const std::string& quizId,
+                                        const std::string& requestedByUserId,
+                                        const std::string& requestId = "") override;
+  QuizCoreStartAiQuizJobResult startAiQuizJob(const std::string& requestedByUserId,
+                                              const std::string& prompt,
+                                              const std::optional<uint32_t>& desiredQuestionCount,
+                                              const std::string& requestId = "") override;
   bool pingHealth(const std::string& requestId = "") override;
 
 private:

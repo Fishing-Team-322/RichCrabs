@@ -10,6 +10,7 @@
 #include "common.pb.h"
 #include "game.grpc.pb.h"
 #include "join.grpc.pb.h"
+#include "quiz.grpc.pb.h"
 #include "richcrab.grpc.pb.h"
 
 using richcrab::v1::BotService;
@@ -32,6 +33,8 @@ using richcrab::v1::LeaveRoomRequest;
 using richcrab::v1::LeaveRoomResponse;
 using richcrab::v1::ListBotsRequest;
 using richcrab::v1::ListBotsResponse;
+using richcrab::v1::ListQuizzesRequest;
+using richcrab::v1::ListQuizzesResponse;
 using richcrab::v1::NextQuestionRequest;
 using richcrab::v1::NextQuestionResponse;
 using richcrab::v1::PauseGameRequest;
@@ -46,6 +49,19 @@ using richcrab::v1::StartGameRequest;
 using richcrab::v1::StartGameResponse;
 using richcrab::v1::SubmitAnswerRequest;
 using richcrab::v1::SubmitAnswerResponse;
+using richcrab::v1::CreateQuizRequest;
+using richcrab::v1::CreateQuizResponse;
+using richcrab::v1::GetQuizRequest;
+using richcrab::v1::GetQuizResponse;
+using richcrab::v1::PublishQuizRequest;
+using richcrab::v1::PublishQuizResponse;
+using richcrab::v1::Quiz;
+using richcrab::v1::QuizQuestion;
+using richcrab::v1::QuizService;
+using richcrab::v1::StartAiQuizJobRequest;
+using richcrab::v1::StartAiQuizJobResponse;
+using richcrab::v1::UpdateQuizRequest;
+using richcrab::v1::UpdateQuizResponse;
 using richcrab::v1::Health;
 using richcrab::v1::Error;
 using richcrab::v1::PingRequest;
@@ -99,6 +115,40 @@ QuizCoreBot mapBot(const richcrab::v1::Bot& bot) {
   return out;
 }
 
+QuizCoreQuizQuestion mapQuizQuestion(const QuizQuestion& q) {
+  QuizCoreQuizQuestion out;
+  out.id = q.id();
+  out.text = q.text();
+  for (const auto& option : q.options()) out.options.push_back(option);
+  if (q.has_correct_option_index()) out.correct_option_index = q.correct_option_index();
+  return out;
+}
+
+QuizCoreQuiz mapQuiz(const Quiz& quiz) {
+  QuizCoreQuiz out;
+  out.quiz_id = quiz.quiz_id().value();
+  out.owner_user_id = quiz.owner_user_id().value();
+  out.title = quiz.title();
+  out.description = quiz.description();
+  for (const auto& question : quiz.questions()) out.questions.push_back(mapQuizQuestion(question));
+  return out;
+}
+
+void setQuizQuestion(const QuizCoreQuizQuestion& input, QuizQuestion* output) {
+  output->set_id(input.id);
+  output->set_text(input.text);
+  for (const auto& option : input.options) output->add_options(option);
+  if (input.correct_option_index.has_value()) output->set_correct_option_index(*input.correct_option_index);
+}
+
+void setQuiz(const QuizCoreQuiz& input, Quiz* output) {
+  output->mutable_quiz_id()->set_value(input.quiz_id);
+  output->mutable_owner_user_id()->set_value(input.owner_user_id);
+  output->set_title(input.title);
+  output->set_description(input.description);
+  for (const auto& question : input.questions) setQuizQuestion(question, output->add_questions());
+}
+
 void attachUserId(grpc::ClientContext& ctx, const std::string& userId) {
   ctx.AddMetadata("x-user-id", userId);
 }
@@ -112,6 +162,7 @@ class QuizCoreClientGrpc::Impl final {
 public:
   Impl(const std::string& gameAddr,
        const std::string& joinAddr,
+       const std::string& quizAddr,
        const std::string& botAddr,
        int deadlineMsCreateRoom,
        int deadlineMsIssueJoinTicket,
@@ -121,7 +172,13 @@ public:
        int deadlineMsResumeGame,
        int deadlineMsNextQuestion,
        int deadlineMsSubmitAnswer,
-       int deadlineMsGetRoomState)
+       int deadlineMsGetRoomState,
+       int deadlineMsCreateQuiz,
+       int deadlineMsListQuizzes,
+       int deadlineMsGetQuiz,
+       int deadlineMsUpdateQuiz,
+       int deadlineMsPublishQuiz,
+       int deadlineMsStartAiQuizJob)
       : deadline_ms_create_room(deadlineMsCreateRoom),
         deadline_ms_issue_join_ticket(deadlineMsIssueJoinTicket),
         deadline_ms_join_room(deadlineMsJoinRoom),
@@ -130,18 +187,27 @@ public:
         deadline_ms_resume_game(deadlineMsResumeGame),
         deadline_ms_next_question(deadlineMsNextQuestion),
         deadline_ms_submit_answer(deadlineMsSubmitAnswer),
-        deadline_ms_get_room_state(deadlineMsGetRoomState) {
+        deadline_ms_get_room_state(deadlineMsGetRoomState),
+        deadline_ms_create_quiz(deadlineMsCreateQuiz),
+        deadline_ms_list_quizzes(deadlineMsListQuizzes),
+        deadline_ms_get_quiz(deadlineMsGetQuiz),
+        deadline_ms_update_quiz(deadlineMsUpdateQuiz),
+        deadline_ms_publish_quiz(deadlineMsPublishQuiz),
+        deadline_ms_start_ai_quiz_job(deadlineMsStartAiQuizJob) {
     auto gameChannel = grpc::CreateChannel(gameAddr, grpc::InsecureChannelCredentials());
     auto joinChannel = grpc::CreateChannel(joinAddr, grpc::InsecureChannelCredentials());
+    auto quizChannel = grpc::CreateChannel(quizAddr, grpc::InsecureChannelCredentials());
     auto botChannel = grpc::CreateChannel(botAddr, grpc::InsecureChannelCredentials());
     game = GameService::NewStub(gameChannel);
     join = JoinService::NewStub(joinChannel);
+    quiz = QuizService::NewStub(quizChannel);
     bot = BotService::NewStub(botChannel);
     health = Health::NewStub(gameChannel);
   }
 
   std::unique_ptr<GameService::Stub> game;
   std::unique_ptr<JoinService::Stub> join;
+  std::unique_ptr<QuizService::Stub> quiz;
   std::unique_ptr<BotService::Stub> bot;
   std::unique_ptr<Health::Stub> health;
   int deadline_ms_create_room;
@@ -153,10 +219,17 @@ public:
   int deadline_ms_next_question;
   int deadline_ms_submit_answer;
   int deadline_ms_get_room_state;
+  int deadline_ms_create_quiz;
+  int deadline_ms_list_quizzes;
+  int deadline_ms_get_quiz;
+  int deadline_ms_update_quiz;
+  int deadline_ms_publish_quiz;
+  int deadline_ms_start_ai_quiz_job;
 };
 
 QuizCoreClientGrpc::QuizCoreClientGrpc(const std::string& gameAddr,
                                        const std::string& joinAddr,
+                                       const std::string& quizAddr,
                                        const std::string& botAddr,
                                        int deadlineMsCreateRoom,
                                        int deadlineMsIssueJoinTicket,
@@ -166,9 +239,16 @@ QuizCoreClientGrpc::QuizCoreClientGrpc(const std::string& gameAddr,
                                        int deadlineMsResumeGame,
                                        int deadlineMsNextQuestion,
                                        int deadlineMsSubmitAnswer,
-                                       int deadlineMsGetRoomState)
+                                       int deadlineMsGetRoomState,
+                                       int deadlineMsCreateQuiz,
+                                       int deadlineMsListQuizzes,
+                                       int deadlineMsGetQuiz,
+                                       int deadlineMsUpdateQuiz,
+                                       int deadlineMsPublishQuiz,
+                                       int deadlineMsStartAiQuizJob)
     : impl_(std::make_unique<Impl>(gameAddr,
                                    joinAddr,
+                                   quizAddr,
                                    botAddr,
                                    deadlineMsCreateRoom,
                                    deadlineMsIssueJoinTicket,
@@ -178,7 +258,13 @@ QuizCoreClientGrpc::QuizCoreClientGrpc(const std::string& gameAddr,
                                    deadlineMsResumeGame,
                                    deadlineMsNextQuestion,
                                    deadlineMsSubmitAnswer,
-                                   deadlineMsGetRoomState)) {}
+                                   deadlineMsGetRoomState,
+                                   deadlineMsCreateQuiz,
+                                   deadlineMsListQuizzes,
+                                   deadlineMsGetQuiz,
+                                   deadlineMsUpdateQuiz,
+                                   deadlineMsPublishQuiz,
+                                   deadlineMsStartAiQuizJob)) {}
 
 QuizCoreClientGrpc::~QuizCoreClientGrpc() = default;
 
@@ -606,6 +692,176 @@ QuizCoreGetBotResult QuizCoreClientGrpc::getBotStatus(const std::string& userId,
   if (!resp.has_bot()) return out;
   out.status = QuizCoreRpcStatus::kOk;
   out.bot = mapBot(resp.bot());
+  return out;
+}
+
+QuizCoreCreateQuizResult QuizCoreClientGrpc::createQuiz(const std::string& ownerUserId,
+                                                            const std::string& title,
+                                                            const std::string& description,
+                                                            const std::vector<QuizCoreQuizQuestion>& questions,
+                                                            const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_create_quiz));
+
+  CreateQuizRequest req;
+  req.mutable_owner_user_id()->set_value(ownerUserId);
+  req.set_title(title);
+  req.set_description(description);
+  for (const auto& question : questions) setQuizQuestion(question, req.add_questions());
+
+  CreateQuizResponse resp;
+  const auto status = impl_->quiz->CreateQuiz(&ctx, req, &resp);
+
+  QuizCoreCreateQuizResult out;
+  out.status = mapStatus(status);
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
+  if (resp.has_quiz()) out.quiz = mapQuiz(resp.quiz());
+  out.status = QuizCoreRpcStatus::kOk;
+  return out;
+}
+
+QuizCoreListQuizzesResult QuizCoreClientGrpc::listQuizzes(const std::optional<std::string>& ownerUserId,
+                                                          uint32_t pageSize,
+                                                          const std::string& pageToken,
+                                                          const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_list_quizzes));
+
+  ListQuizzesRequest req;
+  if (ownerUserId.has_value()) req.mutable_owner_user_id()->set_value(*ownerUserId);
+  req.set_page_size(pageSize);
+  req.set_page_token(pageToken);
+
+  ListQuizzesResponse resp;
+  const auto status = impl_->quiz->ListQuizzes(&ctx, req, &resp);
+
+  QuizCoreListQuizzesResult out;
+  out.status = mapStatus(status);
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
+  out.status = QuizCoreRpcStatus::kOk;
+  out.next_page_token = resp.next_page_token();
+  for (const auto& quiz : resp.quizzes()) out.quizzes.push_back(mapQuiz(quiz));
+  return out;
+}
+
+QuizCoreGetQuizResult QuizCoreClientGrpc::getQuiz(const std::string& quizId,
+                                                  const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_get_quiz));
+
+  GetQuizRequest req;
+  req.mutable_quiz_id()->set_value(quizId);
+
+  GetQuizResponse resp;
+  const auto status = impl_->quiz->GetQuiz(&ctx, req, &resp);
+
+  QuizCoreGetQuizResult out;
+  out.status = mapStatus(status);
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
+  if (resp.has_quiz()) out.quiz = mapQuiz(resp.quiz());
+  out.status = QuizCoreRpcStatus::kOk;
+  return out;
+}
+
+QuizCoreUpdateQuizResult QuizCoreClientGrpc::updateQuiz(const QuizCoreQuiz& quiz,
+                                                        const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_update_quiz));
+
+  UpdateQuizRequest req;
+  setQuiz(quiz, req.mutable_quiz());
+
+  UpdateQuizResponse resp;
+  const auto status = impl_->quiz->UpdateQuiz(&ctx, req, &resp);
+
+  QuizCoreUpdateQuizResult out;
+  out.status = mapStatus(status);
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
+  if (resp.has_quiz()) out.quiz = mapQuiz(resp.quiz());
+  out.status = QuizCoreRpcStatus::kOk;
+  return out;
+}
+
+QuizCorePublishQuizResult QuizCoreClientGrpc::publishQuiz(const std::string& quizId,
+                                                          const std::string& requestedByUserId,
+                                                          const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_publish_quiz));
+
+  PublishQuizRequest req;
+  req.mutable_quiz_id()->set_value(quizId);
+  req.mutable_requested_by()->set_value(requestedByUserId);
+
+  PublishQuizResponse resp;
+  const auto status = impl_->quiz->PublishQuiz(&ctx, req, &resp);
+
+  QuizCorePublishQuizResult out;
+  out.status = mapStatus(status);
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
+  if (resp.has_quiz()) out.quiz = mapQuiz(resp.quiz());
+  out.published_version = resp.published_version();
+  out.status = QuizCoreRpcStatus::kOk;
+  return out;
+}
+
+QuizCoreStartAiQuizJobResult QuizCoreClientGrpc::startAiQuizJob(
+    const std::string& requestedByUserId,
+    const std::string& prompt,
+    const std::optional<uint32_t>& desiredQuestionCount,
+    const std::string& requestId) {
+  grpc::ClientContext ctx;
+  attachRequestId(ctx, requestId);
+  ctx.set_deadline(std::chrono::system_clock::now() +
+                   std::chrono::milliseconds(impl_->deadline_ms_start_ai_quiz_job));
+
+  StartAiQuizJobRequest req;
+  req.mutable_requested_by()->set_value(requestedByUserId);
+  req.set_prompt(prompt);
+  if (desiredQuestionCount.has_value()) req.set_desired_question_count(*desiredQuestionCount);
+
+  StartAiQuizJobResponse resp;
+  const auto status = impl_->quiz->StartAiQuizJob(&ctx, req, &resp);
+
+  QuizCoreStartAiQuizJobResult out;
+  out.status = mapStatus(status);
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
+  out.job_id = resp.job_id();
+  out.status_text = resp.status();
+  out.status = QuizCoreRpcStatus::kOk;
   return out;
 }
 
