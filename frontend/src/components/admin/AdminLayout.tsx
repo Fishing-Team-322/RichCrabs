@@ -3,7 +3,6 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { routes } from '../../app/router/routeMap'
 import { IconGrid, IconKey, IconRooms, IconShield } from '../Icons'
 import { TokenModal } from '../TokenModal'
-import { setToken } from '../../api'
 import '../../styles/admin.css'
 
 export interface AdminOutletContext {
@@ -93,7 +92,7 @@ const AdminLayout = () => {
         open={tokenModalOpen}
         onClose={() => setTokenModalOpen(false)}
         onSave={(token) => {
-          setToken(token)
+          localStorage.setItem('admin_token', token)
           setTokenModalOpen(false)
         }}
       />
