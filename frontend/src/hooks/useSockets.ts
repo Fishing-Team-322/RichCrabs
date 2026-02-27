@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { connectSocket, disconnectSocket, getSocket } from '../services/socket'
+import { connectSocket, disconnectSocket, getSocket, requestGameState, subscribeConnectionEvents } from '../services/socket'
 import { useAppDispatch } from '../store/hooks'
 import {
   setPlayers,
@@ -56,6 +56,22 @@ export const useGameSocket = (pin: string, playerId: string) => {
       dispatch(setStatus('finished'))
     }
 
+    const onConnection = () => {
+      requestGameState()
+    }
+
+    const onReconnect = () => {
+      dispatch(setStatus('waiting'))
+    }
+
+    socket.off('players-update', onPlayersUpdate)
+    socket.off('game-started', onGameStarted)
+    socket.off('question', onQuestion)
+    socket.off('turn', onTurn)
+    socket.off('score-update', onScoreUpdate)
+    socket.off('time-update', onTimeUpdate)
+    socket.off('game-finished', onGameFinished)
+
     socket.on('players-update', onPlayersUpdate)
     socket.on('game-started', onGameStarted)
     socket.on('question', onQuestion)
@@ -63,6 +79,16 @@ export const useGameSocket = (pin: string, playerId: string) => {
     socket.on('score-update', onScoreUpdate)
     socket.on('time-update', onTimeUpdate)
     socket.on('game-finished', onGameFinished)
+
+    const unsubscribeConnection = subscribeConnectionEvents((snapshot) => {
+      if (snapshot.state === 'connected') {
+        onConnection()
+      }
+
+      if (snapshot.state === 'reconnecting' || snapshot.state === 'error') {
+        onReconnect()
+      }
+    })
 
     return () => {
       socket.off('players-update', onPlayersUpdate)
@@ -72,6 +98,7 @@ export const useGameSocket = (pin: string, playerId: string) => {
       socket.off('score-update', onScoreUpdate)
       socket.off('time-update', onTimeUpdate)
       socket.off('game-finished', onGameFinished)
+      unsubscribeConnection()
       disconnectSocket()
     }
   }, [pin, playerId, dispatch])
