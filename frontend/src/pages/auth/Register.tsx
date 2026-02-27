@@ -37,7 +37,8 @@ const Register = () => {
   }
 
   return (
-    <section className="authCard">
+    <div className="authPage">
+      <section className="authCard">
       <h1>{t('auth.registerTitle')}</h1>
       <p className="homeMuted">{t('auth.registerSubtitle')}</p>
       <Link to={routes.home} className="accountAction">{t('common.backToHome')}</Link>
@@ -61,7 +62,8 @@ const Register = () => {
       <p className="homeMuted">
         Уже есть аккаунт? <Link to={routes.authLogin}>Войти</Link>
       </p>
-    </section>
+      </section>
+    </div>
   )
 }
 

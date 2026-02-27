@@ -59,9 +59,16 @@ a { color: inherit; }
   box-shadow: var(--shadow-soft);
 }
 
+.authPage {
+  min-height: 100vh;
+  padding: 16px;
+  display: grid;
+  align-items: center;
+}
+
 .authCard {
-  max-width: 500px;
-  margin: 48px auto;
+  width: min(500px, 100%);
+  margin: 0 auto;
   display: grid;
   gap: 14px;
 }
@@ -98,5 +105,5 @@ a { color: inherit; }
 }
 
 @media (max-width: 760px) {
-  .authCard { margin: 24px auto; }
+  .authPage { padding: 12px; }
 }

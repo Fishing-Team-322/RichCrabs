@@ -22,29 +22,21 @@ const HomePage: React.FC = () => {
   const plans = useMemo(
     () => [
       {
-        title: 'Starter',
-        price: '$19',
-        period: 'monthly',
+        title: 'Free',
+        price: '₽0',
+        period: 'навсегда',
         points: [features[0]?.title, features[1]?.title, t('home.actions.join')],
         cta: t('home.actions.createQuiz'),
         to: routes.quizzesNew,
       },
       {
-        title: 'Scale',
-        price: '$49',
-        period: 'monthly',
+        title: 'Pro',
+        price: '₽300',
+        period: 'в месяц',
         points: [features[0]?.description, features[1]?.description, features[2]?.title],
         cta: t('home.actions.plans'),
         to: routes.subscriptions,
         featured: true,
-      },
-      {
-        title: 'Enterprise',
-        price: '$99',
-        period: 'monthly',
-        points: [features[2]?.description, t('home.faqTitle'), t('home.actions.join')],
-        cta: t('home.actions.plans'),
-        to: routes.subscriptions,
       },
     ],
     [features, t],
@@ -106,12 +98,12 @@ const HomePage: React.FC = () => {
       <section id="pricing" className="homePricingWrap">
         <div className="sectionHeading">
           <Badge tone="neutral">{t('home.actions.plans')}</Badge>
-          <h2>Predictable pricing for every team stage</h2>
+          <h2>Два простых тарифа: бесплатный и Pro</h2>
         </div>
         <div className="pricingGrid">
           {plans.map((plan) => (
             <article key={plan.title} className={`homeGlassCard pricingCard ${plan.featured ? 'isFeatured' : ''}`}>
-              {plan.featured && <span className="planBadge">Most popular</span>}
+              {plan.featured && <span className="planBadge">Рекомендуем</span>}
               <h3>{plan.title}</h3>
               <p className="planPrice">{plan.price} <span>{plan.period}</span></p>
               <ul>

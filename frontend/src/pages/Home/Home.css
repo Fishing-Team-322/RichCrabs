@@ -67,7 +67,7 @@
   width: 100%;
 }
 
-.homeCenterGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.homeCenterGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .homeGlassCard {
   border-radius: 20px;
   padding: 22px;
@@ -79,7 +79,7 @@
 .sectionHeading { margin-bottom: 18px; }
 .sectionHeading h2 { margin: 10px 0 0; font-size: clamp(28px, 3.5vw, 44px); max-width: 18ch; }
 
-.pricingGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.pricingGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .pricingCard { position: relative; display: grid; gap: 16px; }
 .planBadge {
   position: absolute;
