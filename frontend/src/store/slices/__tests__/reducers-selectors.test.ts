@@ -32,7 +32,7 @@ describe('reducers and selectors', () => {
               title: 'Old title',
               language: 'ru',
               tags: [],
-              status: 'draft',
+              status: 'draft' as const,
               updatedAt: new Date().toISOString(),
               questionsCount: 10,
             },

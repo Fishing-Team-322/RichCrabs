@@ -1,3 +1,4 @@
+import type { Socket } from 'socket.io-client'
 import { useEffect } from 'react'
 import { connectSocket, disconnectSocket, getSocket, requestGameState, subscribeConnectionEvents } from '../services/socket'
 import { useAppDispatch } from '../store/hooks'
@@ -19,7 +20,7 @@ export const useGameSocket = (pin: string, playerId: string) => {
       connectSocket('guest', pin)
     }
 
-    const socket = getSocket()
+    const socket = getSocket() as Socket | null
     if (!socket) {
       return
     }

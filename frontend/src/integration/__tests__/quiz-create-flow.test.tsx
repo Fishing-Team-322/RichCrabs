@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import QuizCreate from '../../pages/quizzes/QuizCreate'
 import { renderWithProviders } from '../../test/renderWithProviders'
 import { quizApi } from '../../services/quizApi'
+import type { GenerateQuizDraftRequestDto, QuizGenerationStatus } from '../../types/quiz.types'
 
 vi.mock('../../services/quizApi', () => ({
   quizApi: {
@@ -14,7 +15,7 @@ vi.mock('../../services/quizApi', () => ({
 
 describe('integration: quiz create flow', () => {
   it('creates quiz via AI flow and redirects to editor', async () => {
-    vi.mocked(quizApi.generateDraft).mockImplementation(async (_payload, onStatus) => {
+    vi.mocked(quizApi.generateDraft).mockImplementation(async (_payload: GenerateQuizDraftRequestDto, onStatus: ((status: QuizGenerationStatus) => void) | undefined) => {
       onStatus?.('running')
       return {
         id: 'draft-42',
