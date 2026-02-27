@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { routes } from '../../app/router/routeMap'
 import { roomsApi } from '../../services/roomsApi'
-import type { RoomDetailsDto } from '../../types/room.types'
+import type { RoomDetailsDto, RoomInviteDto } from '../../types/room.types'
 import './rooms.css'
 
 const RoomDetails = () => {
@@ -11,6 +11,7 @@ const RoomDetails = () => {
   const [loading, setLoading] = useState(true)
   const [pendingAction, setPendingAction] = useState(false)
   const [error, setError] = useState('')
+  const [invite, setInvite] = useState<RoomInviteDto | null>(null)
 
   useEffect(() => {
     if (!roomId) return
@@ -23,18 +24,22 @@ const RoomDetails = () => {
     return unsubscribe
   }, [roomId])
 
+  useEffect(() => {
+    if (!roomId) return
+    roomsApi.regenerateInvite(roomId).then(setInvite).catch(() => undefined)
+  }, [roomId])
+
   const inviteLink = useMemo(() => {
-    if (!room?.inviteLink) return ''
-    if (/^https?:\/\//.test(room.inviteLink)) {
-      return room.inviteLink
-    }
-    return `${window.location.origin}${room.inviteLink}`
-  }, [room])
+    const path = invite?.invitePath ?? room?.inviteLink
+    if (!path) return ''
+    if (/^https?:\/\//.test(path)) return path
+    return `${window.location.origin}${path}`
+  }, [invite, room])
 
   const qrCodeUrl = useMemo(() => {
-    if (!inviteLink) return ''
-    return `https://api.qrserver.com/v1/create-qr-code/?size=168x168&margin=10&data=${encodeURIComponent(inviteLink)}`
-  }, [inviteLink])
+    if (!invite?.inviteQrSvg) return ''
+    return `data:image/svg+xml;utf8,${encodeURIComponent(invite.inviteQrSvg)}`
+  }, [invite])
 
   const copyText = async (text: string) => {
     try {
@@ -107,6 +112,9 @@ const RoomDetails = () => {
             <a href={inviteLink}>{inviteLink}</a>
             <button className="roomButton" onClick={() => void copyText(inviteLink)}>
               Копировать ссылку
+            </button>
+            <button className="roomButton" onClick={() => roomId && void roomsApi.regenerateInvite(roomId).then(setInvite).catch(() => setError('Не удалось обновить приглашение.'))}>
+              Обновить приглашение
             </button>
           </div>
 

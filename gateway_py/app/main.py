@@ -197,9 +197,42 @@ def create_game(req: Request, body: dict[str, Any]):
     except grpc.RpcError as ex:
         c,b = map_grpc_err(ex, "create_room"); return JSONResponse(b,status_code=c)
     claims = SessionClaims(session_type="game", role="host", pin=x.pin, room_id=x.room_id.value, user_id=uid)
-    out = JSONResponse({"pin": x.pin, "inviteToken": x.invite_token, "inviteUrl": f"{settings.public_base_url}/invite/{x.invite_token}", "wsUrl": f"{settings.public_base_url}/ws"})
+    invite_path = x.invite_path or f"/join?inviteToken={x.invite_token}"
+    out = JSONResponse({
+        "pin": x.pin,
+        "inviteToken": x.invite_token,
+        "invitePath": invite_path,
+        "inviteQrSvg": x.invite_qr_svg,
+        "wsUrl": f"{settings.public_base_url}/ws",
+    })
     set_auth(out, claims)
     return out
+
+
+@app.post("/api/v1/games/{pin}/invite/regenerate")
+def regenerate_invite(pin: str, req: Request):
+    s = session_from_req(req)
+    if not s or s.role != "host" or not s.room_id or not s.user_id:
+        return err(401, "unauthorized", "session cookie is missing or invalid")
+    if s.pin and s.pin != pin:
+        return err(403, "forbidden", "pin must match host session")
+    if (e := require_csrf(req)):
+        return e
+    try:
+        x = clients.game.RegenerateInvite(
+            game_pb2.RegenerateInviteRequest(
+                room_id=common_pb2.RoomId(value=s.room_id),
+                requested_by=common_pb2.UserId(value=s.user_id),
+            )
+        )
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "regenerate_invite")
+        return JSONResponse(b, status_code=c)
+    return {
+        "inviteToken": x.invite_token,
+        "invitePath": x.invite_path,
+        "inviteQrSvg": x.invite_qr_svg,
+    }
 
 
 def _join_response(pin: str, room_id: str, player_id: str):

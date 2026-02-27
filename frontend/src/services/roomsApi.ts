@@ -5,6 +5,7 @@ import type {
   ListRoomsParams,
   RoomDetailsDto,
   RoomStateDto,
+  RoomInviteDto,
   RoomsListResponseDto,
 } from '../types/room.types'
 
@@ -51,12 +52,12 @@ const mapStateToRoomDetails = (payload: {
 
 export const roomsApi = {
   create: (payload: CreateRoomRequestDto) =>
-    apiFetch<{ pin: string; inviteUrl: string }>(GAMES_BASE, {
+    apiFetch<{ pin: string; invitePath: string }>(GAMES_BASE, {
       method: 'POST',
-      body: JSON.stringify({ ownerUserId: '', quizId: payload.quizId, title: `Quiz ${payload.quizId}` }),
+      body: JSON.stringify({ ownerUserId: payload.ownerUserId, quizId: payload.quizId, title: `Quiz ${payload.quizId}` }),
     }).then((res): RoomDetailsDto => ({
       ...mapStateToRoomDetails({ pin: res.pin, state: 'lobby', players: [] }),
-      inviteLink: res.inviteUrl,
+      inviteLink: res.invitePath,
       settings: payload.settings,
       playerLimit: payload.settings.playerLimit,
     })),
@@ -87,6 +88,12 @@ export const roomsApi = {
 
   close: (roomId: string) =>
     apiFetch<void>(`${GAMES_BASE}/${encodeURIComponent(roomId)}/leave`, {
+      method: 'POST',
+    }),
+
+
+  regenerateInvite: (roomId: string) =>
+    apiFetch<RoomInviteDto>(`${GAMES_BASE}/${encodeURIComponent(roomId)}/invite/regenerate`, {
       method: 'POST',
     }),
 
