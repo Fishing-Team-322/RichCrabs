@@ -5,18 +5,17 @@
 
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <regex>
 #include <sstream>
 #include <string>
-#include <unordered_map>
 
 #include "controllers/BotStateStorage.hpp"
 #include "controllers/ControllerUtils.hpp"
 #include "controllers/TelegramWebhookClient.hpp"
 #include "http_api_utils.hpp"
 #include "random.hpp"
+#include "redis_utils.hpp"
 
 namespace {
 
@@ -61,53 +60,83 @@ struct TelegramRoomSnapshot final {
   std::string invite_url;
 };
 
-class TelegramBindings final {
-public:
-  TelegramBotBinding save(const TelegramBotBinding& binding) {
-    std::lock_guard<std::mutex> lock(mu_);
-    by_id_[binding.bot_id] = binding;
-    return binding;
+std::string quoteRedisArg(const std::string& arg) {
+  std::string escaped = "'";
+  for (const auto ch : arg) {
+    if (ch == '\'') {
+      escaped += "'\\''";
+    } else {
+      escaped.push_back(ch);
+    }
   }
-
-  std::optional<TelegramBotBinding> get(const std::string& bot_id) const {
-    std::lock_guard<std::mutex> lock(mu_);
-    auto it = by_id_.find(bot_id);
-    if (it == by_id_.end()) return std::nullopt;
-    return it->second;
-  }
-
-private:
-  mutable std::mutex mu_;
-  std::unordered_map<std::string, TelegramBotBinding> by_id_;
-};
-
-class TelegramRoomMemory final {
-public:
-  void saveLastRoom(const std::string& botId, const TelegramRoomSnapshot& room) {
-    std::lock_guard<std::mutex> lock(mu_);
-    by_bot_[botId] = room;
-  }
-
-  std::optional<TelegramRoomSnapshot> getLastRoom(const std::string& botId) const {
-    std::lock_guard<std::mutex> lock(mu_);
-    auto it = by_bot_.find(botId);
-    if (it == by_bot_.end()) return std::nullopt;
-    return it->second;
-  }
-
-private:
-  mutable std::mutex mu_;
-  std::unordered_map<std::string, TelegramRoomSnapshot> by_bot_;
-};
-
-TelegramBindings& bindings() {
-  static TelegramBindings s;
-  return s;
+  escaped.push_back('\'');
+  return escaped;
 }
 
-TelegramRoomMemory& roomMemory() {
-  static TelegramRoomMemory s;
-  return s;
+std::string redisBotBindingKey(const std::string& botId) {
+  return "gateway:telegram:binding:" + botId;
+}
+
+std::string redisLastRoomKey(const std::string& botId) {
+  return "gateway:telegram:last_room:" + botId;
+}
+
+bool saveBinding(const Config& conf, const TelegramBotBinding& binding) {
+  const auto key = redisBotBindingKey(binding.bot_id);
+  const auto command =
+      "HSET " + quoteRedisArg(key) +
+      " bot_id " + quoteRedisArg(binding.bot_id) +
+      " secret " + quoteRedisArg(binding.secret) +
+      " token " + quoteRedisArg(binding.token.reveal()) +
+      " owner_user_id " + quoteRedisArg(binding.owner_user_id) +
+      " name " + quoteRedisArg(binding.name);
+  return RedisRunRaw(conf.redis_url, command).has_value();
+}
+
+std::optional<TelegramBotBinding> getBinding(const Config& conf, const std::string& botId) {
+  const auto key = redisBotBindingKey(botId);
+  const auto secret = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " secret");
+  const auto token = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " token");
+  const auto ownerUserId = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " owner_user_id");
+  const auto name = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " name");
+  if (!secret || !token || !ownerUserId || !name || secret->empty() || token->empty() || ownerUserId->empty()) {
+    return std::nullopt;
+  }
+  return TelegramBotBinding{
+      .bot_id = botId,
+      .secret = *secret,
+      .token = TelegramBotBinding::ProtectedToken::fromPlain(*token),
+      .owner_user_id = *ownerUserId,
+      .name = *name,
+  };
+}
+
+bool saveLastRoom(const Config& conf, const std::string& botId, const TelegramRoomSnapshot& room) {
+  const auto key = redisLastRoomKey(botId);
+  const auto command =
+      "HSET " + quoteRedisArg(key) +
+      " room_id " + quoteRedisArg(room.room_id) +
+      " pin " + quoteRedisArg(room.pin) +
+      " invite_token " + quoteRedisArg(room.invite_token) +
+      " invite_url " + quoteRedisArg(room.invite_url);
+  return RedisRunRaw(conf.redis_url, command).has_value();
+}
+
+std::optional<TelegramRoomSnapshot> getLastRoom(const Config& conf, const std::string& botId) {
+  const auto key = redisLastRoomKey(botId);
+  const auto roomId = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " room_id");
+  const auto pin = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " pin");
+  const auto inviteToken = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " invite_token");
+  const auto inviteUrl = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " invite_url");
+  if (!roomId || !pin || !inviteToken || !inviteUrl || roomId->empty() || pin->empty()) {
+    return std::nullopt;
+  }
+  return TelegramRoomSnapshot{
+      .room_id = *roomId,
+      .pin = *pin,
+      .invite_token = *inviteToken,
+      .invite_url = *inviteUrl,
+  };
 }
 
 bool isValidTelegramTokenFormat(const std::string& token) {
@@ -252,9 +281,9 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
                                     details));
           return;
         }
-        const std::string botId = "tg_" + util::random_hex(10);
+        const std::string botId = "bot_" + util::random_hex(24);
         const std::string secret = util::random_hex(24);
-        const std::string webhookPath = "/telegram/webhook/" + botId + "/" + secret;
+        const std::string webhookPath = "/api/v1/telegram/webhook/" + botId + "/" + secret;
         const std::string webhookUrl = conf.public_base_url + webhookPath;
         const std::string botTokenValue = *botToken;
         const std::string botName = name.value_or("Telegram Bot");
@@ -281,13 +310,16 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
                              static_cast<int>(reg.status));
               }
 
-              bindings().save({
+              const auto saved = saveBinding(conf, {
                   .bot_id = botId,
                   .secret = secret,
                   .token = TelegramBotBinding::ProtectedToken::fromPlain(botTokenValue),
                   .owner_user_id = ownerUserId,
                   .name = botName,
               });
+              if (!saved) {
+                spdlog::warn("telegram_connect redis_binding_save_failed request_id={} bot_id={}", requestId, botId);
+              }
 
               std::string stateError;
               SeedBotStateOwner(conf, botId, ownerUserId, botName, stateError);
@@ -318,12 +350,12 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
       {drogon::Post});
 
   drogon::app().registerHandler(
-      "/telegram/webhook/{1}/{2}",
+      "/api/v1/telegram/webhook/{1}/{2}",
       [&quizCore, conf, webhookClient](const drogon::HttpRequestPtr& req,
                                        std::function<void(const drogon::HttpResponsePtr&)>&& cb,
                                        std::string botId,
                                        std::string secret) {
-        auto binding = bindings().get(botId);
+        auto binding = getBinding(conf, botId);
         if (!binding) {
           cb(api::jsonErrorResponse(404, api::ErrorCode::kNotFound, "bot not found"));
           return;
@@ -375,7 +407,9 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
                 .invite_token = room->invite_token,
                 .invite_url = conf.public_base_url + "/invite/" + room->invite_token,
             };
-            roomMemory().saveLastRoom(botId, snapshot);
+            if (!saveLastRoom(conf, botId, snapshot)) {
+              spdlog::warn("telegram_room_snapshot_persist_failed request_id={} bot_id={}", requestId, botId);
+            }
             commandResult["status"] = "ok";
             commandResult["message"] = "room_created";
             commandResult["pin"] = snapshot.pin;
@@ -410,7 +444,7 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
             spdlog::warn("telegram_create_game_failed request_id={} bot_id={}", requestId, botId);
           }
         } else if (command && command->command == "/invite") {
-          auto lastRoom = roomMemory().getLastRoom(botId);
+          auto lastRoom = getLastRoom(conf, botId);
           if (lastRoom) {
             commandResult["status"] = "ok";
             commandResult["inviteUrl"] = lastRoom->invite_url;
@@ -433,7 +467,7 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
                               botId);
           }
         } else if (command && command->command == "/pin") {
-          auto lastRoom = roomMemory().getLastRoom(botId);
+          auto lastRoom = getLastRoom(conf, botId);
           if (lastRoom) {
             commandResult["status"] = "ok";
             commandResult["pin"] = lastRoom->pin;
