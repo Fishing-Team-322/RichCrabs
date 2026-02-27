@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, time::Duration};
 
 use aes_gcm::{
     aead::{Aead, KeyInit},
@@ -11,7 +11,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use sqlx::PgPool;
 use tonic::{Request, Response, Status};
-use tracing::info;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::repository::{Bot, BotRepository};
@@ -66,6 +66,12 @@ pub struct BotServiceImpl {
     webhook_base_url: String,
 }
 
+const TELEGRAM_CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
+const TELEGRAM_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+const TELEGRAM_READ_TIMEOUT: Duration = Duration::from_secs(10);
+const TELEGRAM_MAX_RETRIES: usize = 3;
+const TELEGRAM_RETRY_BASE_DELAY_MS: u64 = 200;
+
 impl BotServiceImpl {
     pub fn new(
         pool: PgPool,
@@ -79,10 +85,64 @@ impl BotServiceImpl {
         Self {
             repository: BotRepository::new(pool),
             entitlements,
-            http: Client::new(),
+            http: Client::builder()
+                .connect_timeout(TELEGRAM_CONNECT_TIMEOUT)
+                .timeout(TELEGRAM_REQUEST_TIMEOUT)
+                .read_timeout(TELEGRAM_READ_TIMEOUT)
+                .build()
+                .expect("failed to build telegram reqwest client"),
             encryption_key,
             webhook_base_url,
         }
+    }
+
+    async fn send_with_retry(
+        &self,
+        request_name: &'static str,
+        mut build_request: impl FnMut() -> reqwest::RequestBuilder,
+    ) -> Result<reqwest::Response, Status> {
+        for attempt in 1..=TELEGRAM_MAX_RETRIES {
+            match build_request().send().await {
+                Ok(response) => return Ok(response),
+                Err(err) => {
+                    let timed_out = err.is_timeout();
+                    let should_retry = timed_out || err.is_connect();
+                    if timed_out {
+                        shared::observability::error("bot", "telegram_timeout");
+                    }
+
+                    warn!(
+                        request_name,
+                        attempt,
+                        max_attempts = TELEGRAM_MAX_RETRIES,
+                        timed_out,
+                        should_retry,
+                        error = %err,
+                        "telegram request failed"
+                    );
+
+                    if !should_retry || attempt == TELEGRAM_MAX_RETRIES {
+                        return if timed_out {
+                            Err(Status::deadline_exceeded(format!(
+                                "telegram {request_name} timed out"
+                            )))
+                        } else {
+                            Err(Status::unavailable(format!(
+                                "telegram {request_name} failed: {err}"
+                            )))
+                        };
+                    }
+
+                    let jitter_ms = rand::random::<u64>() % 100;
+                    let backoff_ms = TELEGRAM_RETRY_BASE_DELAY_MS * attempt as u64 + jitter_ms;
+                    tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                }
+            }
+        }
+
+        Err(Status::unavailable(format!(
+            "telegram {request_name} failed after retries"
+        )))
     }
 
     async fn check_and_report(&self, user_id: &str, feature: &str) -> Result<(), Status> {
@@ -192,11 +252,11 @@ impl BotServiceImpl {
 
     async fn fetch_me(&self, token: &str) -> Result<TelegramBotInfo, Status> {
         let response = self
-            .http
-            .get(format!("https://api.telegram.org/bot{token}/getMe"))
-            .send()
-            .await
-            .map_err(|e| Status::unavailable(format!("telegram getMe failed: {e}")))?;
+            .send_with_retry("getMe", || {
+                self.http
+                    .get(format!("https://api.telegram.org/bot{token}/getMe"))
+            })
+            .await?;
         let body: TelegramGetMeResponse = response
             .json()
             .await
@@ -230,15 +290,15 @@ impl BotServiceImpl {
             self.webhook_base_url.trim_end_matches('/')
         );
         let response = self
-            .http
-            .post(format!("https://api.telegram.org/bot{token}/setWebhook"))
-            .json(&serde_json::json!({
-                "url": webhook_url,
-                "secret_token": webhook_secret,
-            }))
-            .send()
-            .await
-            .map_err(|e| Status::unavailable(format!("telegram setWebhook failed: {e}")))?;
+            .send_with_retry("setWebhook", || {
+                self.http
+                    .post(format!("https://api.telegram.org/bot{token}/setWebhook"))
+                    .json(&serde_json::json!({
+                        "url": webhook_url,
+                        "secret_token": webhook_secret,
+                    }))
+            })
+            .await?;
         let body: TelegramSetWebhookResponse = response
             .json()
             .await
@@ -254,13 +314,12 @@ impl BotServiceImpl {
 
     async fn get_webhook_status(&self, token: &str) -> Result<String, Status> {
         let response = self
-            .http
-            .get(format!(
-                "https://api.telegram.org/bot{token}/getWebhookInfo"
-            ))
-            .send()
-            .await
-            .map_err(|e| Status::unavailable(format!("telegram getWebhookInfo failed: {e}")))?;
+            .send_with_retry("getWebhookInfo", || {
+                self.http.get(format!(
+                    "https://api.telegram.org/bot{token}/getWebhookInfo"
+                ))
+            })
+            .await?;
         let body: TelegramWebhookInfoResponse = response
             .json()
             .await
@@ -291,10 +350,11 @@ impl BotServiceImpl {
 
     async fn delete_webhook(&self, token: &str) {
         let response = self
-            .http
-            .post(format!("https://api.telegram.org/bot{token}/deleteWebhook"))
-            .json(&serde_json::json!({"drop_pending_updates": false}))
-            .send()
+            .send_with_retry("deleteWebhook", || {
+                self.http
+                    .post(format!("https://api.telegram.org/bot{token}/deleteWebhook"))
+                    .json(&serde_json::json!({"drop_pending_updates": false}))
+            })
             .await;
         if let Ok(resp) = response {
             let _ = resp
@@ -304,6 +364,8 @@ impl BotServiceImpl {
                     let _ = body.ok;
                     let _ = body.description;
                 });
+        } else if let Err(err) = response {
+            warn!(error = %err, "telegram deleteWebhook failed");
         }
     }
 }
