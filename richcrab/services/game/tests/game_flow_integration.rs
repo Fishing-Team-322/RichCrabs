@@ -1,13 +1,12 @@
 use chrono::Utc;
 use game::{
-    domain::{RoomLifecycleState, RoomState},
+    domain::{GameQuestion, RoomLifecycleState, RoomState},
     room_actor::{spawn_room_actor, RoomCommand},
 };
 use tokio::sync::oneshot;
 
 #[tokio::test]
 async fn create_room_issue_ticket_join_start_submit_and_game_end() {
-    // CreateRoom
     let room_id = uuid::Uuid::new_v4().to_string();
     let owner_id = uuid::Uuid::new_v4().to_string();
     let state = RoomState {
@@ -17,6 +16,8 @@ async fn create_room_issue_ticket_join_start_submit_and_game_end() {
         title: "Integration room".to_string(),
         state: RoomLifecycleState::Lobby,
         players: Default::default(),
+        teams: Default::default(),
+        question_bank: Vec::new(),
         current_question: None,
         timer: None,
         result: None,
@@ -24,15 +25,13 @@ async fn create_room_issue_ticket_join_start_submit_and_game_end() {
     };
     let (room, _task) = spawn_room_actor(state, 64);
 
-    // IssueTicket (simulated in test)
     let join_ticket = format!("ticket-{}", uuid::Uuid::new_v4());
     assert!(join_ticket.starts_with("ticket-"));
 
-    // JoinRoom
     let (join_tx, join_rx) = oneshot::channel();
     room.tx
         .send(RoomCommand::Join {
-            user_id: "user-1".to_string(),
+            user_id: "".to_string(),
             display_name: "player-1".to_string(),
             response: join_tx,
         })
@@ -40,24 +39,28 @@ async fn create_room_issue_ticket_join_start_submit_and_game_end() {
         .expect("join command sent");
     let player_id = join_rx.await.expect("join response").expect("join ok");
 
-    // StartGame
     let (start_tx, start_rx) = oneshot::channel();
     room.tx
         .send(RoomCommand::StartGame {
             requested_by: owner_id,
+            questions: vec![GameQuestion {
+                question_id: "q1".to_string(),
+                question_text: "2+2?".to_string(),
+                options: vec!["3".to_string(), "4".to_string()],
+                correct_option_index: Some(1),
+            }],
             response: start_tx,
         })
         .await
         .expect("start command sent");
     start_rx.await.expect("start response").expect("start ok");
 
-    // SubmitAnswer
     let (answer_tx, answer_rx) = oneshot::channel();
     room.tx
         .send(RoomCommand::SubmitAnswer {
             player_id: player_id.clone(),
             question_id: "q1".to_string(),
-            answer: "correct".to_string(),
+            answer: "1".to_string(),
             response: answer_tx,
         })
         .await
@@ -68,7 +71,6 @@ async fn create_room_issue_ticket_join_start_submit_and_game_end() {
         .expect("answer accepted");
     assert_eq!(delta, 100);
 
-    // GameEnded
     let (state_tx, state_rx) = oneshot::channel();
     room.tx
         .send(RoomCommand::GetState { response: state_tx })

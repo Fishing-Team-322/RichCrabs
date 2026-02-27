@@ -1,5 +1,8 @@
 #include "config.hpp"
 #include <cstdlib>
+#include <algorithm>
+#include <cctype>
+#include <sstream>
 #include <stdexcept>
 
 static std::string envStr(const char* k, const std::string& d) {
@@ -44,8 +47,38 @@ Config Config::LoadFromEnv() {
   c.grpc_deadline_ms_issue_join_ticket = envInt("GW_GRPC_DEADLINE_MS_ISSUE_JOIN_TICKET", c.grpc_deadline_ms_issue_join_ticket);
   c.grpc_deadline_ms_join_room = envInt("GW_GRPC_DEADLINE_MS_JOIN_ROOM", c.grpc_deadline_ms_join_room);
   c.grpc_deadline_ms_start_game = envInt("GW_GRPC_DEADLINE_MS_START_GAME", c.grpc_deadline_ms_start_game);
+  c.grpc_deadline_ms_pause_game = envInt("GW_GRPC_DEADLINE_MS_PAUSE_GAME", c.grpc_deadline_ms_pause_game);
+  c.grpc_deadline_ms_resume_game = envInt("GW_GRPC_DEADLINE_MS_RESUME_GAME", c.grpc_deadline_ms_resume_game);
+  c.grpc_deadline_ms_next_question = envInt("GW_GRPC_DEADLINE_MS_NEXT_QUESTION", c.grpc_deadline_ms_next_question);
+  c.grpc_deadline_ms_submit_answer = envInt("GW_GRPC_DEADLINE_MS_SUBMIT_ANSWER", c.grpc_deadline_ms_submit_answer);
   c.grpc_deadline_ms_get_room_state = envInt("GW_GRPC_DEADLINE_MS_GET_ROOM_STATE", c.grpc_deadline_ms_get_room_state);
+  c.grpc_deadline_ms_create_quiz = envInt("GW_GRPC_DEADLINE_MS_CREATE_QUIZ", c.grpc_deadline_ms_create_quiz);
+  c.grpc_deadline_ms_list_quizzes = envInt("GW_GRPC_DEADLINE_MS_LIST_QUIZZES", c.grpc_deadline_ms_list_quizzes);
+  c.grpc_deadline_ms_get_quiz = envInt("GW_GRPC_DEADLINE_MS_GET_QUIZ", c.grpc_deadline_ms_get_quiz);
+  c.grpc_deadline_ms_update_quiz = envInt("GW_GRPC_DEADLINE_MS_UPDATE_QUIZ", c.grpc_deadline_ms_update_quiz);
+  c.grpc_deadline_ms_publish_quiz = envInt("GW_GRPC_DEADLINE_MS_PUBLISH_QUIZ", c.grpc_deadline_ms_publish_quiz);
+  c.grpc_deadline_ms_start_ai_quiz_job = envInt("GW_GRPC_DEADLINE_MS_START_AI_QUIZ_JOB", c.grpc_deadline_ms_start_ai_quiz_job);
+  c.grpc_deadline_ms_entitlements = envInt("GW_GRPC_DEADLINE_MS_ENTITLEMENTS", c.grpc_deadline_ms_entitlements);
+  c.redis_url = envStr("GW_REDIS_URL", c.redis_url);
+  c.database_url = envStr("DATABASE_URL", c.database_url);
+  c.entitlements_rooms_daily_limit = static_cast<uint64_t>(envInt("GW_ENT_LIMIT_ROOMS_DAILY", static_cast<int>(c.entitlements_rooms_daily_limit)));
+  c.entitlements_bots_daily_limit = static_cast<uint64_t>(envInt("GW_ENT_LIMIT_BOTS_DAILY", static_cast<int>(c.entitlements_bots_daily_limit)));
+  c.entitlements_ai_daily_limit = static_cast<uint64_t>(envInt("GW_ENT_LIMIT_AI_DAILY", static_cast<int>(c.entitlements_ai_daily_limit)));
+  c.ws_mock_stream_enabled = envBool("GW_WS_MOCK_STREAM_ENABLED", c.ws_mock_stream_enabled);
+  c.ws_mock_stream_auto_on_unavailable = envBool("GW_WS_MOCK_STREAM_AUTO_ON_UNAVAILABLE", c.ws_mock_stream_auto_on_unavailable);
   c.app_env = envStr("GW_ENV", c.app_env);
+  const auto adminEmails = envStr("ADMIN_EMAILS", "");
+  if (!adminEmails.empty()) {
+    std::stringstream ss(adminEmails);
+    std::string email;
+    while (std::getline(ss, email, ',')) {
+      email.erase(email.begin(), std::find_if(email.begin(), email.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+      email.erase(std::find_if(email.rbegin(), email.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), email.end());
+      std::transform(email.begin(), email.end(), email.begin(),
+                     [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+      if (!email.empty()) c.admin_emails.insert(email);
+    }
+  }
   c.session_signing_key = envStr("GW_SESSION_SIGNING_KEY", "");
 
   if (c.app_env == "production" && c.session_signing_key.empty()) {

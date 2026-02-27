@@ -28,9 +28,9 @@ public:
   std::optional<JoinGameOut> joinGame(const std::string& pin, const std::string& name);
   std::optional<JoinGameOut> joinGameByInvite(const std::string& inviteToken, const std::string& name);
 
-  bool startGame(const std::string& roomId, const std::string& requestedByUserId);
+  QuizCoreStartGameResult startGame(const std::string& roomId, const std::string& requestedByUserId);
 
-  std::optional<QuizCoreRoomState> getState(const std::string& roomId) const;
+  QuizCoreGetRoomStateResult getState(const std::string& roomId) const;
 
   std::string makeWsUrl() const;
 

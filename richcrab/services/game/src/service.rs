@@ -11,7 +11,7 @@ use tonic::{Request, Response, Status};
 use tracing::info;
 
 use crate::{
-    domain::{RoomLifecycleState, RoomState},
+    domain::{GameQuestion, RoomLifecycleState, RoomState},
     room_actor::{spawn_room_actor, RoomCommand, RoomRegistry},
 };
 
@@ -28,6 +28,7 @@ pub struct GameServiceImpl {
     entitlements: proto::richcrab::v1::entitlements_service_client::EntitlementsServiceClient<
         tonic::transport::Channel,
     >,
+    quiz: proto::richcrab::v1::quiz_service_client::QuizServiceClient<tonic::transport::Channel>,
     pin_ttl: Duration,
 }
 
@@ -37,11 +38,15 @@ impl GameServiceImpl {
         entitlements: proto::richcrab::v1::entitlements_service_client::EntitlementsServiceClient<
             tonic::transport::Channel,
         >,
+        quiz: proto::richcrab::v1::quiz_service_client::QuizServiceClient<
+            tonic::transport::Channel,
+        >,
     ) -> Self {
         Self {
             redis,
             rooms: Arc::new(RwLock::new(HashMap::new())),
             entitlements,
+            quiz,
             pin_ttl: Duration::from_secs(60 * 60 * 12),
         }
     }
@@ -92,6 +97,53 @@ impl GameServiceImpl {
 
     fn now_ts() -> Option<prost_types::Timestamp> {
         Some(prost_types::Timestamp::from(std::time::SystemTime::now()))
+    }
+
+    async fn load_quiz_questions(&self, quiz_id: &str) -> Result<Vec<GameQuestion>, Status> {
+        let mut client = self.quiz.clone();
+        let response = client
+            .get_quiz(proto::richcrab::v1::GetQuizRequest {
+                quiz_id: Some(proto::richcrab::v1::QuizId {
+                    value: quiz_id.to_string(),
+                }),
+            })
+            .await
+            .map_err(|e| Status::unavailable(format!("quiz unavailable: {e}")))?
+            .into_inner();
+
+        let quiz = response
+            .quiz
+            .ok_or_else(|| Status::not_found("quiz not found"))?;
+
+        if quiz.questions.is_empty() {
+            return Err(Status::failed_precondition("quiz has no questions"));
+        }
+
+        let mut questions = Vec::with_capacity(quiz.questions.len());
+        for q in quiz.questions {
+            if q.options.len() < 2 {
+                return Err(Status::failed_precondition(format!(
+                    "quiz question {} has less than 2 options",
+                    q.id
+                )));
+            }
+            if let Some(correct_idx) = q.correct_option_index {
+                if (correct_idx as usize) >= q.options.len() {
+                    return Err(Status::failed_precondition(format!(
+                        "quiz question {} has invalid correct option index",
+                        q.id
+                    )));
+                }
+            }
+            questions.push(GameQuestion {
+                question_id: q.id,
+                question_text: q.text,
+                options: q.options,
+                correct_option_index: q.correct_option_index,
+            });
+        }
+
+        Ok(questions)
     }
 }
 
@@ -155,6 +207,8 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             title: req.title,
             state: RoomLifecycleState::Lobby,
             players: HashMap::new(),
+            teams: HashMap::new(),
+            question_bank: Vec::new(),
             current_question: None,
             timer: None,
             result: None,
@@ -258,10 +312,21 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         self.check_entitlement(&requested_by, "START_GAME").await?;
 
         let room = self.resolve_room(&room_id).await?;
+        let (state_tx, state_rx) = oneshot::channel();
+        room.tx
+            .send(RoomCommand::GetState { response: state_tx })
+            .await
+            .map_err(|_| Status::unavailable("room is unavailable"))?;
+        let state = state_rx
+            .await
+            .map_err(|_| Status::internal("room actor response dropped"))?;
+        let questions = self.load_quiz_questions(&state.quiz_id).await?;
+
         let (tx, rx) = oneshot::channel();
         room.tx
             .send(RoomCommand::StartGame {
                 requested_by: requested_by.clone(),
+                questions,
                 response: tx,
             })
             .await
@@ -278,12 +343,179 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         }))
     }
 
+    async fn leave_room(
+        &self,
+        request: Request<proto::richcrab::v1::LeaveRoomRequest>,
+    ) -> Result<Response<proto::richcrab::v1::LeaveRoomResponse>, Status> {
+        let req = request.into_inner();
+        let room_id = req
+            .room_id
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("room_id is required"))?;
+        let player_id = req
+            .player_id
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("player_id is required"))?;
+        let room = self.resolve_room(&room_id).await?;
+
+        let (tx, rx) = oneshot::channel();
+        room.tx
+            .send(RoomCommand::Leave {
+                player_id,
+                response: tx,
+            })
+            .await
+            .map_err(|_| Status::unavailable("room is unavailable"))?;
+        rx.await
+            .map_err(|_| Status::internal("room actor response dropped"))?
+            .map_err(Status::failed_precondition)?;
+
+        Ok(Response::new(proto::richcrab::v1::LeaveRoomResponse {
+            left: true,
+            error: None,
+        }))
+    }
+
+    async fn kick_player(
+        &self,
+        request: Request<proto::richcrab::v1::KickPlayerRequest>,
+    ) -> Result<Response<proto::richcrab::v1::KickPlayerResponse>, Status> {
+        let req = request.into_inner();
+        let room_id = req
+            .room_id
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("room_id is required"))?;
+        let requested_by = req
+            .requested_by
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("requested_by is required"))?;
+        let player_id = req
+            .player_id
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("player_id is required"))?;
+
+        let room = self.resolve_room(&room_id).await?;
+        let (tx, rx) = oneshot::channel();
+        room.tx
+            .send(RoomCommand::KickPlayer {
+                requested_by,
+                player_id,
+                response: tx,
+            })
+            .await
+            .map_err(|_| Status::unavailable("room is unavailable"))?;
+        rx.await
+            .map_err(|_| Status::internal("room actor response dropped"))?
+            .map_err(Status::failed_precondition)?;
+
+        Ok(Response::new(proto::richcrab::v1::KickPlayerResponse {
+            kicked: true,
+            error: None,
+        }))
+    }
+
+    async fn pause_game(
+        &self,
+        request: Request<proto::richcrab::v1::PauseGameRequest>,
+    ) -> Result<Response<proto::richcrab::v1::PauseGameResponse>, Status> {
+        let req = request.into_inner();
+        let room_id = req
+            .room_id
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("room_id is required"))?;
+        let requested_by = req
+            .requested_by
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("requested_by is required"))?;
+        let room = self.resolve_room(&room_id).await?;
+        let (tx, rx) = oneshot::channel();
+        room.tx
+            .send(RoomCommand::PauseGame {
+                requested_by,
+                response: tx,
+            })
+            .await
+            .map_err(|_| Status::unavailable("room is unavailable"))?;
+        rx.await
+            .map_err(|_| Status::internal("room actor response dropped"))?
+            .map_err(Status::failed_precondition)?;
+
+        Ok(Response::new(proto::richcrab::v1::PauseGameResponse {
+            paused: true,
+            error: None,
+        }))
+    }
+
+    async fn resume_game(
+        &self,
+        request: Request<proto::richcrab::v1::ResumeGameRequest>,
+    ) -> Result<Response<proto::richcrab::v1::ResumeGameResponse>, Status> {
+        let req = request.into_inner();
+        let room_id = req
+            .room_id
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("room_id is required"))?;
+        let requested_by = req
+            .requested_by
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("requested_by is required"))?;
+        let room = self.resolve_room(&room_id).await?;
+        let (tx, rx) = oneshot::channel();
+        room.tx
+            .send(RoomCommand::ResumeGame {
+                requested_by,
+                response: tx,
+            })
+            .await
+            .map_err(|_| Status::unavailable("room is unavailable"))?;
+        rx.await
+            .map_err(|_| Status::internal("room actor response dropped"))?
+            .map_err(Status::failed_precondition)?;
+
+        Ok(Response::new(proto::richcrab::v1::ResumeGameResponse {
+            resumed: true,
+            error: None,
+        }))
+    }
+
+    async fn next_question(
+        &self,
+        request: Request<proto::richcrab::v1::NextQuestionRequest>,
+    ) -> Result<Response<proto::richcrab::v1::NextQuestionResponse>, Status> {
+        let req = request.into_inner();
+        let room_id = req
+            .room_id
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("room_id is required"))?;
+        let requested_by = req
+            .requested_by
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("requested_by is required"))?;
+        let room = self.resolve_room(&room_id).await?;
+        let (tx, rx) = oneshot::channel();
+        room.tx
+            .send(RoomCommand::NextQuestion {
+                requested_by,
+                response: tx,
+            })
+            .await
+            .map_err(|_| Status::unavailable("room is unavailable"))?;
+        rx.await
+            .map_err(|_| Status::internal("room actor response dropped"))?
+            .map_err(Status::failed_precondition)?;
+
+        Ok(Response::new(proto::richcrab::v1::NextQuestionResponse {
+            advanced: true,
+            error: None,
+        }))
+    }
+
     async fn submit_answer(
         &self,
         request: Request<proto::richcrab::v1::SubmitAnswerRequest>,
     ) -> Result<Response<proto::richcrab::v1::SubmitAnswerResponse>, Status> {
         let req = request.into_inner();
-        info!(request_id = %uuid::Uuid::new_v4(), room_id = req.room_id.as_ref().map(|v| v.value.as_str()).unwrap_or(""), user_id = req.player_id.as_ref().map(|v| v.value.as_str()).unwrap_or(""), bot_id = "", "submit_answer");
+        info!(request_id = %uuid::Uuid::new_v4(), room_id = req.room_id.as_ref().map(|v| v.value.as_str()).unwrap_or(""), user_id = "", bot_id = "", "submit_answer");
         let room_id = req
             .room_id
             .map(|v| v.value)
@@ -303,14 +535,9 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         let state = state_rx
             .await
             .map_err(|_| Status::internal("room actor response dropped"))?;
-        let user_id = state
-            .players
-            .get(&player_id)
-            .map(|p| p.user_id.clone())
-            .ok_or_else(|| Status::not_found("player not found"))?;
-
-        self.check_entitlement(&user_id, "game.submit_answer")
-            .await?;
+        if !state.players.contains_key(&player_id) {
+            return Err(Status::not_found("player not found"));
+        }
 
         let (tx, rx) = oneshot::channel();
         room.tx
@@ -410,23 +637,65 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             .await
             .map_err(|_| Status::internal("room actor response dropped"))?;
 
+        let current_question_id = state
+            .current_question
+            .as_ref()
+            .map(|q| q.question_id.clone());
+        let current_question =
+            state
+                .current_question
+                .clone()
+                .map(|q| proto::richcrab::v1::QuestionState {
+                    question_id: q.question_id,
+                    question_text: q.question_text,
+                    options: q.options,
+                    ends_at: Some(prost_types::Timestamp {
+                        seconds: q.ends_at.timestamp(),
+                        nanos: q.ends_at.timestamp_subsec_nanos() as i32,
+                    }),
+                });
+
+        let players: Vec<proto::richcrab::v1::PlayerState> = state
+            .players
+            .values()
+            .map(|p| proto::richcrab::v1::PlayerState {
+                player_id: Some(proto::richcrab::v1::PlayerId {
+                    value: p.player_id.clone(),
+                }),
+                display_name: p.display_name.clone(),
+                score: p.score,
+                team_id: p.team_id.clone(),
+            })
+            .collect();
+
+        let teams: Vec<proto::richcrab::v1::TeamState> = state
+            .teams
+            .values()
+            .map(|team| proto::richcrab::v1::TeamState {
+                team_id: team.team_id.clone(),
+                score: team.score,
+                players: state
+                    .players
+                    .values()
+                    .filter(|player| player.team_id.as_deref() == Some(team.team_id.as_str()))
+                    .map(|player| proto::richcrab::v1::PlayerId {
+                        value: player.player_id.clone(),
+                    })
+                    .collect(),
+            })
+            .collect();
+
         Ok(Response::new(proto::richcrab::v1::GetRoomStateResponse {
             room_id: Some(proto::richcrab::v1::RoomId {
                 value: state.room_id,
             }),
             state: state.state.as_str().to_string(),
-            players: state
-                .players
-                .into_values()
-                .map(|p| proto::richcrab::v1::PlayerState {
-                    player_id: Some(proto::richcrab::v1::PlayerId { value: p.player_id }),
-                    display_name: p.display_name,
-                    score: p.score,
-                })
-                .collect(),
-            current_question_id: state.current_question.map(|q| q.question_id),
+            players,
+            current_question_id,
             updated_at: Self::now_ts(),
             error: None,
+            teams,
+            current_question,
         }))
     }
 }

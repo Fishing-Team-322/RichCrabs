@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 
 #include "csrf.hpp"
 #include "session.hpp"
@@ -22,7 +23,26 @@ struct Config final {
   int grpc_deadline_ms_issue_join_ticket = 1500;
   int grpc_deadline_ms_join_room = 1500;
   int grpc_deadline_ms_start_game = 1500;
+  int grpc_deadline_ms_pause_game = 1500;
+  int grpc_deadline_ms_resume_game = 1500;
+  int grpc_deadline_ms_next_question = 1500;
+  int grpc_deadline_ms_submit_answer = 1500;
   int grpc_deadline_ms_get_room_state = 1000;
+  int grpc_deadline_ms_create_quiz = 1500;
+  int grpc_deadline_ms_list_quizzes = 1500;
+  int grpc_deadline_ms_get_quiz = 1500;
+  int grpc_deadline_ms_update_quiz = 1500;
+  int grpc_deadline_ms_publish_quiz = 1500;
+  int grpc_deadline_ms_start_ai_quiz_job = 1500;
+  int grpc_deadline_ms_entitlements = 1200;
+  std::string redis_url = "redis://redis:6379";
+  std::string database_url = "postgres://richcrab:richcrab@postgres:5432/richcrab";
+  std::unordered_set<std::string> admin_emails;
+  uint64_t entitlements_rooms_daily_limit = 10;
+  uint64_t entitlements_bots_daily_limit = 20;
+  uint64_t entitlements_ai_daily_limit = 30;
+  bool ws_mock_stream_enabled = false;
+  bool ws_mock_stream_auto_on_unavailable = true;
   std::string app_env = "development";
   std::string session_signing_key;
 

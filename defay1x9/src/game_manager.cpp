@@ -30,11 +30,11 @@ std::optional<JoinGameOut> GameManager::joinGameByInvite(const std::string& invi
   return JoinGameOut{out->room_id, out->player_id, out->join_ticket};
 }
 
-bool GameManager::startGame(const std::string& roomId, const std::string& requestedByUserId) {
+QuizCoreStartGameResult GameManager::startGame(const std::string& roomId, const std::string& requestedByUserId) {
   return client_.startGame(roomId, requestedByUserId);
 }
 
-std::optional<QuizCoreRoomState> GameManager::getState(const std::string& roomId) const {
+QuizCoreGetRoomStateResult GameManager::getState(const std::string& roomId) const {
   return client_.getRoomState(roomId);
 }
 
