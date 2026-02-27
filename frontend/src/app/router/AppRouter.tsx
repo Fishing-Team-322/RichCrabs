@@ -16,6 +16,7 @@ import RoomDetails from '../../pages/rooms/RoomDetails'
 import JoinPage from '../../pages/join/JoinPage'
 import InviteJoinPage from '../../pages/join/InviteJoinPage'
 import RuntimePage from '../../pages/Quiz/RuntimePage'
+import Profile from '../../pages/Profile/Profile'
 import AuthGuard from './guards/AuthGuard'
 import GuestGuard from './guards/GuestGuard'
 import { routes } from './routeMap'
@@ -72,7 +73,7 @@ const AppRouter: React.FC = () => {
             <Route path={routes.rooms} element={<OpenGames />} />
             <Route path={routes.roomsNew} element={<CreateRoom />} />
             <Route path={routes.roomDetails} element={<RoomDetails />} />
-            <Route path={routes.profile} element={<AppPage title="Профиль" description="Управление профилем пользователя." />} />
+            <Route path={routes.profile} element={<Profile />} />
             <Route
               path={routes.subscriptions}
               element={<AppPage title="Подписки" description="Управление подписками и тарифами." />}
