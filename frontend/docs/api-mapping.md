@@ -1,85 +1,58 @@
 # UI ↔ Backend API mapping
 
-Документ фиксирует, какие UI-экраны дергают какие backend endpoint-ы.
+Документ фиксирует текущее соответствие frontend-сервисов и контрактов Python gateway (`/api/v1/*`).
 
 ## Аутентификация
 
-> Сессионная модель: cookie (`QB-SESSION`) + CSRF (`XSRF-TOKEN` cookie + `X-XSRF-TOKEN` header), без bearer access/refresh токенов.
+| UI экран | Endpoint | Метод | Назначение |
+|---|---|---|---|
+| Login/Register | `/api/v1/auth/login`, `/api/v1/auth/register` | POST | Вход/регистрация |
+| CSRF bootstrap | `/api/v1/auth/csrf` | GET | Получить CSRF token |
+| Logout | `/api/v1/auth/logout` | POST | Очистить сессию |
 
+## Квизы (`quizApi`)
 
-| UI экран | Роут | Endpoint | Метод | Назначение |
-|---|---|---|---|---|
-| Login | `/auth/login` | `/api/v1/auth/login` | POST | Вход пользователя |
-| Register | `/auth/register` | `/api/v1/auth/register` | POST | Регистрация пользователя |
-| CSRF bootstrap (before auth mutating calls) | n/a (app init / перед POST) | `/api/v1/auth/csrf` | GET | Получить CSRF token cookie/header pair |
+| Метод сервиса | Endpoint | Метод | Gateway shape |
+|---|---|---|---|
+| `list` | `/api/v1/quizzes` | GET | `{ items: Quiz[] }` |
+| `draft` / `createDraft` | `/api/v1/quizzes` | POST | `{ quiz: Quiz, status }` |
+| `getDraft` | `/api/v1/quizzes/{quizId}` | GET | `{ quiz: Quiz }` |
+| `saveDraft` | `/api/v1/quizzes/{quizId}` | PATCH | `{ quiz: Quiz, status }` |
+| `publish` | `/api/v1/quizzes/{quizId}/publish` | POST | `{ quiz: { quizId }, publishedVersion, status }` |
+| `startGeneration` | `/api/v1/quizzes/ai-generate` | POST | `{ jobId, status }` |
+| `getGenerationStatus` | `/api/v1/quizzes/ai-jobs/{jobId}` | GET | `{ jobId, status, quiz? }` |
 
-## Квизы (authoring + publish)
+> Endpoint-ов `/unpublish`, `/versions`, `/quizzes/{id}/draft` в Python gateway сейчас нет.
 
-| UI экран | Роут | Endpoint | Метод | Назначение |
-|---|---|---|---|---|
-| Quizzes list | `/quizzes` | `/api/quizzes?status=&search=` | GET | Список квизов по фильтру |
-| Create quiz (manual) | `/quizzes/new` | `/api/quizzes/draft` | POST | Создать пустой draft |
-| Create quiz (AI start) | `/quizzes/new` | `/api/quizzes/generate` | POST | Запустить AI генерацию |
-| Create quiz (AI polling) | `/quizzes/new` | `/api/quizzes/generate/:jobId` | GET | Проверить статус job |
-| Quiz editor (load) | `/quizzes/:quizId/edit` | `/api/quizzes/:quizId/draft` | GET | Загрузить draft |
-| Quiz editor (autosave) | `/quizzes/:quizId/edit` | `/api/quizzes/:quizId/draft` | PUT | Сохранить draft |
-| Publish page (load versions) | `/quizzes/:quizId/publish` | `/api/quizzes/:quizId/versions` | GET | Получить историю версий |
-| Publish action | `/quizzes/:quizId/publish` | `/api/quizzes/:quizId/publish` | POST | Опубликовать квиз |
-| Unpublish action | `/quizzes/:quizId/publish` | `/api/quizzes/:quizId/unpublish` | POST | Снять публикацию |
+## Комнаты и игра (`roomsApi`, `joinApi`)
 
-## Комнаты и игра
+| Метод сервиса | Endpoint | Метод | Gateway shape |
+|---|---|---|---|
+| `create` | `/api/v1/games` | POST | `{ pin, inviteToken, inviteUrl, wsUrl }` |
+| `details` | `/api/v1/games/{pin}` | GET | `{ pin, state, players[] }` |
+| `open` | `/api/v1/games/{pin}/start` | POST | `204` |
+| `pause` | `/api/v1/games/{pin}/pause` | POST | `204` |
+| `close` | `/api/v1/games/{pin}/leave` | POST | `204` |
+| `getRoomState` | `/api/v1/games/{pin}/state` | GET | `{ pin, state, players[] }` |
+| `joinByPin` | `/api/v1/games/{pin}/join` | POST | `{ playerId, joinTicket, roomPin, ... }` |
+| `joinByInviteToken` | `/api/v1/invites/{inviteToken}/join` | POST | `{ playerId, joinTicket, roomPin, ... }` |
 
-| UI экран | Роут | Endpoint | Метод | Назначение |
-|---|---|---|---|---|
-| Rooms list | `/rooms` | `/api/rooms?status=` | GET | Список комнат |
-| Create room (load quizzes) | `/rooms/new` | `/api/quizzes?status=published` | GET | Выбор опубликованного квиза |
-| Create room (submit) | `/rooms/new` | `/api/rooms` | POST | Создать комнату |
-| Room details (polling) | `/rooms/:roomId` | `/api/rooms/:roomId` | GET | Детали и статус комнаты |
-| Room details → start | `/rooms/:roomId` | `/api/rooms/:roomId/open` | POST | Открыть/запустить комнату |
-| Room details → pause | `/rooms/:roomId` | `/api/rooms/:roomId/pause` | POST | Поставить комнату на паузу |
-| Room details → finish | `/rooms/:roomId` | `/api/rooms/:roomId/close` | POST | Завершить комнату |
-| Open games (legacy helper) | n/a | `/api/games/open` | GET | Список открытых игр |
-| Game state (legacy helper) | n/a | `/api/games/:roomId/state` | GET | Состояние игры |
+## Боты и Telegram (`botsApi`)
 
-## Join сценарии
+| Метод сервиса | Endpoint | Метод | Gateway shape |
+|---|---|---|---|
+| `list` | `/api/v1/bots` | GET | `{ bots: Bot[] }` |
+| `create` | `/api/v1/bots` | POST | `{ bot: Bot }` |
+| `remove` | `/api/v1/bots/{botId}` | DELETE | `204` |
+| `validate` / `bind` | `/api/v1/telegram/bots/connect` | POST | `{ botId, webhookUrl, status }` |
+| `status` | `/api/v1/bots` | GET | агрегируется из списка |
+| `unbind` | `/api/v1/bots/{botId}` | DELETE | удаление привязки |
 
-| UI экран | Роут | Endpoint | Метод | Назначение |
-|---|---|---|---|---|
-| Join by PIN | `/join` | `/api/games/join` | POST | Вход в комнату по `pin` + `playerName` |
-| Join by invite token | `/join`, `/invite/:token` | `/api/games/join` | POST | Вход по `inviteToken` + `playerName` |
+## Биллинг (`billingApi`)
 
-## Runtime (HTTP + WebSocket)
-
-| UI экран | Роут | Endpoint/Event | Тип | Назначение |
-|---|---|---|---|---|
-| Runtime page | `/quiz/:roomId` | `VITE_WS_URL` (socket.io) | WS | Подключение игрока к комнате |
-| Runtime page | `/quiz/:roomId` | `getGameState` | WS event | Heartbeat/state sync |
-| Runtime page | `/quiz/:roomId` | `startGame` | WS event | Старт игры |
-| Runtime page | `/quiz/:roomId` | `answer` | WS event | Отправка ответа |
-| Runtime page | `/quiz/:roomId` | `gameState`, `answerResult`, `reconnectState` | WS event | Получение актуального состояния |
-
-## Профиль и биллинг
-
-| UI экран | Роут | Endpoint | Метод | Назначение |
-|---|---|---|---|---|
-| Profile | `/profile` | `/api/v1/me` | GET | Получить профиль |
-| Profile | `/profile` | `/api/v1/me` | PATCH | Обновить профиль |
-| Profile | `/profile` | `/api/v1/me/password` | POST | Смена пароля |
-| Profile | `/profile` | `/api/v1/me/sessions` | GET | Активные сессии |
-| Subscriptions | `/subscriptions` | `/api/billing/plans` | GET | Доступные планы |
-| Subscriptions | `/subscriptions` | `/api/billing/current` | GET | Текущая подписка |
-| Subscriptions | `/subscriptions` | `/api/billing/checkout` | POST | Создать checkout-сессию |
-| Subscriptions | `/subscriptions` | `/api/billing/cancel` | POST | Отмена подписки |
-| Subscriptions | `/subscriptions` | `/api/billing/history` | GET | История платежей |
-| Subscriptions | `/subscriptions` | `/api/billing/promo` | POST | Применить промокод |
-| Subscriptions | `/subscriptions` | `/api/billing/callback-status` | POST | Статус callback оплаты |
-
-## Telegram bots
-
-| UI экран | Роут | Endpoint | Метод | Назначение |
-|---|---|---|---|---|
-| Telegram bots page | `/bots` | `/api/bots/telegram/status` | GET | Текущий runtime-статус привязки |
-| Telegram bots page | `/bots` | `/api/bots/telegram/validate` | POST | Валидация токена |
-| Telegram bots page | `/bots` | `/api/bots/telegram/bind` | POST | Привязка токена |
-| Telegram bots page | `/bots` | `/api/bots/telegram/unbind` | POST | Отвязка токена |
-| (Доп. bot CRUD API в сервисе) | n/a | `/api/bots`, `/api/bots/:id` | GET/POST/DELETE | Управление ботами (сервисный слой) |
+| Метод сервиса | Endpoint | Статус |
+|---|---|---|
+| `plans` | `/api/v1/entitlements` | Поддерживается (адаптер в billingApi) |
+| `current` | `/api/v1/usage` | Поддерживается (адаптер в billingApi) |
+| `history` | n/a | Возвращается пустой список в frontend |
+| `checkout` / `cancel` / `applyPromo` / `paymentCallbackStatus` | n/a | Не реализовано в Python gateway (явная ошибка в сервисе) |
