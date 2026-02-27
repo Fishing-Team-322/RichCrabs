@@ -3,11 +3,11 @@ import { Link, Route, Routes } from 'react-router-dom'
 import { useAppDispatch } from '../../store/hooks'
 import { restoreSession } from '../../store/slices'
 import Layout from '../../components/Layout'
-import AdminLayout from '../../components/admin/AdminLayout'
 import AuthGuard from './guards/AuthGuard'
 import GuestGuard from './guards/GuestGuard'
 import {
   AdminDashboard,
+  AdminLayout,
   AdminSecurity,
   CreateRoom,
   HomePage,
