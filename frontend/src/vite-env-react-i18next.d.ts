@@ -1,5 +1,7 @@
+import type { Module } from 'i18next'
+
 declare module 'react-i18next' {
-  export const initReactI18next: unknown
+  export const initReactI18next: Module
 
   export function useTranslation(): {
     t: (key: string, options?: Record<string, unknown>) => any
