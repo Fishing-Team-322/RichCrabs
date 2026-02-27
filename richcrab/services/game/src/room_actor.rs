@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use chrono::Utc;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
+use tokio::task::JoinHandle;
 use tracing::info;
 
 use crate::domain::{
@@ -110,7 +111,6 @@ fn next_team_id(current: &str) -> String {
 fn start_round(
     state: &mut RoomState,
     events_tx: &broadcast::Sender<proto::richcrab::v1::RoomEvent>,
-    actor_tx: &mpsc::Sender<RoomCommand>,
     question_index: usize,
     active_team_id: String,
 ) -> Result<(), String> {
@@ -154,17 +154,36 @@ fn start_round(
         emitted_at: now_ts(),
     });
 
+    Ok(())
+}
+
+fn spawn_round_timeout(
+    actor_tx: &mpsc::Sender<RoomCommand>,
+    question_id: String,
+    delay: Duration,
+) -> JoinHandle<()> {
     let timeout_tx = actor_tx.clone();
     tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(u64::from(DEFAULT_ROUND_SECONDS))).await;
+        tokio::time::sleep(delay).await;
         let _ = timeout_tx
-            .send(RoomCommand::RoundTimeout {
-                question_id: question.question_id,
-            })
+            .send(RoomCommand::RoundTimeout { question_id })
             .await;
-    });
+    })
+}
 
-    Ok(())
+fn cancel_round_timeout(timeout_task: &mut Option<JoinHandle<()>>) {
+    if let Some(handle) = timeout_task.take() {
+        handle.abort();
+    }
+}
+
+fn remaining_round_duration(round: &QuestionRound) -> Duration {
+    let now = Utc::now();
+    if round.ends_at <= now {
+        Duration::ZERO
+    } else {
+        (round.ends_at - now).to_std().unwrap_or(Duration::ZERO)
+    }
 }
 
 fn active_team_player_count(state: &RoomState, active_team_id: &str) -> usize {
@@ -228,7 +247,6 @@ fn finish_game(
 fn close_round_and_progress(
     state: &mut RoomState,
     events_tx: &broadcast::Sender<proto::richcrab::v1::RoomEvent>,
-    actor_tx: &mpsc::Sender<RoomCommand>,
 ) -> Result<(), String> {
     let Some(round) = state.current_question.clone() else {
         return Ok(());
@@ -254,7 +272,7 @@ fn close_round_and_progress(
     }
 
     let next_team = next_team_id(&round.active_team_id);
-    start_round(state, events_tx, actor_tx, next_question_index, next_team)
+    start_round(state, events_tx, next_question_index, next_team)
 }
 
 pub fn spawn_room_actor(
@@ -272,6 +290,8 @@ pub fn spawn_room_actor(
 
     let task = tokio::spawn(async move {
         let mut state = state;
+        let mut round_timeout_task: Option<JoinHandle<()>> = None;
+        let mut paused_remaining: Option<Duration> = None;
         state.teams.insert(
             "A".to_string(),
             Team {
@@ -459,10 +479,20 @@ pub fn spawn_room_actor(
                         emitted_at: now_ts(),
                     });
 
-                    if let Err(err) = start_round(&mut state, &events_tx, &tx, 0, "A".to_string()) {
+                    if let Err(err) = start_round(&mut state, &events_tx, 0, "A".to_string()) {
                         let _ = response.send(Err(err));
                         continue;
                     }
+
+                    if let Some(round) = state.current_question.as_ref() {
+                        cancel_round_timeout(&mut round_timeout_task);
+                        round_timeout_task = Some(spawn_round_timeout(
+                            &tx,
+                            round.question_id.clone(),
+                            Duration::from_secs(u64::from(DEFAULT_ROUND_SECONDS)),
+                        ));
+                    }
+                    paused_remaining = None;
 
                     let _ = response.send(Ok(()));
                 }
@@ -474,10 +504,24 @@ pub fn spawn_room_actor(
                         let _ = response.send(Err("only owner can pause game".to_string()));
                         continue;
                     }
+                    if state.state == RoomLifecycleState::Paused {
+                        let _ = response.send(Ok(()));
+                        continue;
+                    }
                     if state.state != RoomLifecycleState::InProgress {
                         let _ = response.send(Err("game is not in progress".to_string()));
                         continue;
                     }
+
+                    if let Some(round) = state.current_question.as_ref() {
+                        let remaining = remaining_round_duration(round);
+                        paused_remaining = Some(remaining);
+                        state.timer = Some(RoundTimer {
+                            started_at: Utc::now(),
+                            duration_secs: remaining.as_secs().min(u64::from(u32::MAX)) as u32,
+                        });
+                    }
+                    cancel_round_timeout(&mut round_timeout_task);
                     state.state = RoomLifecycleState::Paused;
                     state.updated_at = Utc::now();
                     let _ = response.send(Ok(()));
@@ -490,10 +534,36 @@ pub fn spawn_room_actor(
                         let _ = response.send(Err("only owner can resume game".to_string()));
                         continue;
                     }
+                    if state.state == RoomLifecycleState::InProgress {
+                        let _ = response.send(Ok(()));
+                        continue;
+                    }
                     if state.state != RoomLifecycleState::Paused {
                         let _ = response.send(Err("game is not paused".to_string()));
                         continue;
                     }
+
+                    if let Some(round) = state.current_question.as_mut() {
+                        let remaining = paused_remaining
+                            .take()
+                            .unwrap_or_else(|| remaining_round_duration(round));
+                        let now = Utc::now();
+                        round.ends_at = now
+                            + chrono::Duration::from_std(remaining)
+                                .unwrap_or_else(|_| chrono::Duration::zero());
+                        state.timer = Some(RoundTimer {
+                            started_at: now,
+                            duration_secs: remaining.as_secs().min(u64::from(u32::MAX)) as u32,
+                        });
+
+                        cancel_round_timeout(&mut round_timeout_task);
+                        round_timeout_task = Some(spawn_round_timeout(
+                            &tx,
+                            round.question_id.clone(),
+                            remaining,
+                        ));
+                    }
+
                     state.state = RoomLifecycleState::InProgress;
                     state.updated_at = Utc::now();
                     let _ = response.send(Ok(()));
@@ -511,13 +581,25 @@ pub fn spawn_room_actor(
                         let _ = response.send(Err("game is not in progress".to_string()));
                         continue;
                     }
-                    if let Err(err) = close_round_and_progress(&mut state, &events_tx, &tx) {
+                    cancel_round_timeout(&mut round_timeout_task);
+                    paused_remaining = None;
+                    if let Err(err) = close_round_and_progress(&mut state, &events_tx) {
                         let _ = response.send(Err(err));
                         continue;
                     }
+
+                    if let Some(round) = state.current_question.as_ref() {
+                        round_timeout_task = Some(spawn_round_timeout(
+                            &tx,
+                            round.question_id.clone(),
+                            remaining_round_duration(round),
+                        ));
+                    }
+
                     let _ = response.send(Ok(()));
                 }
                 RoomCommand::RoundTimeout { question_id } => {
+                    round_timeout_task = None;
                     if state.state != RoomLifecycleState::InProgress {
                         continue;
                     }
@@ -527,7 +609,22 @@ pub fn spawn_room_actor(
                     if current_question.question_id != question_id {
                         continue;
                     }
-                    let _ = close_round_and_progress(&mut state, &events_tx, &tx);
+                    let remaining = remaining_round_duration(current_question);
+                    if !remaining.is_zero() {
+                        round_timeout_task = Some(spawn_round_timeout(&tx, question_id, remaining));
+                        continue;
+                    }
+
+                    paused_remaining = None;
+                    let _ = close_round_and_progress(&mut state, &events_tx);
+
+                    if let Some(round) = state.current_question.as_ref() {
+                        round_timeout_task = Some(spawn_round_timeout(
+                            &tx,
+                            round.question_id.clone(),
+                            remaining_round_duration(round),
+                        ));
+                    }
                 }
                 RoomCommand::SubmitAnswer {
                     player_id,
@@ -625,7 +722,16 @@ pub fn spawn_room_actor(
                     let expected_answers = active_team_player_count(&state, &active_team);
 
                     if expected_answers > 0 && answers_in_team >= expected_answers {
-                        let _ = close_round_and_progress(&mut state, &events_tx, &tx);
+                        cancel_round_timeout(&mut round_timeout_task);
+                        paused_remaining = None;
+                        let _ = close_round_and_progress(&mut state, &events_tx);
+                        if let Some(round) = state.current_question.as_ref() {
+                            round_timeout_task = Some(spawn_round_timeout(
+                                &tx,
+                                round.question_id.clone(),
+                                remaining_round_duration(round),
+                            ));
+                        }
                     }
 
                     let _ = response.send(Ok(score_delta));
