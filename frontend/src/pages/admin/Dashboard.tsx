@@ -10,7 +10,12 @@ import type { Overview, RoomDetails, RoomsList, RoomRow } from '../../features/m
 type SortKey = 'players_desc' | 'players_asc' | 'ws_desc' | 'ws_asc' | 'room_asc' | 'room_desc'
 type LifecycleFilter = 'all' | 'lobby' | 'in_game' | 'finished' | 'unknown'
 
-const Dashboard = () => {
+type DashboardProps = {
+  onStatus?: (ok: boolean, text: string, updatedAt: number | null) => void
+  onTotals?: (rooms: number, players: number) => void
+}
+
+const Dashboard = ({ onStatus, onTotals }: DashboardProps) => {
   const [overview, setOverview] = useState<Overview | null>(null)
   const [rooms, setRooms] = useState<RoomsList>({ rooms: [] })
 
@@ -94,6 +99,18 @@ const Dashboard = () => {
   useEffect(() => {
     void refresh()
   }, [])
+
+  useEffect(() => {
+    if (!onTotals) return
+    onTotals(totals.rooms, totals.players)
+  }, [onTotals, totals.players, totals.rooms])
+
+  useEffect(() => {
+    if (!onStatus) return
+    const ok = overview?.grpcHealth ?? false
+    const text = error ? 'Error' : ok ? 'Healthy' : 'Degraded'
+    onStatus(ok && !error, text, Date.now())
+  }, [error, onStatus, overview?.grpcHealth])
 
   const openRoom = async (roomId: string) => {
     setDrawerOpen(true)
