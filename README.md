@@ -1,5 +1,7 @@
 # RichCrabs
 
+![alt text](docs/rich_crab.png)
+
 ## Быстрый старт
 
 ```bash
