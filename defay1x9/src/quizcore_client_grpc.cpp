@@ -3,6 +3,7 @@
 #include <grpcpp/grpcpp.h>
 
 #include <chrono>
+#include <cctype>
 #include <utility>
 
 #include "bot.grpc.pb.h"
@@ -46,6 +47,7 @@ using richcrab::v1::StartGameResponse;
 using richcrab::v1::SubmitAnswerRequest;
 using richcrab::v1::SubmitAnswerResponse;
 using richcrab::v1::Health;
+using richcrab::v1::Error;
 using richcrab::v1::PingRequest;
 using richcrab::v1::PingResponse;
 
@@ -61,6 +63,30 @@ QuizCoreRpcStatus mapStatus(const grpc::Status& status) {
     case grpc::StatusCode::UNAVAILABLE: return QuizCoreRpcStatus::kUnavailable;
     default: return QuizCoreRpcStatus::kUnknown;
   }
+}
+
+QuizCoreRpcStatus mapProtoErrorCode(std::string code) {
+  for (char& ch : code) {
+    if (ch == '.') ch = '_';
+    ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+  }
+
+  if (code == "INVALID_ARGUMENT") return QuizCoreRpcStatus::kInvalidArgument;
+  if (code == "NOT_FOUND") return QuizCoreRpcStatus::kNotFound;
+  if (code == "FAILED_PRECONDITION") return QuizCoreRpcStatus::kFailedPrecondition;
+  if (code == "PERMISSION_DENIED") return QuizCoreRpcStatus::kPermissionDenied;
+  if (code == "DEADLINE_EXCEEDED") return QuizCoreRpcStatus::kDeadlineExceeded;
+  if (code == "UNAVAILABLE") return QuizCoreRpcStatus::kUnavailable;
+  if (code == "OK") return QuizCoreRpcStatus::kOk;
+  return QuizCoreRpcStatus::kUnknown;
+}
+
+template <typename TResult>
+void applyProtoErrorStatus(TResult& out, const Error& error) {
+  out.error_code = error.code();
+  out.error_message = error.message();
+  out.status = mapProtoErrorCode(error.code());
+  if (out.status == QuizCoreRpcStatus::kUnknown) out.status = QuizCoreRpcStatus::kUnavailable;
 }
 
 QuizCoreBot mapBot(const richcrab::v1::Bot& bot) {
@@ -173,7 +199,11 @@ std::optional<QuizCoreCreateRoomResult> QuizCoreClientGrpc::createRoom(const std
   const auto status = impl_->game->CreateRoom(&ctx, req, &resp);
   QuizCoreCreateRoomResult out;
   out.status = mapStatus(status);
-  if (!status.ok() || resp.has_error()) return out;
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
 
   out.status = QuizCoreRpcStatus::kOk;
   out.room_id = resp.room_id().value();
@@ -195,9 +225,18 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByPin(const st
 
   IssueJoinTicketResponse ticketResp;
   const auto ticketStatus = impl_->join->IssueJoinTicketByPin(&ticketCtx, ticketReq, &ticketResp);
-  if (!ticketStatus.ok() || ticketResp.has_error() || !ticketResp.has_ticket()) {
+  if (!ticketStatus.ok()) {
     QuizCoreJoinRoomResult out;
     out.status = mapStatus(ticketStatus);
+    return out;
+  }
+  if (ticketResp.has_error() || !ticketResp.has_ticket()) {
+    QuizCoreJoinRoomResult out;
+    if (ticketResp.has_error()) {
+      applyProtoErrorStatus(out, ticketResp.error());
+    } else {
+      out.status = QuizCoreRpcStatus::kUnavailable;
+    }
     return out;
   }
 
@@ -212,7 +251,11 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByPin(const st
   const auto joinStatus = impl_->game->JoinRoom(&joinCtx, joinReq, &joinResp);
   QuizCoreJoinRoomResult out;
   out.status = mapStatus(joinStatus);
-  if (!joinStatus.ok() || joinResp.has_error()) return out;
+  if (!joinStatus.ok()) return out;
+  if (joinResp.has_error()) {
+    applyProtoErrorStatus(out, joinResp.error());
+    return out;
+  }
 
   out.status = QuizCoreRpcStatus::kOk;
   out.room_id = ticketResp.ticket().room_id().value();
@@ -234,9 +277,18 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByInvite(const
 
   IssueJoinTicketResponse ticketResp;
   const auto ticketStatus = impl_->join->IssueJoinTicketByInvite(&ticketCtx, ticketReq, &ticketResp);
-  if (!ticketStatus.ok() || ticketResp.has_error() || !ticketResp.has_ticket()) {
+  if (!ticketStatus.ok()) {
     QuizCoreJoinRoomResult out;
     out.status = mapStatus(ticketStatus);
+    return out;
+  }
+  if (ticketResp.has_error() || !ticketResp.has_ticket()) {
+    QuizCoreJoinRoomResult out;
+    if (ticketResp.has_error()) {
+      applyProtoErrorStatus(out, ticketResp.error());
+    } else {
+      out.status = QuizCoreRpcStatus::kUnavailable;
+    }
     return out;
   }
 
@@ -251,7 +303,11 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByInvite(const
   const auto joinStatus = impl_->game->JoinRoom(&joinCtx, joinReq, &joinResp);
   QuizCoreJoinRoomResult out;
   out.status = mapStatus(joinStatus);
-  if (!joinStatus.ok() || joinResp.has_error()) return out;
+  if (!joinStatus.ok()) return out;
+  if (joinResp.has_error()) {
+    applyProtoErrorStatus(out, joinResp.error());
+    return out;
+  }
 
   out.status = QuizCoreRpcStatus::kOk;
   out.room_id = ticketResp.ticket().room_id().value();
@@ -260,9 +316,9 @@ std::optional<QuizCoreJoinRoomResult> QuizCoreClientGrpc::joinRoomByInvite(const
   return out;
 }
 
-bool QuizCoreClientGrpc::startGame(const std::string& roomId,
-                                   const std::string& requestedByUserId,
-                                   const std::string& requestId) {
+QuizCoreStartGameResult QuizCoreClientGrpc::startGame(const std::string& roomId,
+                                                      const std::string& requestedByUserId,
+                                                      const std::string& requestId) {
   grpc::ClientContext ctx;
   attachRequestId(ctx, requestId);
   ctx.set_deadline(std::chrono::system_clock::now() +
@@ -273,8 +329,16 @@ bool QuizCoreClientGrpc::startGame(const std::string& roomId,
 
   StartGameResponse resp;
   const auto status = impl_->game->StartGame(&ctx, req, &resp);
-  if (!status.ok() || resp.has_error()) return false;
-  return resp.started();
+  QuizCoreStartGameResult out;
+  out.status = mapStatus(status);
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
+  out.status = QuizCoreRpcStatus::kOk;
+  out.started = resp.started();
+  return out;
 }
 
 QuizCoreLeaveRoomResult QuizCoreClientGrpc::leaveRoom(const std::string& roomId,
@@ -410,8 +474,8 @@ QuizCoreSubmitAnswerResult QuizCoreClientGrpc::submitAnswer(const std::string& r
   return out;
 }
 
-std::optional<QuizCoreRoomState> QuizCoreClientGrpc::getRoomState(const std::string& roomId,
-                                                                  const std::string& requestId) {
+QuizCoreGetRoomStateResult QuizCoreClientGrpc::getRoomState(const std::string& roomId,
+                                                            const std::string& requestId) {
   grpc::ClientContext ctx;
   attachRequestId(ctx, requestId);
   ctx.set_deadline(std::chrono::system_clock::now() +
@@ -421,19 +485,27 @@ std::optional<QuizCoreRoomState> QuizCoreClientGrpc::getRoomState(const std::str
 
   GetRoomStateResponse resp;
   const auto status = impl_->game->GetRoomState(&ctx, req, &resp);
-  if (!status.ok() || resp.has_error()) return std::nullopt;
+  QuizCoreGetRoomStateResult out;
+  out.status = mapStatus(status);
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
 
-  QuizCoreRoomState out;
-  out.room_id = resp.room_id().value();
-  out.state = resp.state();
+  QuizCoreRoomState roomState;
+  roomState.room_id = resp.room_id().value();
+  roomState.state = resp.state();
   for (const auto& p : resp.players()) {
     QuizCorePlayerState ps;
     ps.player_id = p.player_id().value();
     ps.display_name = p.display_name();
     ps.score = p.score();
-    out.players.push_back(std::move(ps));
+    roomState.players.push_back(std::move(ps));
   }
-  if (resp.has_current_question_id()) out.current_question_id = resp.current_question_id();
+  if (resp.has_current_question_id()) roomState.current_question_id = resp.current_question_id();
+  out.status = QuizCoreRpcStatus::kOk;
+  out.room_state = std::move(roomState);
   return out;
 }
 
@@ -455,7 +527,13 @@ QuizCoreRegisterBotResult QuizCoreClientGrpc::registerBot(const std::string& use
 
   QuizCoreRegisterBotResult out;
   out.status = mapStatus(status);
-  if (!status.ok() || resp.has_error() || !resp.has_bot()) return out;
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
+  if (!resp.has_bot()) return out;
+  out.status = QuizCoreRpcStatus::kOk;
   out.bot = mapBot(resp.bot());
   return out;
 }
@@ -472,7 +550,12 @@ QuizCoreListBotsResult QuizCoreClientGrpc::listBots(const std::string& userId,
 
   QuizCoreListBotsResult out;
   out.status = mapStatus(status);
-  if (!status.ok() || resp.has_error()) return out;
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
+  out.status = QuizCoreRpcStatus::kOk;
   for (const auto& bot : resp.bots()) out.bots.push_back(mapBot(bot));
   return out;
 }
@@ -491,7 +574,12 @@ QuizCoreRemoveBotResult QuizCoreClientGrpc::removeBot(const std::string& userId,
 
   QuizCoreRemoveBotResult out;
   out.status = mapStatus(status);
-  if (!status.ok() || resp.has_error()) return out;
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
+  out.status = QuizCoreRpcStatus::kOk;
   out.removed = resp.removed();
   return out;
 }
@@ -510,7 +598,13 @@ QuizCoreGetBotResult QuizCoreClientGrpc::getBotStatus(const std::string& userId,
 
   QuizCoreGetBotResult out;
   out.status = mapStatus(status);
-  if (!status.ok() || resp.has_error() || !resp.has_bot()) return out;
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
+  if (!resp.has_bot()) return out;
+  out.status = QuizCoreRpcStatus::kOk;
   out.bot = mapBot(resp.bot());
   return out;
 }

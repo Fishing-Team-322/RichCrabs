@@ -31,7 +31,7 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
         const auto requestId = requestIdFromRequest(req);
         auto result = quizCore.registerBot(resolveUserId(req, conf), *name, *version, *endpoint, requestId);
         if (!result.bot) {
-          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "register_bot")));
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "register_bot", result.error_code, result.error_message)));
           return;
         }
 
@@ -47,7 +47,7 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
         const auto requestId = requestIdFromRequest(req);
         auto result = quizCore.listBots(resolveUserId(req, conf), requestId);
         if (result.status != QuizCoreRpcStatus::kOk) {
-          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "list_bots")));
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "list_bots", result.error_code, result.error_message)));
           return;
         }
 
@@ -67,7 +67,7 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
         const auto requestId = requestIdFromRequest(req);
         auto result = quizCore.getBotStatus(resolveUserId(req, conf), botId, requestId);
         if (!result.bot) {
-          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "get_bot_status")));
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "get_bot_status", result.error_code, result.error_message)));
           return;
         }
 
@@ -95,7 +95,7 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore) {
         const auto requestId = requestIdFromRequest(req);
         auto result = quizCore.removeBot(resolveUserId(req, conf), botId, requestId);
         if (result.status != QuizCoreRpcStatus::kOk) {
-          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "remove_bot")));
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "remove_bot", result.error_code, result.error_message)));
           return;
         }
         if (!result.removed) {
