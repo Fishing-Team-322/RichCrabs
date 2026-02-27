@@ -30,7 +30,7 @@ services:
   gateway:
     build:
       context: .
-      dockerfile: defay1x9/Dockerfile
+      dockerfile: defay1x9/Dockerfile  # runtime-only image, expects prebuilt defay1x9/bin/defay1x9
     image: devhack/gateway:local
     ports:
       - "8080:8080"

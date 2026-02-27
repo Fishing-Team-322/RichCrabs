@@ -44,3 +44,10 @@ compile_commands.json
 *.env
 
 */node_modules/
+# --- gateway binary artifacts (local build flow) ---
+defay1x9/build-linux/
+defay1x9/bin/defay1x9
+defay1x9/bin/lib/*
+!defay1x9/bin/.gitkeep
+!defay1x9/bin/lib/.gitkeep
+.cache/
