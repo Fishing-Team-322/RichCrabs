@@ -602,6 +602,126 @@ components:
           type: object
           additionalProperties: true
 
+    LimitExceededDetails:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [limit_exceeded]
+        limit:
+          type: string
+          example: AI_GENERATE
+        retryAt:
+          type: string
+          format: date-time
+          example: '2026-01-01T00:00:00Z'
+
+    LimitExceededResponse:
+      type: object
+      required: [error, message, details]
+      properties:
+        error:
+          type: string
+          enum: [too_many_attempts, forbidden]
+          example: too_many_attempts
+        message:
+          type: string
+          example: ai limit exceeded
+        details:
+          $ref: '#/components/schemas/LimitExceededDetails'
+
+    EntitlementLimit:
+      type: object
+      required: [limit, used, max]
+      properties:
+        limit:
+          type: string
+          example: ai
+        used:
+          type: integer
+          minimum: 0
+        max:
+          type: integer
+          minimum: 0
+        retryAt:
+          type: string
+          format: date-time
+
+    EntitlementsResponse:
+      type: object
+      required: [limits, byLimit]
+      properties:
+        limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntitlementLimit'
+        byLimit:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/EntitlementLimit'
+
+    UsageResponse:
+      type: object
+      required: [usage]
+      properties:
+        usage:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+        periodEndsAt:
+          type: string
+          format: date-time
+
+    AiGenerateRequest:
+      type: object
+      required: [prompt]
+      properties:
+        prompt:
+          type: string
+        desiredQuestionCount:
+          type: integer
+          minimum: 1
+
+    AiGenerateAcceptedResponse:
+      type: object
+      required: [jobId, status]
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, done, failed]
+
+    AiJobStatusResponse:
+      type: object
+      required: [jobId, status]
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, done, failed]
+        quiz:
+          $ref: '#/components/schemas/Quiz'
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+
+    AiJobResultResponse:
+      type: object
+      required: [jobId, status, quiz]
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          enum: [done]
+        quiz:
+          $ref: '#/components/schemas/Quiz'
+
     WsClientPauseGame:
       type: object
       required: [type]
@@ -908,6 +1028,42 @@ paths:
                 $ref: '#/components/schemas/SessionResponse'
         '401':
           description: Missing or invalid session
+
+  /api/v1/entitlements:
+    get:
+      tags: [Service]
+      summary: Get current user entitlement limits and usage
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Entitlement limits snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementsResponse'
+        '5xx':
+          description: Backend/internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/usage:
+    get:
+      tags: [Service]
+      summary: Get current user feature usage counters
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Usage snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageResponse'
+        '5xx':
+          description: Backend/internal error
           content:
             application/json:
               schema:
@@ -1083,6 +1239,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: CSRF required or entitlement denied
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - $ref: '#/components/schemas/LimitExceededResponse'
+        '429':
+          description: Entitlement or rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitExceededResponse'
 
   /api/v1/games/{pin}:
     get:
@@ -1519,13 +1689,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [prompt]
-              properties:
-                prompt: { type: string }
-                desiredQuestionCount: { type: integer, minimum: 1 }
-                difficulty: { type: string }
-                language: { type: string }
+              $ref: '#/components/schemas/AiGenerateRequest'
       responses:
         '200':
           description: Job accepted or degraded fallback
@@ -1533,13 +1697,7 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - type: object
-                    required: [jobId, status]
-                    properties:
-                      jobId:
-                        type: string
-                      status:
-                        type: string
+                  - $ref: '#/components/schemas/AiGenerateAcceptedResponse'
                   - $ref: '#/components/schemas/QuizTelegramDegradedResponse'
         '400':
           description: Invalid JSON or validation error
@@ -1548,11 +1706,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/QuizTelegramErrorResponse'
         '403':
-          description: CSRF required
+          description: CSRF required or entitlement denied
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/QuizTelegramErrorResponse'
+                  - $ref: '#/components/schemas/LimitExceededResponse'
+        '429':
+          description: Entitlement or rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitExceededResponse'
         '5xx':
           description: Backend/internal error
           content:
@@ -1579,15 +1745,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [jobId, status]
-                properties:
-                  jobId: { type: string }
-                  status: { type: string, enum: [queued, running, done, failed] }
-                  quiz:
-                    $ref: '#/components/schemas/Quiz'
-                  errorCode: { type: string }
-                  errorMessage: { type: string }
+                $ref: '#/components/schemas/AiJobStatusResponse'
         '403':
           description: CSRF required
           content:
@@ -1613,15 +1771,15 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [jobId, status, quiz]
-                properties:
-                  jobId: { type: string }
-                  status: { type: string, enum: [done] }
-                  quiz:
-                    $ref: '#/components/schemas/Quiz'
+                $ref: '#/components/schemas/AiJobResultResponse'
         '409':
           description: Job is not done yet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '503':
+          description: Job result storage/backend unavailable
           content:
             application/json:
               schema:
@@ -1662,11 +1820,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/QuizTelegramErrorResponse'
         '403':
-          description: CSRF required
+          description: CSRF required or entitlement denied
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/QuizTelegramErrorResponse'
+                  - $ref: '#/components/schemas/LimitExceededResponse'
+        '429':
+          description: Entitlement limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitExceededResponse'
         '5xx':
           description: Backend/internal error
           content:
@@ -1755,6 +1921,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BotResponse'
+        '403':
+          description: CSRF required or entitlement denied
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - $ref: '#/components/schemas/LimitExceededResponse'
+        '429':
+          description: Entitlement limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitExceededResponse'
 
   /api/v1/bots/{botId}:
     get:
@@ -1808,12 +1988,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Bot not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '409':
-          description: Update conflict
           content:
             application/json:
               schema:
