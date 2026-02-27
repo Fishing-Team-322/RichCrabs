@@ -268,7 +268,8 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
         }
 
         const auto requestId = requestIdFromRequest(req);
-        const auto ownerUserId = resolveUserId(req, conf);
+        std::string ownerUserId;
+        if (!RequireUserId(req, conf, cb, ownerUserId)) return;
         const auto entitlement = entitlementsClient.checkAndConsume(ownerUserId, "REGISTER_BOT");
         if (!entitlement.allowed) {
           Json::Value details;

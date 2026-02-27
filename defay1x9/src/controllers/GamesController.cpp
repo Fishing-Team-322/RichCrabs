@@ -77,6 +77,13 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
           return;
         }
 
+        std::string sessionUserId;
+        if (!RequireUserId(req, conf, cb, sessionUserId)) return;
+        if (*ownerUserId != sessionUserId) {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "ownerUserId must match host session"));
+          return;
+        }
+
         const auto ip = clientIpFromRequest(req);
         if (!AllowRateLimit(conf,
                             {"rl:create_game:ip:" + ip},

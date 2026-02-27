@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+option(GW_ALLOW_DEFAULT_USER_FALLBACK "Allow GW_DEFAULT_USER_ID fallback outside of GW_ENV=dev" OFF)
+
 find_package(Drogon CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)
@@ -102,3 +104,7 @@ target_link_libraries(defay1x9 PRIVATE
   protobuf::libprotobuf
   OpenSSL::Crypto
 )
+
+if(GW_ALLOW_DEFAULT_USER_FALLBACK)
+  target_compile_definitions(defay1x9 PRIVATE GW_ALLOW_DEFAULT_USER_FALLBACK=1)
+endif()
