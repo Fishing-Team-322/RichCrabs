@@ -32,6 +32,8 @@ message CreateRoomResponse {
   string invite_token = 3;
   google.protobuf.Timestamp created_at = 4;
   optional Error error = 5;
+  string invite_path = 6;
+  string invite_qr_svg = 7;
 }
 
 message JoinRoomRequest {

@@ -23,3 +23,5 @@ serde = { version = "1", features = ["derive"] }
 anyhow.workspace = true
 tonic-health = "0.12"
 tracing = "0.1"
+
+qrcodegen = "1"
