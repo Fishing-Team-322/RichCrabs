@@ -10,6 +10,9 @@ import QuizCreate from '../../pages/quizzes/QuizCreate'
 import QuizEdit from '../../pages/quizzes/QuizEdit'
 import QuizPublish from '../../pages/quizzes/QuizPublish'
 import HomePage from '../../pages/Home/Home'
+import CreateRoom from '../../pages/CreateRoom/CreateRoom'
+import OpenGames from '../../pages/rooms/OpenGames'
+import RoomDetails from '../../pages/rooms/RoomDetails'
 import AuthGuard from './guards/AuthGuard'
 import GuestGuard from './guards/GuestGuard'
 import { routes } from './routeMap'
@@ -62,9 +65,9 @@ const AppRouter: React.FC = () => {
             <Route path={routes.quizzesNew} element={<QuizCreate />} />
             <Route path={routes.quizzesEdit} element={<QuizEdit />} />
             <Route path={routes.quizzesPublish} element={<QuizPublish />} />
-            <Route path={routes.rooms} element={<AppPage title="Комнаты" description="Список игровых комнат." />} />
-            <Route path={routes.roomsNew} element={<AppPage title="Новая комната" description="Создание игровой комнаты." />} />
-            <Route path={routes.roomDetails} element={<AppPage title="Комната" description="Детали игровой комнаты." />} />
+            <Route path={routes.rooms} element={<OpenGames />} />
+            <Route path={routes.roomsNew} element={<CreateRoom />} />
+            <Route path={routes.roomDetails} element={<RoomDetails />} />
             <Route path={routes.quizRuntime} element={<AppPage title="Игра" description="Игровой runtime комнаты." />} />
             <Route path={routes.profile} element={<AppPage title="Профиль" description="Управление профилем пользователя." />} />
             <Route
