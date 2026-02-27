@@ -14,7 +14,7 @@ const QuizCreate = () => {
     setError('')
 
     try {
-      const draft = await quizApi.createDraft()
+      const draft = await quizApi.draft()
       navigate(routes.quizzesEdit.replace(':quizId', draft.id))
     } catch (apiError: unknown) {
       setError(apiError instanceof Error ? apiError.message : 'Не удалось создать черновик.')

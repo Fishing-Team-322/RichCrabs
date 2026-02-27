@@ -13,6 +13,20 @@ import type {
 
 const QUIZZES_BASE = '/api/quizzes'
 
+export interface QuizApi {
+  create: (payload: CreateQuizRequestDto) => Promise<CreateQuizResponseDto>
+  nextQuestion: (gameId: string) => Promise<QuizQuestionDto>
+  submitAnswer: (gameId: string, answer: number) => Promise<QuizAnswerResultDto>
+  list: (params?: QuizListParams) => Promise<QuizListItemDto[]>
+  draft: () => Promise<QuizDraftDto>
+  createDraft: () => Promise<QuizDraftDto>
+  getDraft: (quizId: string) => Promise<QuizDraftDto>
+  saveDraft: (quizId: string, payload: SaveQuizDraftRequestDto) => Promise<QuizDraftDto>
+  publish: (quizId: string, payload?: PublishQuizRequestDto) => Promise<QuizDraftDto>
+  unpublish: (quizId: string) => Promise<QuizDraftDto>
+  listVersions: (quizId: string) => Promise<Array<{ version: number; updatedAt: string; status: string }>>
+}
+
 const toQueryString = (params: Record<string, string | undefined>): string => {
   const searchParams = new URLSearchParams()
 
@@ -26,7 +40,7 @@ const toQueryString = (params: Record<string, string | undefined>): string => {
   return raw ? `?${raw}` : ''
 }
 
-export const quizApi = {
+export const quizApi: QuizApi = {
   create: (payload: CreateQuizRequestDto) =>
     apiFetch<CreateQuizResponseDto>('/api/games/create', {
       method: 'POST',
@@ -49,6 +63,11 @@ export const quizApi = {
         search: params.search,
       })}`,
     ),
+
+  draft: () =>
+    apiFetch<QuizDraftDto>(`${QUIZZES_BASE}/draft`, {
+      method: 'POST',
+    }),
 
   createDraft: () =>
     apiFetch<QuizDraftDto>(`${QUIZZES_BASE}/draft`, {
