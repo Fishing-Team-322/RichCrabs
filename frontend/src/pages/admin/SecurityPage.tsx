@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { SecurityPage as SecurityContent } from '../Security'
+import SecurityContent from './Security'
 import type { AdminOutletContext } from '../../components/admin/AdminLayout'
 
 const AdminSecurityPage = () => {
