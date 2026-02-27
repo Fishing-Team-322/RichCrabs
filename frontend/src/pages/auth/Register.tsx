@@ -1,29 +1,28 @@
+import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
 import useAuth from '../../hooks/useAuth'
 import { routes } from '../../app/router/routeMap'
 import { Button, Input } from '../../components/ui'
-import { registerSchema, type RegisterFormData } from '../../shared/validation/formSchemas'
+import { validateRegister, type RegisterFormData } from '../../shared/validation/formSchemas'
 import { useNotifications } from '../../app/providers/NotificationProvider'
 
 const Register = () => {
   const navigate = useNavigate()
   const { signUp, isLoading } = useAuth()
   const notifications = useNotifications()
+  const [form, setForm] = useState<RegisterFormData>({ name: '', email: '', password: '', confirmPassword: '' })
+  const [errors, setErrors] = useState<Partial<Record<'name' | 'email' | 'password' | 'confirmPassword' | 'root', string>>>({})
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    setError,
-  } = useForm<RegisterFormData>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
-  })
+  const onSubmit = async (event: FormEvent) => {
+    event.preventDefault()
+    const nextErrors = validateRegister(form)
+    if (Object.keys(nextErrors).length) {
+      setErrors(nextErrors)
+      return
+    }
 
-  const onSubmit = async (data: RegisterFormData) => {
-    const result = await signUp(data.name.trim(), data.email.trim(), data.password)
+    setErrors({})
+    const result = await signUp(form.name.trim(), form.email.trim(), form.password)
     if (result.meta.requestStatus === 'fulfilled') {
       notifications.success('Аккаунт создан. Добро пожаловать!')
       navigate(routes.profile, { replace: true })
@@ -31,7 +30,7 @@ const Register = () => {
     }
 
     const message = typeof result.payload === 'string' ? result.payload : 'Не удалось зарегистрироваться.'
-    setError('root', { message })
+    setErrors({ root: message })
     notifications.error(message)
   }
 
@@ -39,18 +38,19 @@ const Register = () => {
     <section className="authCard">
       <h1>Регистрация</h1>
       <p className="homeMuted">Создайте аккаунт, чтобы играть и управлять квизами.</p>
-      <form onSubmit={handleSubmit((data) => void onSubmit(data))} className="homePage">
-        <Input label="Имя" error={errors.name?.message} placeholder="Crab Master" {...register('name')} />
-        <Input label="Email" error={errors.email?.message} type="email" placeholder="name@example.com" {...register('email')} />
-        <Input label="Пароль" error={errors.password?.message} type="password" placeholder="••••••••" {...register('password')} />
+      <form onSubmit={(event) => void onSubmit(event)} className="homePage">
+        <Input label="Имя" error={errors.name} placeholder="Crab Master" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
+        <Input label="Email" error={errors.email} type="email" placeholder="name@example.com" value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} />
+        <Input label="Пароль" error={errors.password} type="password" placeholder="••••••••" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} />
         <Input
           label="Повторите пароль"
-          error={errors.confirmPassword?.message}
+          error={errors.confirmPassword}
           type="password"
           placeholder="••••••••"
-          {...register('confirmPassword')}
+          value={form.confirmPassword}
+          onChange={(event) => setForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
         />
-        {errors.root?.message && <div className="ui-help">{errors.root.message}</div>}
+        {errors.root && <div className="ui-help">{errors.root}</div>}
         <Button variant="primary" type="submit" loading={isLoading} fullWidth>
           {isLoading ? 'Создаем аккаунт...' : 'Зарегистрироваться'}
         </Button>

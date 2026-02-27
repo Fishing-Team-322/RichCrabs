@@ -1,29 +1,28 @@
+import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
 import useAuth from '../../hooks/useAuth'
 import { routes } from '../../app/router/routeMap'
 import { Button, Input } from '../../components/ui'
-import { loginSchema, type LoginFormData } from '../../shared/validation/formSchemas'
+import { validateLogin, type LoginFormData } from '../../shared/validation/formSchemas'
 import { useNotifications } from '../../app/providers/NotificationProvider'
 
 const Login = () => {
   const navigate = useNavigate()
   const { signIn, isLoading } = useAuth()
   const notifications = useNotifications()
+  const [form, setForm] = useState<LoginFormData>({ email: '', password: '' })
+  const [errors, setErrors] = useState<Partial<Record<'email' | 'password' | 'root', string>>>({})
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    setError,
-  } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
-  })
+  const onSubmit = async (event: FormEvent) => {
+    event.preventDefault()
+    const nextErrors = validateLogin(form)
+    if (Object.keys(nextErrors).length) {
+      setErrors(nextErrors)
+      return
+    }
 
-  const onSubmit = async (data: LoginFormData) => {
-    const result = await signIn(data.email.trim(), data.password)
+    setErrors({})
+    const result = await signIn(form.email.trim(), form.password)
     if (result.meta.requestStatus === 'fulfilled') {
       notifications.success('Вы успешно вошли в аккаунт.')
       navigate(routes.profile, { replace: true })
@@ -31,7 +30,7 @@ const Login = () => {
     }
 
     const message = typeof result.payload === 'string' ? result.payload : 'Не удалось выполнить вход.'
-    setError('root', { message })
+    setErrors({ root: message })
     notifications.error(message)
   }
 
@@ -39,10 +38,24 @@ const Login = () => {
     <section className="authCard">
       <h1>Вход</h1>
       <p className="homeMuted">Войдите в аккаунт RichCrabs, чтобы продолжить.</p>
-      <form onSubmit={handleSubmit((data) => void onSubmit(data))} className="homePage">
-        <Input label="Email" error={errors.email?.message} type="email" placeholder="name@example.com" {...register('email')} />
-        <Input label="Пароль" error={errors.password?.message} type="password" placeholder="••••••••" {...register('password')} />
-        {errors.root?.message && <div className="ui-help">{errors.root.message}</div>}
+      <form onSubmit={(event) => void onSubmit(event)} className="homePage">
+        <Input
+          label="Email"
+          error={errors.email}
+          type="email"
+          placeholder="name@example.com"
+          value={form.email}
+          onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+        />
+        <Input
+          label="Пароль"
+          error={errors.password}
+          type="password"
+          placeholder="••••••••"
+          value={form.password}
+          onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+        />
+        {errors.root && <div className="ui-help">{errors.root}</div>}
         <Button variant="primary" type="submit" loading={isLoading} fullWidth>
           {isLoading ? 'Входим...' : 'Войти'}
         </Button>
