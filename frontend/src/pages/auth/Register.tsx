@@ -5,11 +5,13 @@ import { routes } from '../../app/router/routeMap'
 import { Button, Input } from '../../components/ui'
 import { validateRegister, type RegisterFormData } from '../../shared/validation/formSchemas'
 import { useNotifications } from '../../app/providers/NotificationProvider'
+import { useTranslation } from 'react-i18next'
 
 const Register = () => {
   const navigate = useNavigate()
   const { signUp, isLoading } = useAuth()
   const notifications = useNotifications()
+  const { t } = useTranslation()
   const [form, setForm] = useState<RegisterFormData>({ name: '', email: '', password: '', confirmPassword: '' })
   const [errors, setErrors] = useState<Partial<Record<'name' | 'email' | 'password' | 'confirmPassword' | 'root', string>>>({})
 
@@ -36,8 +38,9 @@ const Register = () => {
 
   return (
     <section className="authCard">
-      <h1>Регистрация</h1>
-      <p className="homeMuted">Создайте аккаунт, чтобы играть и управлять квизами.</p>
+      <h1>{t('auth.registerTitle')}</h1>
+      <p className="homeMuted">{t('auth.registerSubtitle')}</p>
+      <Link to={routes.home} className="accountAction">{t('common.backToHome')}</Link>
       <form onSubmit={(event) => void onSubmit(event)} className="homePage">
         <Input label="Имя" error={errors.name} placeholder="Crab Master" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
         <Input label="Email" error={errors.email} type="email" placeholder="name@example.com" value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} />

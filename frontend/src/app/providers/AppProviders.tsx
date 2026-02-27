@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { store } from '../../store/store'
 import { theme } from '../../theme/theme'
 import NotificationProvider from './NotificationProvider'
+import './i18n'
 
 interface AppProvidersProps {
   children: React.ReactNode

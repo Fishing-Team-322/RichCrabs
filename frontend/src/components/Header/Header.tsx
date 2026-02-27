@@ -1,14 +1,18 @@
 import { Link } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth'
 import { routes } from '../../app/router/routeMap'
+import { useTranslation } from 'react-i18next'
+import LanguageSwitcher from '../LanguageSwitcher'
 
 const Header = () => {
   const { profile, signOut, isLoading } = useAuth()
+  const { t } = useTranslation()
 
   return (
     <header className="topbar">
-      <strong>Внутренние разделы</strong>
+      <strong>{t('header.title')}</strong>
       <div className="accountBlock">
+        <LanguageSwitcher />
         {profile ? (
           <>
             <div className="accountMeta">
@@ -16,15 +20,15 @@ const Header = () => {
               <span className="accountEmail">{profile.email}</span>
             </div>
             <Link className="accountAction" to={routes.profile}>
-              Профиль
+              {t('common.profile')}
             </Link>
             <button className="accountAction" onClick={() => void signOut()} disabled={isLoading}>
-              Выйти
+              {t('common.logout')}
             </button>
           </>
         ) : (
           <Link className="accountAction" to={routes.authLogin}>
-            Войти
+            {t('common.login')}
           </Link>
         )}
       </div>
