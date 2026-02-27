@@ -40,13 +40,15 @@ std::string resolveUserId(const drogon::HttpRequestPtr& req, const Config& conf)
   return conf.default_user_id;
 }
 
-Json::Value botToJson(const QuizCoreBot& bot) {
+Json::Value botToJson(const QuizCoreBot& bot, const std::optional<BotState>& state) {
   Json::Value out;
   out["botId"] = bot.bot_id;
-  out["name"] = bot.name;
+  out["name"] = state && state->name.has_value() ? *state->name : bot.name;
   out["version"] = bot.version;
   out["status"] = bot.status;
   out["registeredAt"] = static_cast<Json::Int64>(bot.registered_at);
+  out["enabled"] = state ? state->enabled : true;
+  out["metadata"] = state ? state->metadata : Json::Value(Json::objectValue);
   return out;
 }
 

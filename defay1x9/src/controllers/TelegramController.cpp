@@ -12,6 +12,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "controllers/BotStateStorage.hpp"
 #include "controllers/ControllerUtils.hpp"
 #include "controllers/TelegramWebhookClient.hpp"
 #include "http_api_utils.hpp"
@@ -288,6 +289,9 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
                   .name = botName,
               });
 
+              std::string stateError;
+              SeedBotStateOwner(conf, botId, ownerUserId, botName, stateError);
+
               Json::Value out;
               out["botId"] = botId;
               out["webhookUrl"] = webhookUrl;
@@ -326,6 +330,13 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
         }
         if (binding->secret != secret) {
           cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "invalid webhook secret"));
+          return;
+        }
+
+        std::string stateError;
+        auto state = GetBotState(conf, botId, stateError);
+        if (state && !state->enabled) {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "bot is disabled"));
           return;
         }
 
