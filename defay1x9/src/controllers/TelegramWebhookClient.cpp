@@ -94,4 +94,79 @@ void TelegramWebhookClient::setWebhook(const std::string& botToken,
       timeoutSeconds_);
 }
 
+
+void TelegramWebhookClient::sendMessage(const std::string& botToken,
+                                        const std::string& chatId,
+                                        const std::string& text,
+                                        const std::optional<int64_t>& replyToMessageId,
+                                        const std::string& requestId,
+                                        std::function<void(TelegramSendMessageResult)> cb) const {
+  auto client = drogon::HttpClient::newHttpClient("https://api.telegram.org");
+  auto req = drogon::HttpRequest::newHttpJsonRequest(Json::Value(Json::objectValue));
+  req->setMethod(drogon::Post);
+  req->setPath("/bot" + botToken + "/sendMessage");
+
+  Json::Value payload;
+  payload["chat_id"] = chatId;
+  payload["text"] = text;
+  if (replyToMessageId.has_value()) {
+    payload["reply_to_message_id"] = Json::Int64(*replyToMessageId);
+  }
+  req->setJsonObject(payload);
+
+  spdlog::info("telegram_send_message_start request_id={} token_masked={} chat_id={}",
+               requestId,
+               maskToken(botToken),
+               chatId);
+
+  client->sendRequest(
+      req,
+      [cb = std::move(cb), requestId, maskedToken = maskToken(botToken)](drogon::ReqResult result,
+                                                                          const drogon::HttpResponsePtr& resp) mutable {
+        TelegramSendMessageResult out;
+        out.details["requestId"] = requestId;
+
+        if (result != drogon::ReqResult::Ok || !resp) {
+          out.delivered = false;
+          out.status = "telegram_unreachable";
+          out.details["transportResult"] = static_cast<int>(result);
+          spdlog::warn("telegram_send_message_transport_error request_id={} token_masked={} result={}",
+                       requestId,
+                       maskedToken,
+                       static_cast<int>(result));
+          cb(std::move(out));
+          return;
+        }
+
+        out.details["httpStatus"] = static_cast<int>(resp->statusCode());
+        auto body = resp->getJsonObject();
+        if (body) {
+          out.details["telegramOk"] = (*body).get("ok", false).asBool();
+          if ((*body).isMember("description")) {
+            out.details["telegramDescription"] = (*body)["description"].asString();
+          }
+          if ((*body).isMember("error_code")) {
+            out.details["telegramErrorCode"] = (*body)["error_code"].asInt();
+          }
+        }
+
+        const bool httpOk = resp->statusCode() == drogon::k200OK;
+        const bool telegramOk = body && (*body).get("ok", false).asBool();
+        out.delivered = httpOk && telegramOk;
+        out.status = out.delivered ? "sent" : "telegram_rejected";
+
+        if (out.delivered) {
+          spdlog::info("telegram_send_message_ok request_id={} token_masked={}", requestId, maskedToken);
+        } else {
+          spdlog::warn("telegram_send_message_failed request_id={} token_masked={} http_status={}",
+                       requestId,
+                       maskedToken,
+                       static_cast<int>(resp->statusCode()));
+        }
+
+        cb(std::move(out));
+      },
+      timeoutSeconds_);
+}
+
 }  // namespace controllers
