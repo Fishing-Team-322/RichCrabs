@@ -53,7 +53,8 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
           cb(api::validationErrorResponse(validator.issues()));
           return;
         }
-        const auto userId = resolveUserId(req, conf);
+        std::string userId;
+        if (!RequireUserId(req, conf, cb, userId)) return;
         const auto entitlement = entitlementsClient.checkAndConsume(userId, "REGISTER_BOT");
         if (!entitlement.allowed) {
           Json::Value details;
@@ -87,7 +88,8 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
       "/api/v1/bots",
       [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         const auto requestId = requestIdFromRequest(req);
-        const auto userId = resolveUserId(req, conf);
+        std::string userId;
+        if (!RequireUserId(req, conf, cb, userId)) return;
         auto result = quizCore.listBots(userId, requestId);
         if (result.status != QuizCoreRpcStatus::kOk) {
           cb(api::jsonErrorResponse(api::mapRpcError(result.status, "list_bots", result.error_code, result.error_message)));
@@ -111,7 +113,8 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
                         std::function<void(const drogon::HttpResponsePtr&)>&& cb,
                         std::string botId) {
         const auto requestId = requestIdFromRequest(req);
-        const auto userId = resolveUserId(req, conf);
+        std::string userId;
+        if (!RequireUserId(req, conf, cb, userId)) return;
         auto result = quizCore.getBotStatus(userId, botId, requestId);
         if (!result.bot) {
           cb(api::jsonErrorResponse(api::mapRpcError(result.status, "get_bot_status", result.error_code, result.error_message)));
@@ -153,7 +156,8 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
         }
 
         const auto requestId = requestIdFromRequest(req);
-        const auto userId = resolveUserId(req, conf);
+        std::string userId;
+        if (!RequireUserId(req, conf, cb, userId)) return;
 
         QuizCoreBot baseBot;
         bool hasBaseBot = false;
@@ -219,7 +223,9 @@ void RegisterBotsRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
         if (!RequireCsrf(req, conf, cb)) return;
 
         const auto requestId = requestIdFromRequest(req);
-        auto result = quizCore.removeBot(resolveUserId(req, conf), botId, requestId);
+        std::string userId;
+        if (!RequireUserId(req, conf, cb, userId)) return;
+        auto result = quizCore.removeBot(userId, botId, requestId);
         if (result.status != QuizCoreRpcStatus::kOk) {
           cb(api::jsonErrorResponse(api::mapRpcError(result.status, "remove_bot", result.error_code, result.error_message)));
           return;

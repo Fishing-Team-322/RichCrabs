@@ -1,5 +1,8 @@
 #include "controllers/ControllerUtils.hpp"
 
+#include <drogon/HttpRequest.h>
+#include <spdlog/spdlog.h>
+
 #include <random>
 
 #include "csrf.hpp"
@@ -7,6 +10,55 @@
 #include "session.hpp"
 
 namespace {
+
+constexpr bool kAllowDefaultUserFallbackBuild =
+#if defined(GW_ALLOW_DEFAULT_USER_FALLBACK)
+    true;
+#else
+    false;
+#endif
+
+struct UserResolution final {
+  std::optional<std::string> user_id;
+  int http_status = 401;
+  std::string reason;
+};
+
+bool IsDevFallbackAllowed(const Config& conf) {
+  return conf.app_env == "dev" || conf.app_env == "development" || kAllowDefaultUserFallbackBuild;
+}
+
+UserResolution ResolveUser(const drogon::HttpRequestPtr& req, const Config& conf) {
+  const auto sessionCookie = req->getCookie(conf.session.cookie_name);
+  auto session = security::VerifySessionFromRequest(req, conf.session);
+  if (session && session->role == "host" && !session->user_id.empty()) {
+    return {.user_id = session->user_id, .http_status = 200, .reason = "ok"};
+  }
+
+  std::string reason = "session_invalid";
+  int httpStatus = 401;
+  if (sessionCookie.empty()) {
+    reason = "session_cookie_missing";
+  } else if (!session) {
+    reason = "session_cookie_invalid";
+  } else if (session->role != "host") {
+    reason = "session_role_forbidden";
+    httpStatus = 403;
+  } else if (session->user_id.empty()) {
+    reason = "session_user_id_missing";
+  }
+
+  if (IsDevFallbackAllowed(conf) && !conf.default_user_id.empty()) {
+    spdlog::warn("auth_fallback_default_user_id reason={} env={} path={}",
+                 reason,
+                 conf.app_env,
+                 req->path());
+    return {.user_id = conf.default_user_id, .http_status = 200, .reason = reason};
+  }
+
+  spdlog::warn("auth_denied reason={} env={} path={}", reason, conf.app_env, req->path());
+  return {.user_id = std::nullopt, .http_status = httpStatus, .reason = reason};
+}
 
 std::string generateRequestId() {
   static constexpr char kHex[] = "0123456789abcdef";
@@ -46,10 +98,25 @@ std::string clientIpFromRequest(const drogon::HttpRequestPtr& req) {
   return req->peerAddr().toIp();
 }
 
-std::string resolveUserId(const drogon::HttpRequestPtr& req, const Config& conf) {
-  auto session = security::VerifySessionFromRequest(req, conf.session);
-  if (session && session->role == "host" && !session->user_id.empty()) return session->user_id;
-  return conf.default_user_id;
+std::optional<std::string> resolveUserId(const drogon::HttpRequestPtr& req, const Config& conf) {
+  return ResolveUser(req, conf).user_id;
+}
+
+bool RequireUserId(const drogon::HttpRequestPtr& req,
+                   const Config& conf,
+                   const std::function<void(const drogon::HttpResponsePtr&)>& cb,
+                   std::string& userIdOut) {
+  auto resolved = ResolveUser(req, conf);
+  if (!resolved.user_id.has_value()) {
+    if (resolved.http_status == 403) {
+      cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "host session is required"));
+    } else {
+      cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
+    }
+    return false;
+  }
+  userIdOut = *resolved.user_id;
+  return true;
 }
 
 Json::Value botToJson(const QuizCoreBot& bot, const std::optional<BotState>& state) {

@@ -12,7 +12,8 @@ void RegisterEntitlementsRoutes(const Config& conf, EntitlementsClient& entitlem
       "/api/v1/entitlements",
       [&entitlementsClient, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         EntitlementsClientError error;
-        const auto userId = resolveUserId(req, conf);
+        std::string userId;
+        if (!RequireUserId(req, conf, cb, userId)) return;
         const auto snapshot = entitlementsClient.getEntitlements(userId, error);
         if (!snapshot) {
           cb(api::jsonErrorResponse(error.gateway_error));
@@ -38,7 +39,8 @@ void RegisterEntitlementsRoutes(const Config& conf, EntitlementsClient& entitlem
       "/api/v1/usage",
       [&entitlementsClient, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         EntitlementsClientError error;
-        const auto userId = resolveUserId(req, conf);
+        std::string userId;
+        if (!RequireUserId(req, conf, cb, userId)) return;
         const auto snapshot = entitlementsClient.getUsage(userId, error);
         if (!snapshot) {
           cb(api::jsonErrorResponse(error.gateway_error));

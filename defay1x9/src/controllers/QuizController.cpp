@@ -158,7 +158,9 @@ void RegisterQuizRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
           return;
         }
 
-        const auto ownerUserId = owner.value_or(resolveUserId(req, conf));
+        std::string resolvedUserId;
+        if (!RequireUserId(req, conf, cb, resolvedUserId)) return;
+        const auto ownerUserId = owner.value_or(resolvedUserId);
         const auto rpc = quizCore.createQuiz(ownerUserId, *title, description.value_or(""), *questions);
         if (isRpcDegradedStatus(rpc.status)) {
           cb(degradedQuizResponse("createQuiz", rpc.error_message));
@@ -229,6 +231,10 @@ void RegisterQuizRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
       [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string quizId) {
         if (!RequireCsrf(req, conf, cb)) return;
 
+        std::string userId;
+        if (!RequireUserId(req, conf, cb, userId)) return;
+        (void)userId;
+
         std::string parseError;
         auto body = api::parseJsonBody(req, parseError);
         if (!body) {
@@ -292,7 +298,8 @@ void RegisterQuizRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
       [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string quizId) {
         if (!RequireCsrf(req, conf, cb)) return;
 
-        const auto userId = resolveUserId(req, conf);
+        std::string userId;
+        if (!RequireUserId(req, conf, cb, userId)) return;
         const auto rpc = quizCore.publishQuiz(quizId, userId);
         if (isRpcDegradedStatus(rpc.status)) {
           cb(degradedQuizResponse("publishQuiz", rpc.error_message));
@@ -338,7 +345,8 @@ void RegisterQuizRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
           return;
         }
 
-        const auto userId = resolveUserId(req, conf);
+        std::string userId;
+        if (!RequireUserId(req, conf, cb, userId)) return;
         const auto ip = clientIpFromRequest(req);
         const auto ipDecision = RedisAllowFixedWindow(conf.redis_url, "rl:ai_generate:ip:" + ip, kRateLimitAiPerIp, kRateLimitWindowSec);
         if (ipDecision.has_value() && !ipDecision->allowed) {
