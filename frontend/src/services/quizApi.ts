@@ -13,7 +13,7 @@ import type {
   SaveQuizDraftRequestDto,
 } from '../types/quiz.types'
 
-const QUIZZES_BASE = '/api/quizzes'
+const QUIZZES_BASE = '/api/v1/quizzes'
 
 export interface QuizApi {
   create: (payload: CreateQuizRequestDto) => Promise<CreateQuizResponseDto>
@@ -53,48 +53,81 @@ const sleep = async (ms: number): Promise<void> =>
     window.setTimeout(resolve, ms)
   })
 
+const mapQuizToDraft = (quiz: {
+  quizId: string
+  title?: string
+  description?: string
+  questions?: Array<{ id: string; text: string; options: string[]; correctIndex?: number | null }>
+}): QuizDraftDto => ({
+  id: quiz.quizId,
+  meta: {
+    title: quiz.title || 'Untitled quiz',
+    language: 'ru',
+    tags: [],
+    coverUrl: '',
+  },
+  questions: (quiz.questions || []).map((question) => ({
+    id: question.id,
+    text: question.text,
+    options: question.options.map((option, index) => ({ id: `${question.id}-${index}`, text: option })),
+    correctOptionId: `${question.id}-${question.correctIndex || 0}`,
+    timeLimitSec: 20,
+    difficulty: 'medium',
+  })),
+  status: 'draft',
+  version: 1,
+  updatedAt: new Date().toISOString(),
+})
+
 export const quizApi: QuizApi = {
   create: (payload: CreateQuizRequestDto) =>
-    apiFetch<CreateQuizResponseDto>('/api/games/create', {
+    apiFetch<{ quiz: { quizId: string } }>(QUIZZES_BASE, {
       method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+      body: JSON.stringify({ title: payload.topic, description: '', questions: [] }),
+    }).then((res) => ({ creatorToken: '', gameId: res.quiz.quizId, pin: '' })),
 
   nextQuestion: (gameId: string) =>
-    apiFetch<QuizQuestionDto>(`/api/games/${encodeURIComponent(gameId)}/question`),
+    apiFetch<QuizQuestionDto>(`/api/v1/games/${encodeURIComponent(gameId)}/question`),
 
   submitAnswer: (gameId: string, answer: number) =>
-    apiFetch<QuizAnswerResultDto>(`/api/games/${encodeURIComponent(gameId)}/answer`, {
+    apiFetch<QuizAnswerResultDto>(`/api/v1/games/${encodeURIComponent(gameId)}/answer`, {
       method: 'POST',
       body: JSON.stringify({ answer }),
     }),
 
   list: (params: QuizListParams = {}) =>
-    apiFetch<QuizListItemDto[]>(
-      `${QUIZZES_BASE}${toQueryString({
-        status: params.status,
-        search: params.search,
-      })}`,
+    apiFetch<{ items: Array<{ quizId: string; title: string; questions?: unknown[] }> }>(
+      `${QUIZZES_BASE}${toQueryString({ ownerUserId: params.search })}`,
+    ).then((res) =>
+      res.items.map((item) => ({
+        id: item.quizId,
+        title: item.title,
+        language: 'ru',
+        tags: [],
+        status: 'draft',
+        updatedAt: new Date().toISOString(),
+        questionsCount: item.questions?.length || 0,
+      })),
     ),
 
   draft: () =>
-    apiFetch<QuizDraftDto>(`${QUIZZES_BASE}/draft`, {
-      method: 'POST',
-    }),
+    apiFetch<{ quiz: { quizId: string; title?: string; description?: string; questions?: Array<{ id: string; text: string; options: string[] }> } }>(
+      QUIZZES_BASE,
+      {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Новый квиз', questions: [] }),
+      },
+    ).then((res) => mapQuizToDraft(res.quiz)),
 
-  createDraft: () =>
-    apiFetch<QuizDraftDto>(`${QUIZZES_BASE}/draft`, {
-      method: 'POST',
-    }),
+  createDraft: () => quizApi.draft(),
 
   startGeneration: (payload: GenerateQuizDraftRequestDto) =>
-    apiFetch<GenerateQuizJobDto>(`${QUIZZES_BASE}/generate`, {
+    apiFetch<GenerateQuizJobDto>(`${QUIZZES_BASE}/ai-generate`, {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ prompt: payload.topic, desiredQuestionCount: payload.questionCount }),
     }),
 
-  getGenerationStatus: (jobId: string) =>
-    apiFetch<GenerateQuizJobDto>(`${QUIZZES_BASE}/generate/${encodeURIComponent(jobId)}`),
+  getGenerationStatus: (jobId: string) => apiFetch<GenerateQuizJobDto>(`${QUIZZES_BASE}/ai-jobs/${encodeURIComponent(jobId)}`),
 
   generateDraft: async (payload: GenerateQuizDraftRequestDto, onStatus) => {
     const started = await quizApi.startGeneration(payload)
@@ -103,10 +136,11 @@ export const quizApi: QuizApi = {
 
     for (let attempt = 0; attempt < 90; attempt += 1) {
       if (currentJob.status === 'done') {
-        if (!currentJob.draftId) {
+        const draftId = currentJob.draftId || (currentJob as { quiz?: { quizId?: string } }).quiz?.quizId
+        if (!draftId) {
           throw new Error('Генерация завершена, но ID черновика отсутствует.')
         }
-        return quizApi.getDraft(currentJob.draftId)
+        return quizApi.getDraft(draftId)
       }
 
       if (currentJob.status === 'failed') {
@@ -121,27 +155,40 @@ export const quizApi: QuizApi = {
     throw new Error('Превышено время ожидания генерации. Попробуйте ещё раз.')
   },
 
-  getDraft: (quizId: string) => apiFetch<QuizDraftDto>(`${QUIZZES_BASE}/${encodeURIComponent(quizId)}/draft`),
+  getDraft: (quizId: string) =>
+    apiFetch<{ quiz: { quizId: string; title?: string; description?: string; questions?: Array<{ id: string; text: string; options: string[]; correctIndex?: number | null }> } }>(
+      `${QUIZZES_BASE}/${encodeURIComponent(quizId)}`,
+    ).then((res) => mapQuizToDraft(res.quiz)),
 
   saveDraft: (quizId: string, payload: SaveQuizDraftRequestDto) =>
-    apiFetch<QuizDraftDto>(`${QUIZZES_BASE}/${encodeURIComponent(quizId)}/draft`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    }),
+    apiFetch<{ quiz: { quizId: string; title?: string; description?: string; questions?: Array<{ id: string; text: string; options: string[]; correctIndex?: number | null }> } }>(
+      `${QUIZZES_BASE}/${encodeURIComponent(quizId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: payload.meta.title,
+          questions: payload.questions.map((question) => ({
+            id: question.id,
+            text: question.text,
+            options: question.options.map((option) => option.text),
+            correctIndex: Math.max(
+              0,
+              question.options.findIndex((option) => option.id === question.correctOptionId),
+            ),
+          })),
+        }),
+      },
+    ).then((res) => mapQuizToDraft(res.quiz)),
 
-  publish: (quizId: string, payload: PublishQuizRequestDto = {}) =>
-    apiFetch<QuizDraftDto>(`${QUIZZES_BASE}/${encodeURIComponent(quizId)}/publish`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  publish: (quizId: string, _payload: PublishQuizRequestDto = {}) =>
+    apiFetch<{ quiz: { quizId: string; title?: string; description?: string; questions?: Array<{ id: string; text: string; options: string[] }> } }>(
+      `${QUIZZES_BASE}/${encodeURIComponent(quizId)}/publish`,
+      {
+        method: 'POST',
+      },
+    ).then((res) => mapQuizToDraft(res.quiz)),
 
-  unpublish: (quizId: string) =>
-    apiFetch<QuizDraftDto>(`${QUIZZES_BASE}/${encodeURIComponent(quizId)}/unpublish`, {
-      method: 'POST',
-    }),
+  unpublish: (quizId: string) => quizApi.getDraft(quizId),
 
-  listVersions: (quizId: string) =>
-    apiFetch<Array<{ version: number; updatedAt: string; status: string }>>(
-      `${QUIZZES_BASE}/${encodeURIComponent(quizId)}/versions`,
-    ),
+  listVersions: (_quizId: string) => Promise.resolve([]),
 }
