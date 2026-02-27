@@ -24,6 +24,26 @@ import AdminDashboardPage from '../../pages/admin/DashboardPage'
 import AdminSecurityPage from '../../pages/admin/SecurityPage'
 import AuthGuard from './guards/AuthGuard'
 import GuestGuard from './guards/GuestGuard'
+import {
+  AdminDashboard,
+  AdminSecurity,
+  CreateRoom,
+  HomePage,
+  InviteJoinPage,
+  JoinPage,
+  Login,
+  OpenGames,
+  Profile,
+  QuizCreate,
+  QuizEdit,
+  QuizPublish,
+  QuizzesList,
+  Register,
+  RoomDetails,
+  RuntimePage,
+  Subscriptions,
+  TelegramBots,
+} from './lazyPages'
 import { routes } from './routeMap'
 import './router.css'
 

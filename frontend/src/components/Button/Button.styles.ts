@@ -1,5 +1,7 @@
 import styled, { css } from 'styled-components';
 
+type ThemePalette = { colors: Record<string, string> }
+
 interface StyledButtonProps {
   variant?: 'primary' | 'secondary' | 'outline';
   fullWidth?: boolean;
@@ -20,11 +22,13 @@ export const StyledButton = styled.button<StyledButtonProps>`
   width: ${({ fullWidth }) => (fullWidth ? '100%' : 'auto')};
   
   ${({ variant = 'primary', theme }) => {
+    const palette = (theme as ThemePalette).colors
+
     switch (variant) {
       case 'primary':
         return css`
-          background-color: ${theme.colors.primary};
-          color: ${theme.colors.white};
+          background-color: ${palette.primary};
+          color: ${palette.textPrimary};
           &:hover:not(:disabled) {
             opacity: 0.9;
           }
@@ -32,20 +36,20 @@ export const StyledButton = styled.button<StyledButtonProps>`
       case 'secondary':
         return css`
           background-color: transparent;
-          color: ${theme.colors.primary};
-          border: 2px solid ${theme.colors.primary};
+          color: ${palette.primary};
+          border: 2px solid ${palette.primary};
           &:hover:not(:disabled) {
-            background-color: ${theme.colors.primary};
-            color: ${theme.colors.white};
+            background-color: ${palette.primary};
+            color: ${palette.textPrimary};
           }
         `;
       case 'outline':
         return css`
           background-color: transparent;
-          color: ${theme.colors.white};
-          border: 1px solid ${theme.colors.gray};
+          color: ${palette.textPrimary};
+          border: 1px solid ${palette.border};
           &:hover:not(:disabled) {
-            border-color: ${theme.colors.primary};
+            border-color: ${palette.primary};
           }
         `;
       default:

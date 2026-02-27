@@ -1,5 +1,5 @@
 
-import type { SecurityEvent } from "../types";
+import type { SecurityEvent } from '../features/monitoring/types';
 
 export function SecurityEventsTable(props: { events: SecurityEvent[]; loading: boolean }) {
   return (

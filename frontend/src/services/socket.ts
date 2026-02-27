@@ -174,7 +174,7 @@ const configureLifecycle = (client: QuizSocket) => {
 
 export const connectSocket = (token: string, gameId: string): QuizSocket => {
   const shouldReuse = socket && activeConfig?.token === token && activeConfig?.gameId === gameId
-  if (shouldReuse) {
+  if (shouldReuse && socket) {
     return socket
   }
 

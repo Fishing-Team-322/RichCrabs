@@ -68,3 +68,18 @@ npm run build
 # локальный предпросмотр production-сборки
 npm run preview
 ```
+
+Проверки качества фронтенда локально:
+
+```bash
+cd frontend
+npm ci
+
+# линтер выполняется только если добавлен script lint
+npm run lint --if-present
+
+# fail-fast: остановится на первой ошибке типов или тестов
+npm run typecheck && npm run test:coverage && npm run build
+```
+
+После `npm run test:coverage` отчёт покрытия будет доступен в `frontend/coverage`.
