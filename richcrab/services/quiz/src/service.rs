@@ -630,6 +630,10 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
         request: Request<proto::richcrab::v1::GetAiQuizJobRequest>,
     ) -> Result<Response<proto::richcrab::v1::GetAiQuizJobResponse>, Status> {
         let req = request.into_inner();
+        let requested_by = req
+            .requested_by
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("requested_by is required"))?;
         let job_uuid = Uuid::parse_str(&req.job_id)
             .map_err(|_| Status::invalid_argument("job_id must be uuid"))?;
 
@@ -639,6 +643,11 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
             .await
             .map_err(|e| Status::internal(format!("failed to read ai job: {e}")))?
             .ok_or_else(|| Status::not_found("ai quiz job not found"))?;
+        if job.owner_user_id.to_string() != requested_by {
+            return Err(Status::permission_denied(
+                "only job owner can read ai job status",
+            ));
+        }
 
         let quiz = job.result_quiz_json.as_ref().and_then(Self::quiz_from_json);
         let error = job.error_message.map(|message| proto::richcrab::v1::Error {

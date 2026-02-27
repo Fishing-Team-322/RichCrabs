@@ -461,7 +461,10 @@ void RegisterQuizRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
       [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string jobId) {
         if (!RequireCsrf(req, conf, cb)) return;
 
-        const auto rpc = quizCore.getAiQuizJob(jobId);
+        std::string userId;
+        if (!RequireUserId(req, conf, cb, userId)) return;
+
+        const auto rpc = quizCore.getAiQuizJob(jobId, userId);
         if (rpc.status != QuizCoreRpcStatus::kOk) {
           cb(api::jsonErrorResponse(api::mapRpcError(rpc.status, "QuizService.GetAiQuizJob", rpc.error_code, rpc.error_message)));
           return;
@@ -482,7 +485,10 @@ void RegisterQuizRoutes(const Config& conf, QuizCoreClient& quizCore, Entitlemen
       [&quizCore, conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, std::string jobId) {
         if (!RequireCsrf(req, conf, cb)) return;
 
-        const auto rpc = quizCore.getAiQuizJob(jobId);
+        std::string userId;
+        if (!RequireUserId(req, conf, cb, userId)) return;
+
+        const auto rpc = quizCore.getAiQuizJob(jobId, userId);
         if (rpc.status != QuizCoreRpcStatus::kOk) {
           cb(api::jsonErrorResponse(api::mapRpcError(rpc.status, "QuizService.GetAiQuizJob", rpc.error_code, rpc.error_message)));
           return;
