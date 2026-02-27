@@ -2,7 +2,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
 use chrono::Utc;
 use futures::Stream;
-use qrcodegen::{QrCode, QrCodeEcc};
+use qrcode::{render::svg, QrCode};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::Deserialize;
 use shared::{redis_client::RedisClient, redis_keys};
@@ -27,32 +27,15 @@ fn invite_path(invite_token: &str) -> String {
     format!("/join?inviteToken={invite_token}")
 }
 
-fn invite_qr_svg(invite_path: &str) -> String {
-    let qr = QrCode::encode_text(invite_path, QrCodeEcc::Medium)
-        .expect("invite path must always encode as QR");
-    let border: i32 = 4;
-    let scale: i32 = 6;
-    let size = qr.size();
-    let dimension = (size + border * 2) * scale;
+fn invite_qr_svg(path: &str) -> Result<String, Status> {
+    let qr = QrCode::new(path)
+        .map_err(|e| Status::internal(format!("failed to generate invite QR code: {e}")))?;
 
-    let mut svg = format!(
-        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {dimension} {dimension}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/>"##
-    );
-
-    for y in 0..size {
-        for x in 0..size {
-            if qr.get_module(x, y) {
-                let rx = (x + border) * scale;
-                let ry = (y + border) * scale;
-                svg.push_str(&format!(
-                    r##"<rect x="{rx}" y="{ry}" width="{scale}" height="{scale}" fill="#000"/>"##
-                ));
-            }
-        }
-    }
-
-    svg.push_str("</svg>");
-    svg
+    Ok(qr
+        .render::<svg::Color>()
+        .min_dimensions(246, 246)
+        .quiet_zone(true)
+        .build())
 }
 
 pub struct GameServiceImpl {
@@ -254,7 +237,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         self.report_usage(&owner_id, "CREATE_ROOM", 1).await?;
 
         let invite_path = invite_path(&invite_token);
-        let invite_qr_svg = invite_qr_svg(&invite_path);
+        let invite_qr_svg = invite_qr_svg(&invite_path)?;
 
         Ok(Response::new(proto::richcrab::v1::CreateRoomResponse {
             room_id: Some(proto::richcrab::v1::RoomId { value: room_id }),
