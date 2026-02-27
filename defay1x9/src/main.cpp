@@ -65,7 +65,7 @@ int main() {
   controllers::RegisterBotsRoutes(conf, quizCore, entitlementsClient);
   controllers::RegisterTelegramRoutes(conf, quizCore, entitlementsClient);
   controllers::RegisterEntitlementsRoutes(conf, entitlementsClient);
-  controllers::RegisterAdminRoutes(conf);
+  controllers::RegisterAdminRoutes(conf, quizCore);
 
   drogon::app().addListener(conf.listen_host, conf.listen_port).run();
   return 0;

@@ -123,6 +123,13 @@ struct QuizCoreGetBotResult final {
   std::optional<QuizCoreBot> bot;
 };
 
+struct QuizCoreUpdateBotStatusResult final {
+  QuizCoreRpcStatus status = QuizCoreRpcStatus::kUnknown;
+  std::string error_code;
+  std::string error_message;
+  std::optional<QuizCoreBot> bot;
+};
+
 struct QuizCoreGetRoomStateResult final {
   QuizCoreRpcStatus status = QuizCoreRpcStatus::kUnknown;
   std::string error_code;
@@ -252,6 +259,12 @@ public:
   virtual QuizCoreGetBotResult getBotStatus(const std::string& userId,
                                             const std::string& botId,
                                             const std::string& requestId = "") = 0;
+  virtual QuizCoreUpdateBotStatusResult updateBotStatus(const std::string& userId,
+                                                        const std::string& botId,
+                                                        bool enabled,
+                                                        const std::optional<std::string>& reason = std::nullopt,
+                                                        const std::string& requestId = "",
+                                                        const std::string& userRole = "") = 0;
   virtual QuizCoreCreateQuizResult createQuiz(const std::string& ownerUserId,
                                               const std::string& title,
                                               const std::string& description,
@@ -352,6 +365,12 @@ public:
   QuizCoreGetBotResult getBotStatus(const std::string& userId,
                                     const std::string& botId,
                                     const std::string& requestId = "") override;
+  QuizCoreUpdateBotStatusResult updateBotStatus(const std::string& userId,
+                                                const std::string& botId,
+                                                bool enabled,
+                                                const std::optional<std::string>& reason = std::nullopt,
+                                                const std::string& requestId = "",
+                                                const std::string& userRole = "") override;
   QuizCoreCreateQuizResult createQuiz(const std::string& ownerUserId,
                                       const std::string& title,
                                       const std::string& description,

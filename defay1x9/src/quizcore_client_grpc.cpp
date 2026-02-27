@@ -43,6 +43,8 @@ using richcrab::v1::RegisterBotRequest;
 using richcrab::v1::RegisterBotResponse;
 using richcrab::v1::RemoveBotRequest;
 using richcrab::v1::RemoveBotResponse;
+using richcrab::v1::UpdateBotStatusRequest;
+using richcrab::v1::UpdateBotStatusResponse;
 using richcrab::v1::ResumeGameRequest;
 using richcrab::v1::ResumeGameResponse;
 using richcrab::v1::StartGameRequest;
@@ -153,6 +155,10 @@ void setQuiz(const QuizCoreQuiz& input, Quiz* output) {
 
 void attachUserId(grpc::ClientContext& ctx, const std::string& userId) {
   ctx.AddMetadata("x-user-id", userId);
+}
+
+void attachUserRole(grpc::ClientContext& ctx, const std::string& role) {
+  if (!role.empty()) ctx.AddMetadata("x-user-role", role);
 }
 
 void attachRequestId(grpc::ClientContext& ctx, const std::string& requestId) {
@@ -694,6 +700,38 @@ QuizCoreGetBotResult QuizCoreClientGrpc::getBotStatus(const std::string& userId,
   if (!resp.has_bot()) return out;
   out.status = QuizCoreRpcStatus::kOk;
   out.bot = mapBot(resp.bot());
+  return out;
+}
+
+
+QuizCoreUpdateBotStatusResult QuizCoreClientGrpc::updateBotStatus(const std::string& userId,
+                                                                  const std::string& botId,
+                                                                  bool enabled,
+                                                                  const std::optional<std::string>& reason,
+                                                                  const std::string& requestId,
+                                                                  const std::string& userRole) {
+  grpc::ClientContext ctx;
+  attachUserId(ctx, userId);
+  attachUserRole(ctx, userRole);
+  attachRequestId(ctx, requestId);
+
+  UpdateBotStatusRequest req;
+  req.mutable_bot_id()->set_value(botId);
+  req.set_enabled(enabled);
+  if (reason.has_value()) req.set_reason(*reason);
+
+  UpdateBotStatusResponse resp;
+  const auto status = impl_->bot->UpdateBotStatus(&ctx, req, &resp);
+
+  QuizCoreUpdateBotStatusResult out;
+  out.status = mapStatus(status);
+  if (!status.ok()) return out;
+  if (resp.has_error()) {
+    applyProtoErrorStatus(out, resp.error());
+    return out;
+  }
+  if (resp.has_bot()) out.bot = mapBot(resp.bot());
+  out.status = QuizCoreRpcStatus::kOk;
   return out;
 }
 
