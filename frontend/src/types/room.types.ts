@@ -11,7 +11,8 @@ export interface PlayerDto {
 }
 
 export interface JoinRoomRequestDto {
-  pin: string
+  pin?: string
+  inviteToken?: string
   playerName: string
 }
 

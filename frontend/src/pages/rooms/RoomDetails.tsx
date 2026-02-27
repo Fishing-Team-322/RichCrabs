@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { QRCodeSVG } from 'qrcode.react'
 import { routes } from '../../app/router/routeMap'
 import { roomsApi } from '../../services/roomsApi'
 import type { RoomDetailsDto } from '../../types/room.types'
@@ -108,6 +109,14 @@ const RoomDetails = () => {
           <div className="roomMeta">
             Игроки: {room.playersCount}/{room.playerLimit} · Приватность: {room.settings.privacy}
           </div>
+
+
+          {inviteLink && (
+            <div className="roomQr">
+              <QRCodeSVG value={inviteLink} size={168} includeMargin />
+              <span className="roomMeta">QR для быстрого входа по invite-link</span>
+            </div>
+          )}
           <div className="roomMeta">
             Таймеры: lobby {room.settings.timers.lobbyTimerSec}s · question {room.settings.timers.questionTimerSec}s · reveal{' '}
             {room.settings.timers.answerRevealSec}s
