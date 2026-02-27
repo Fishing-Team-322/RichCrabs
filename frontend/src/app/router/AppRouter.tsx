@@ -3,24 +3,26 @@ import { Link, Route, Routes } from 'react-router-dom'
 import { useAppDispatch } from '../../store/hooks'
 import { restoreSession } from '../../store/slices'
 import Layout from '../../components/Layout'
-import Login from '../../pages/auth/Login'
-import Register from '../../pages/auth/Register'
-import QuizzesList from '../../pages/quizzes/QuizzesList'
-import QuizCreate from '../../pages/quizzes/QuizCreate'
-import QuizEdit from '../../pages/quizzes/QuizEdit'
-import QuizPublish from '../../pages/quizzes/QuizPublish'
-import HomePage from '../../pages/Home/Home'
-import CreateRoom from '../../pages/CreateRoom/CreateRoom'
-import OpenGames from '../../pages/rooms/OpenGames'
-import RoomDetails from '../../pages/rooms/RoomDetails'
-import JoinPage from '../../pages/join/JoinPage'
-import InviteJoinPage from '../../pages/join/InviteJoinPage'
-import RuntimePage from '../../pages/Quiz/RuntimePage'
-import Profile from '../../pages/Profile/Profile'
-import Subscriptions from '../../pages/Subscriptions/Subscriptions'
-import TelegramBots from '../../pages/TelegramBots/TelegramBots'
 import AuthGuard from './guards/AuthGuard'
 import GuestGuard from './guards/GuestGuard'
+import {
+  CreateRoom,
+  HomePage,
+  InviteJoinPage,
+  JoinPage,
+  Login,
+  OpenGames,
+  Profile,
+  QuizCreate,
+  QuizEdit,
+  QuizPublish,
+  QuizzesList,
+  Register,
+  RoomDetails,
+  RuntimePage,
+  Subscriptions,
+  TelegramBots,
+} from './lazyPages'
 import { routes } from './routeMap'
 import './router.css'
 

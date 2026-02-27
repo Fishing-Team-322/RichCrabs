@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { routes } from '../../app/router/routeMap'
+import { preloadQuizRuntime } from '../../app/router/lazyPages'
 import { useNotifications } from '../../app/providers/NotificationProvider'
 import { joinApi } from '../../services/joinApi'
 import { playerSession } from '../../services/playerSession'
@@ -33,7 +34,11 @@ const JoinPage = () => {
   const notifications = useNotifications()
   const { t } = useTranslation()
 
-  const onSubmitPin = async (event: FormEvent) => {
+  useEffect(() => {
+    void preloadQuizRuntime()
+  }, [])
+
+  const onSubmitPin = useCallback(async (event: FormEvent) => {
     event.preventDefault()
     const nextErrors = validateJoinByPin(pinForm)
     if (Object.keys(nextErrors).length) return setPinErrors(nextErrors)
@@ -54,9 +59,9 @@ const JoinPage = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [navigate, notifications, pinForm])
 
-  const onSubmitInvite = async (event: FormEvent) => {
+  const onSubmitInvite = useCallback(async (event: FormEvent) => {
     event.preventDefault()
     const nextErrors = validateJoinByInvite(inviteForm)
     if (Object.keys(nextErrors).length) return setInviteErrors(nextErrors)
@@ -77,7 +82,7 @@ const JoinPage = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [inviteForm, navigate, notifications])
 
   return (
     <section className="roomsPage">

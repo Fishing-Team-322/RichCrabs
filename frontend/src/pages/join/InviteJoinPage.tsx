@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { routes } from '../../app/router/routeMap'
+import { preloadQuizRuntime } from '../../app/router/lazyPages'
 import { joinApi } from '../../services/joinApi'
 import { AppError } from '../../services/api'
 import { playerSession } from '../../services/playerSession'
@@ -35,6 +36,8 @@ const InviteJoinPage = () => {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    void preloadQuizRuntime()
+
     if (!token) {
       setError('Invite-token не указан в ссылке.')
       return
