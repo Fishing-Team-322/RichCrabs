@@ -3,6 +3,7 @@
 #include <drogon/drogon.h>
 #include <spdlog/spdlog.h>
 
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -17,6 +18,8 @@
 #include "random.hpp"
 
 namespace {
+
+constexpr const char* kDefaultTelegramQuizId = "telegram-default-quiz";
 
 struct TelegramBotBinding final {
   struct ProtectedToken final {
@@ -50,6 +53,13 @@ struct TelegramBotBinding final {
   std::string name;
 };
 
+struct TelegramRoomSnapshot final {
+  std::string room_id;
+  std::string pin;
+  std::string invite_token;
+  std::string invite_url;
+};
+
 class TelegramBindings final {
 public:
   TelegramBotBinding save(const TelegramBotBinding& binding) {
@@ -70,8 +80,32 @@ private:
   std::unordered_map<std::string, TelegramBotBinding> by_id_;
 };
 
+class TelegramRoomMemory final {
+public:
+  void saveLastRoom(const std::string& botId, const TelegramRoomSnapshot& room) {
+    std::lock_guard<std::mutex> lock(mu_);
+    by_bot_[botId] = room;
+  }
+
+  std::optional<TelegramRoomSnapshot> getLastRoom(const std::string& botId) const {
+    std::lock_guard<std::mutex> lock(mu_);
+    auto it = by_bot_.find(botId);
+    if (it == by_bot_.end()) return std::nullopt;
+    return it->second;
+  }
+
+private:
+  mutable std::mutex mu_;
+  std::unordered_map<std::string, TelegramRoomSnapshot> by_bot_;
+};
+
 TelegramBindings& bindings() {
   static TelegramBindings s;
+  return s;
+}
+
+TelegramRoomMemory& roomMemory() {
+  static TelegramRoomMemory s;
   return s;
 }
 
@@ -83,6 +117,92 @@ bool isValidTelegramTokenFormat(const std::string& token) {
 std::string maskToken(const std::string& token) {
   if (token.size() <= 8) return "***";
   return token.substr(0, 4) + "***" + token.substr(token.size() - 4);
+}
+
+std::optional<int64_t> extractInt64(const Json::Value& value) {
+  if (value.isInt64()) return value.asInt64();
+  if (value.isInt()) return value.asInt();
+  if (value.isUInt64()) {
+    return static_cast<int64_t>(value.asUInt64());
+  }
+  if (value.isUInt()) {
+    return static_cast<int64_t>(value.asUInt());
+  }
+  if (value.isString()) {
+    try {
+      return std::stoll(value.asString());
+    } catch (...) {
+      return std::nullopt;
+    }
+  }
+  return std::nullopt;
+}
+
+struct TelegramCommand final {
+  std::string command;
+  std::optional<std::string> argument;
+};
+
+std::optional<TelegramCommand> parseTelegramCommand(const std::string& text) {
+  if (text.empty() || text.front() != '/') return std::nullopt;
+
+  std::istringstream iss(text);
+  std::string first;
+  iss >> first;
+  if (first.empty()) return std::nullopt;
+
+  const auto mentionPos = first.find('@');
+  if (mentionPos != std::string::npos) {
+    first = first.substr(0, mentionPos);
+  }
+
+  std::string arg;
+  iss >> arg;
+  TelegramCommand out;
+  out.command = first;
+  if (!arg.empty()) out.argument = arg;
+  return out;
+}
+
+std::string buildCreateGameMessage(const TelegramRoomSnapshot& room) {
+  std::ostringstream out;
+  out << "✅ Игра создана\n";
+  out << "PIN: " << room.pin << "\n";
+  out << "Invite: " << room.invite_url;
+  return out.str();
+}
+
+std::string buildPinMessage(const TelegramRoomSnapshot& room) {
+  return "PIN последней комнаты: " + room.pin;
+}
+
+std::string buildInviteMessage(const TelegramRoomSnapshot& room) {
+  return "Invite последней комнаты: " + room.invite_url;
+}
+
+void sendTelegramReply(const std::shared_ptr<controllers::TelegramWebhookClient>& webhookClient,
+                       const TelegramBotBinding& binding,
+                       const std::optional<int64_t>& chatId,
+                       const std::optional<int64_t>& messageId,
+                       const std::string& text,
+                       const std::string& requestId,
+                       const std::string& botId) {
+  if (!chatId.has_value()) {
+    spdlog::warn("telegram_reply_skipped_no_chat request_id={} bot_id={}", requestId, botId);
+    return;
+  }
+
+  webhookClient->sendMessage(
+      binding.token.reveal(),
+      std::to_string(*chatId),
+      text,
+      messageId,
+      requestId,
+      [requestId, botId](controllers::TelegramSendMessageResult result) {
+        if (!result.delivered) {
+          spdlog::warn("telegram_reply_failed request_id={} bot_id={} status={}", requestId, botId, result.status);
+        }
+      });
 }
 
 }  // namespace
@@ -183,10 +303,10 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore) {
 
   drogon::app().registerHandler(
       "/telegram/webhook/{1}/{2}",
-      [&quizCore](const drogon::HttpRequestPtr& req,
-                  std::function<void(const drogon::HttpResponsePtr&)>&& cb,
-                  std::string botId,
-                  std::string secret) {
+      [&quizCore, conf, webhookClient](const drogon::HttpRequestPtr& req,
+                                       std::function<void(const drogon::HttpResponsePtr&)>&& cb,
+                                       std::string botId,
+                                       std::string secret) {
         auto binding = bindings().get(botId);
         if (!binding) {
           cb(api::jsonErrorResponse(404, api::ErrorCode::kNotFound, "bot not found"));
@@ -213,25 +333,115 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore) {
         }
 
         const auto requestId = requestIdFromRequest(req);
-        const std::string text = payload["message"].get("text", "").asString();
+        const Json::Value& message = payload["message"];
+        const std::string text = message.get("text", "").asString();
+        const auto chatId = extractInt64(message["chat"]["id"]);
+        const auto messageId = extractInt64(message["message_id"]);
 
-        if (text.rfind("/create_game", 0) == 0) {
-          const auto room = quizCore.createRoom(binding->owner_user_id,
-                                                "telegram-default-quiz",
-                                                "Telegram room",
-                                                requestId);
+        Json::Value commandResult;
+        commandResult["status"] = "ignored";
+
+        auto command = parseTelegramCommand(text);
+        if (command && command->command == "/create_game") {
+          const std::string quizId = command->argument.value_or(kDefaultTelegramQuizId);
+          const auto room = quizCore.createRoom(binding->owner_user_id, quizId, "Telegram room", requestId);
           if (room && room->status == QuizCoreRpcStatus::kOk) {
+            TelegramRoomSnapshot snapshot{
+                .room_id = room->room_id,
+                .pin = room->pin,
+                .invite_token = room->invite_token,
+                .invite_url = conf.public_base_url + "/invite/" + room->invite_token,
+            };
+            roomMemory().saveLastRoom(botId, snapshot);
+            commandResult["status"] = "ok";
+            commandResult["message"] = "room_created";
+            commandResult["pin"] = snapshot.pin;
+            commandResult["inviteUrl"] = snapshot.invite_url;
+
+            sendTelegramReply(webhookClient,
+                              *binding,
+                              chatId,
+                              messageId,
+                              buildCreateGameMessage(snapshot),
+                              requestId,
+                              botId);
             spdlog::info("telegram_create_game_ok request_id={} bot_id={} pin={}", requestId, botId, room->pin);
           } else {
+            commandResult["status"] = "degraded";
+            commandResult["error"] = "create_room_rpc_unavailable";
+            if (room) {
+              commandResult["rpcStatus"] = static_cast<int>(room->status);
+              if (!room->error_code.empty()) commandResult["rpcErrorCode"] = room->error_code;
+              if (!room->error_message.empty()) commandResult["rpcErrorMessage"] = room->error_message;
+            } else {
+              commandResult["rpcStatus"] = "null";
+            }
+
+            sendTelegramReply(webhookClient,
+                              *binding,
+                              chatId,
+                              messageId,
+                              "⚠️ create_game временно недоступен (degraded). Попробуйте позже.",
+                              requestId,
+                              botId);
             spdlog::warn("telegram_create_game_failed request_id={} bot_id={}", requestId, botId);
           }
-        } else if (text == "/invite" || text == "/pin") {
-          spdlog::info("telegram_invite_or_pin request_id={} bot_id={}", requestId, botId);
+        } else if (command && command->command == "/invite") {
+          auto lastRoom = roomMemory().getLastRoom(botId);
+          if (lastRoom) {
+            commandResult["status"] = "ok";
+            commandResult["inviteUrl"] = lastRoom->invite_url;
+            sendTelegramReply(webhookClient,
+                              *binding,
+                              chatId,
+                              messageId,
+                              buildInviteMessage(*lastRoom),
+                              requestId,
+                              botId);
+          } else {
+            commandResult["status"] = "degraded";
+            commandResult["error"] = "room_not_initialized";
+            sendTelegramReply(webhookClient,
+                              *binding,
+                              chatId,
+                              messageId,
+                              "Нет данных о комнате. Сначала выполните /create_game",
+                              requestId,
+                              botId);
+          }
+        } else if (command && command->command == "/pin") {
+          auto lastRoom = roomMemory().getLastRoom(botId);
+          if (lastRoom) {
+            commandResult["status"] = "ok";
+            commandResult["pin"] = lastRoom->pin;
+            sendTelegramReply(webhookClient,
+                              *binding,
+                              chatId,
+                              messageId,
+                              buildPinMessage(*lastRoom),
+                              requestId,
+                              botId);
+          } else {
+            commandResult["status"] = "degraded";
+            commandResult["error"] = "room_not_initialized";
+            sendTelegramReply(webhookClient,
+                              *binding,
+                              chatId,
+                              messageId,
+                              "Нет данных о комнате. Сначала выполните /create_game",
+                              requestId,
+                              botId);
+          }
         }
 
         Json::Value ok;
         ok["ok"] = true;
         ok["status"] = "accepted";
+        ok["botId"] = botId;
+        ok["message"] = text;
+        if (chatId.has_value()) ok["chatId"] = Json::Int64(*chatId);
+        if (messageId.has_value()) ok["messageId"] = Json::Int64(*messageId);
+        ok["commandResult"] = std::move(commandResult);
         cb(drogon::HttpResponse::newHttpJsonResponse(ok));
       },
       {drogon::Post});
