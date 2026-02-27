@@ -19,12 +19,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r gateway_py/requirements.txt
-      - name: Static import check
-        run: PYTHONPATH=gateway_py python -c "import app.main"
       - name: Proto generation smoke check
         run: |
           bash gateway_py/scripts/gen_proto.sh
           python -c "import pathlib; files=list(pathlib.Path('gateway_py/app/proto_gen').glob('*_pb2.py')); assert files, 'No generated protobuf modules found in gateway_py/app/proto_gen'"
+      - name: Static import check
+        run: PYTHONPATH=gateway_py python -c "import app.main"
       - name: Tests
         run: pytest gateway_py/tests -q
 
