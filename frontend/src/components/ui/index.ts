@@ -8,3 +8,6 @@ export * from './Table'
 export * from './Badge'
 export * from './EmptyState'
 export * from './Loader'
+
+export * from './Skeleton'
+export * from './Progress'

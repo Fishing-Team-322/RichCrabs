@@ -113,3 +113,7 @@
   border-radius: 12px;
   background: #f8fafc;
 }
+.roomForm input.error,
+.roomForm select.error {
+  border-color: #dc2626;
+}

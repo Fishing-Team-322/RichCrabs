@@ -1,44 +1,68 @@
-import { FormEvent, useMemo, useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth'
 import { routes } from '../../app/router/routeMap'
 import { Button, Input } from '../../components/ui'
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+import { validateLogin, type LoginFormData } from '../../shared/validation/formSchemas'
+import { useNotifications } from '../../app/providers/NotificationProvider'
 
 const Login = () => {
   const navigate = useNavigate()
-  const { signIn, isLoading, error } = useAuth()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [formError, setFormError] = useState<string | null>(null)
-
-  const validationError = useMemo(() => {
-    if (!email.trim() || !password.trim()) return 'Заполните email и пароль.'
-    if (!EMAIL_PATTERN.test(email)) return 'Введите корректный email.'
-    if (password.length < 6) return 'Пароль должен быть не короче 6 символов.'
-    return null
-  }, [email, password])
+  const { signIn, isLoading } = useAuth()
+  const notifications = useNotifications()
+  const [form, setForm] = useState<LoginFormData>({ email: '', password: '' })
+  const [errors, setErrors] = useState<Partial<Record<'email' | 'password' | 'root', string>>>({})
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault()
-    if (validationError) return setFormError(validationError)
-    setFormError(null)
-    const result = await signIn(email.trim(), password)
-    if (result.meta.requestStatus === 'fulfilled') navigate(routes.profile, { replace: true })
+    const nextErrors = validateLogin(form)
+    if (Object.keys(nextErrors).length) {
+      setErrors(nextErrors)
+      return
+    }
+
+    setErrors({})
+    const result = await signIn(form.email.trim(), form.password)
+    if (result.meta.requestStatus === 'fulfilled') {
+      notifications.success('Вы успешно вошли в аккаунт.')
+      navigate(routes.profile, { replace: true })
+      return
+    }
+
+    const message = typeof result.payload === 'string' ? result.payload : 'Не удалось выполнить вход.'
+    setErrors({ root: message })
+    notifications.error(message)
   }
 
   return (
     <section className="authCard">
       <h1>Вход</h1>
       <p className="homeMuted">Войдите в аккаунт RichCrabs, чтобы продолжить.</p>
-      <form onSubmit={onSubmit} className="homePage">
-        <Input label="Email" value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="name@example.com" />
-        <Input label="Пароль" value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••••" />
-        {(formError || error) && <div className="ui-help">{formError || error}</div>}
-        <Button variant="primary" type="submit" loading={isLoading} fullWidth>{isLoading ? 'Входим...' : 'Войти'}</Button>
+      <form onSubmit={(event) => void onSubmit(event)} className="homePage">
+        <Input
+          label="Email"
+          error={errors.email}
+          type="email"
+          placeholder="name@example.com"
+          value={form.email}
+          onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+        />
+        <Input
+          label="Пароль"
+          error={errors.password}
+          type="password"
+          placeholder="••••••••"
+          value={form.password}
+          onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+        />
+        {errors.root && <div className="ui-help">{errors.root}</div>}
+        <Button variant="primary" type="submit" loading={isLoading} fullWidth>
+          {isLoading ? 'Входим...' : 'Войти'}
+        </Button>
       </form>
-      <p className="homeMuted">Нет аккаунта? <Link to={routes.authRegister}>Зарегистрироваться</Link></p>
+      <p className="homeMuted">
+        Нет аккаунта? <Link to={routes.authRegister}>Зарегистрироваться</Link>
+      </p>
     </section>
   )
 }

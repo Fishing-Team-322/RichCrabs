@@ -167,3 +167,12 @@
   color: #64748b;
   font-size: 13px;
 }
+.telegramBotsForm input.error {
+  border-color: #dc2626;
+}
+
+.telegramBotsStatusSkeleton {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+}
