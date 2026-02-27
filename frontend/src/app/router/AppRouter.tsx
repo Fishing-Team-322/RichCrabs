@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect } from 'react'
-import { Link, Route, Routes } from 'react-router-dom'
+import { Link, Route, Routes, useLocation } from 'react-router-dom'
 import { useAppDispatch } from '../../store/hooks'
 import { restoreSession } from '../../store/slices'
 import Layout from '../../components/Layout'
@@ -39,12 +39,29 @@ const NotFoundPage: React.FC = () => (
   </div>
 )
 
+const THEME_STORAGE_KEY = 'richcrabs-theme'
+
 const AppRouter: React.FC = () => {
   const dispatch = useAppDispatch()
+  const location = useLocation()
 
   useEffect(() => {
     void dispatch(restoreSession())
   }, [dispatch])
+
+
+  useEffect(() => {
+    const root = document.documentElement
+    const isAdminRoute = location.pathname.startsWith('/admin')
+
+    if (isAdminRoute) {
+      root.setAttribute('data-theme', 'dark')
+      return
+    }
+
+    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY)
+    root.setAttribute('data-theme', savedTheme === 'light' ? 'light' : 'dark')
+  }, [location.pathname])
 
   return (
     <Suspense fallback={<LoadingFallback />}>

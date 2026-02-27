@@ -1,0 +1,22 @@
+<svg width="680" height="680" viewBox="0 0 680 680" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="paint0" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(380 230) rotate(120) scale(520)">
+      <stop offset="0" stop-color="#F472FF"/>
+      <stop offset="0.45" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#1D1640"/>
+    </radialGradient>
+    <linearGradient id="paint1" x1="160" y1="110" x2="542" y2="578" gradientUnits="userSpaceOnUse">
+      <stop stop-color="rgba(255,255,255,0.72)"/>
+      <stop offset="1" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
+    <filter id="blur1" x="0" y="0" width="680" height="680" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="24"/>
+    </filter>
+  </defs>
+  <g filter="url(#blur1)">
+    <path d="M145 267C166 188 243 106 341 103C458 99 567 187 581 302C595 413 528 547 418 579C328 606 246 542 190 489C132 435 120 358 145 267Z" fill="url(#paint0)"/>
+  </g>
+  <path d="M233 182C287 136 373 123 447 164C504 196 539 253 530 314C514 416 378 494 279 445C193 402 146 279 233 182Z" fill="url(#paint0)" opacity="0.9"/>
+  <path d="M267 179C324 152 417 176 474 249" stroke="url(#paint1)" stroke-width="22" stroke-linecap="round" opacity="0.85"/>
+  <path d="M237 284C292 342 376 386 466 397" stroke="url(#paint1)" stroke-width="14" stroke-linecap="round" opacity="0.7"/>
+</svg>

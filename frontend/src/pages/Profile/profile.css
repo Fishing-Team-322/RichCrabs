@@ -1,125 +1,70 @@
-.profilePage {
-  display: grid;
-  gap: 16px;
-}
+.profilePage { display: grid; gap: 16px; }
 
-.profileGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 16px;
-}
+.profileGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
 
-.profileBasic {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-}
+.profileBasic { display: flex; gap: 16px; align-items: center; }
 
 .profileAvatar {
   width: 64px;
   height: 64px;
   border-radius: 50%;
   object-fit: cover;
+  border: 1px solid var(--border);
 }
 
 .profileAvatar.fallback {
   display: grid;
   place-items: center;
-  background: #2563eb;
+  background: linear-gradient(135deg, var(--primary), var(--accent-pink));
   color: #fff;
-  font-weight: 600;
-}
-
-.profileName {
-  font-size: 20px;
   font-weight: 700;
 }
 
-.profileMuted {
-  color: #64748b;
-  font-size: 14px;
-}
+.profileTitle { margin: 0; font-size: 22px; font-weight: 700; }
+.profileMuted { color: var(--text-secondary); font-size: 14px; }
 
-.statsGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
+.statsGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.statsLabel { color: var(--text-secondary); font-size: 13px; }
+.statsValue { font-size: 20px; font-weight: 700; }
 
-.statsLabel {
-  color: #64748b;
-  font-size: 13px;
-}
-
-.statsValue {
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.profileMetaCards {
-  display: grid;
-  gap: 14px;
-}
+.profileMetaCards { display: grid; gap: 14px; }
 
 .profileBadge {
   display: inline-flex;
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: rgba(139, 92, 246, 0.22);
+  color: #ddd6fe;
+  border: 1px solid rgba(196, 181, 253, 0.45);
   font-weight: 600;
   border-radius: 999px;
   padding: 6px 12px;
 }
 
-.statusOk {
-  color: #166534;
-  margin-top: 8px;
-}
+.statusOk { color: #bbf7d0; margin-top: 8px; }
+.statusMuted { color: var(--text-secondary); }
+.statusError { color: #ffd0da; margin-top: 8px; }
 
-.statusMuted {
-  color: #64748b;
-}
+.profileForm { display: grid; gap: 10px; }
 
-.statusError {
-  color: #b91c1c;
-  margin-top: 8px;
-}
-
-.profileForm {
-  display: grid;
-  gap: 10px;
-}
-
-.profileForm label {
-  display: grid;
-  gap: 4px;
-  font-size: 14px;
-}
+.profileForm label { display: grid; gap: 4px; font-size: 14px; color: var(--text-secondary); }
 
 .profileForm input {
-  height: 38px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 0 10px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0 12px;
+  background: var(--surface-strong);
+  color: var(--text-primary);
 }
 
 .profileForm button {
   width: fit-content;
   padding: 10px 16px;
-  border-radius: 8px;
-  border: 0;
-  background: #2563eb;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: linear-gradient(90deg, var(--primary), var(--accent-pink));
   color: #fff;
   font-weight: 600;
 }
 
-.sessionsList {
-  margin: 8px 0 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 8px;
-}
-
-.sessionsList li {
-  display: grid;
-  gap: 2px;
-}
+.sessionsList { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 8px; }
+.sessionsList li { display: grid; gap: 2px; }

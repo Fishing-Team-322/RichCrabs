@@ -1,48 +1,28 @@
-.telegramBotsPage {
-  display: grid;
-  gap: 16px;
-}
-
+.telegramBotsPage { display: grid; gap: 16px; }
 .telegramBotsPage h1,
-.telegramBotsPage h2 {
-  margin-top: 0;
-}
+.telegramBotsPage h2 { margin-top: 0; }
+.telegramBotsMuted { color: var(--text-secondary); }
 
-.telegramBotsMuted {
-  color: #64748b;
-}
-
-.telegramBotsForm {
-  display: grid;
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.telegramBotsForm label {
-  display: grid;
-  gap: 6px;
-  font-size: 14px;
-}
+.telegramBotsForm { display: grid; gap: 12px; margin-top: 14px; }
+.telegramBotsForm label { display: grid; gap: 6px; font-size: 14px; color: var(--text-secondary); }
 
 .telegramBotsForm input {
   height: 42px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
   padding: 0 12px;
+  background: var(--surface-strong);
+  color: var(--text-primary);
 }
 
-.telegramBotsActions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
+.telegramBotsActions { display: flex; gap: 10px; flex-wrap: wrap; }
 
 .telegramBotsActions button,
 .telegramBotsStatusHead button {
   height: 38px;
-  border: 0;
-  border-radius: 8px;
-  background: #2563eb;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), var(--accent-pink));
   color: #fff;
   padding: 0 14px;
   font-weight: 600;
@@ -50,129 +30,52 @@
 }
 
 .telegramBotsActions button.secondary,
-.telegramBotsStatusHead button.secondary {
-  background: #0f766e;
-}
-
-.telegramBotsActions button.danger {
-  background: #dc2626;
-}
+.telegramBotsStatusHead button.secondary { background: linear-gradient(90deg, #2563eb, #38bdf8); }
+.telegramBotsActions button.danger { background: linear-gradient(90deg, #be123c, #fb7185); }
 
 .telegramBotsActions button:disabled,
-.telegramBotsStatusHead button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+.telegramBotsStatusHead button:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .telegramBotsWarning {
   margin-top: 12px;
   padding: 12px;
-  border-radius: 8px;
-  background: #ffedd5;
-  color: #9a3412;
-  border: 1px solid #fdba74;
+  border-radius: 10px;
+  background: rgba(234, 179, 8, 0.18);
+  color: #fde68a;
+  border: 1px solid rgba(250, 204, 21, 0.44);
   font-size: 14px;
 }
 
 .telegramBotsError,
 .telegramBotsSuccess {
   margin-top: 10px;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 10px 12px;
   font-size: 14px;
 }
 
-.telegramBotsError {
-  background: #fee2e2;
-  color: #b91c1c;
-}
+.telegramBotsError { background: rgba(185, 28, 28, 0.2); color: #ffd0da; }
+.telegramBotsSuccess { background: rgba(21, 128, 61, 0.2); color: #bbf7d0; }
 
-.telegramBotsSuccess {
-  background: #dcfce7;
-  color: #166534;
-}
+.telegramBotsHint { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.telegramBotsHint ol { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
 
-.telegramBotsHint {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid #e2e8f0;
-}
+.telegramBotsStatusHead { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 
-.telegramBotsHint ol {
-  margin: 8px 0 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 4px;
-}
+.telegramBotsStatusGrid { margin-top: 12px; display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.statusLabel { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
+.statusValue { margin-top: 4px; font-weight: 600; }
+.statusValue.ok { color: #bbf7d0; }
+.statusValue.muted { color: #ffd0da; }
 
-.telegramBotsStatusHead {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
+.operationsBlock { grid-column: 1 / -1; }
+.operationsBlock ul { margin: 8px 0 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 12px; }
+.operationsBlock li { display: flex; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.operationsBlock li:last-child { border-bottom: 0; }
+.operationsBlock li span { color: var(--text-secondary); font-size: 13px; }
+.telegramBotsForm input.error { border-color: #ff8eb1; }
+.telegramBotsStatusSkeleton { margin-top: 12px; display: grid; gap: 12px; }
 
-.telegramBotsStatusGrid {
-  margin-top: 12px;
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.statusLabel {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #64748b;
-}
-
-.statusValue {
-  margin-top: 4px;
-  font-weight: 600;
-}
-
-.statusValue.ok {
-  color: #15803d;
-}
-
-.statusValue.muted {
-  color: #dc2626;
-}
-
-.operationsBlock {
-  grid-column: 1 / -1;
-}
-
-.operationsBlock ul {
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-  border: 1px solid #dbe4ef;
-  border-radius: 8px;
-}
-
-.operationsBlock li {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.operationsBlock li:last-child {
-  border-bottom: 0;
-}
-
-.operationsBlock li span {
-  color: #64748b;
-  font-size: 13px;
-}
-.telegramBotsForm input.error {
-  border-color: #dc2626;
-}
-
-.telegramBotsStatusSkeleton {
-  margin-top: 12px;
-  display: grid;
-  gap: 12px;
+@media (max-width: 840px) {
+  .telegramBotsStatusGrid { grid-template-columns: 1fr; }
 }
