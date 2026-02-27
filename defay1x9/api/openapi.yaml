@@ -1048,6 +1048,7 @@ paths:
         - name: pin
           in: path
           required: true
+          description: Must match the pin stored in the active game session.
           schema:
             type: string
             pattern: '^[A-Z0-9]{6}$'
@@ -1137,6 +1138,7 @@ paths:
         - name: pin
           in: path
           required: true
+          description: Must match the pin stored in the active game session.
           schema:
             type: string
             pattern: '^[A-Z0-9]{6}$'
@@ -1156,6 +1158,7 @@ paths:
         - name: pin
           in: path
           required: true
+          description: Must match the pin stored in the active game session.
           schema: { type: string }
       responses:
         '204':
@@ -1172,6 +1175,7 @@ paths:
         - name: pin
           in: path
           required: true
+          description: Must match the pin stored in the active game session.
           schema: { type: string }
       responses:
         '204':
@@ -1188,6 +1192,7 @@ paths:
         - name: pin
           in: path
           required: true
+          description: Must match the pin stored in the active game session.
           schema: { type: string }
       responses:
         '204':
@@ -1203,6 +1208,7 @@ paths:
         - name: pin
           in: path
           required: true
+          description: Must match the pin stored in the active game session.
           schema:
             type: string
             pattern: '^[A-Z0-9]{6}$'
@@ -1225,6 +1231,7 @@ paths:
         - name: pin
           in: path
           required: true
+          description: Must match the pin stored in the active game session.
           schema:
             type: string
             pattern: '^[A-Z0-9]{6}$'
@@ -1243,6 +1250,7 @@ paths:
         - name: pin
           in: path
           required: true
+          description: Must match the pin stored in the active game session.
           schema:
             type: string
             pattern: '^[A-Z0-9]{6}$'
