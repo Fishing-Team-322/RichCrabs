@@ -27,10 +27,20 @@ services:
       timeout: 3s
       retries: 20
 
+
+  gateway_deps:
+    profiles: ["build"]
+    image: ${GATEWAY_DEPS_IMAGE:-devhack/gateway-deps:local}
+    build:
+      context: .
+      dockerfile: defay1x9/Dockerfile.deps
+
   gateway:
     build:
       context: .
       dockerfile: defay1x9/Dockerfile
+      args:
+        GATEWAY_DEPS_IMAGE: ${GATEWAY_DEPS_IMAGE:-devhack/gateway-deps:local}
     image: devhack/gateway:local
     ports:
       - "8080:8080"
