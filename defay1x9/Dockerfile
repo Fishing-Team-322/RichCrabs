@@ -1,12 +1,9 @@
-# syntax=docker/dockerfile:1.7-labs
-
 FROM ubuntu:22.04 AS builder
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
   git curl zip unzip tar ca-certificates \
-  build-essential pkg-config ccache \
-  cmake ninja-build \
+  build-essential pkg-config cmake ninja-build libssl-dev \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt
@@ -17,55 +14,34 @@ ENV VCPKG_ROOT=/opt/vcpkg
 ENV VCPKG_FEATURE_FLAGS=manifests
 ENV VCPKG_DEFAULT_TRIPLET=x64-linux-release
 ENV VCPKG_DEFAULT_HOST_TRIPLET=x64-linux-release
-ENV CCACHE_DIR=/root/.cache/ccache
-ENV CCACHE_MAXSIZE=2G
 
-
-WORKDIR /repo/defay1x9
-
+WORKDIR /repo
 COPY defay1x9/ /repo/defay1x9/
 COPY richcrab/proto/proto/ /repo/richcrab/proto/proto/
 
-# На случай, если build/ попал в контекст до обновления .dockerignore
-RUN rm -rf /repo/defay1x9/build /repo/defay1x9/CMakeCache.txt
+WORKDIR /repo/defay1x9
+RUN cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
+  -DVCPKG_MANIFEST_INSTALL=ON \
+  -DVCPKG_TARGET_TRIPLET=x64-linux-release \
+  -DVCPKG_HOST_TRIPLET=x64-linux-release \
+  -DVCPKG_OVERLAY_TRIPLETS=/repo/defay1x9/triplets
 
-ENV VCPKG_BINARY_SOURCES="clear;files,/root/.cache/vcpkg/bincache,readwrite"
+RUN cmake --build build -j "$(nproc)"
 
-RUN --mount=type=cache,target=/opt/vcpkg/downloads,id=vcpkg-downloads \
-    --mount=type=cache,target=/opt/vcpkg/buildtrees,id=vcpkg-buildtrees-x64-linux-release \
-    --mount=type=cache,target=/opt/vcpkg/packages,id=vcpkg-packages-x64-linux-release \
-    --mount=type=cache,target=/root/.cache/vcpkg/bincache,id=vcpkg-bincache \
-    --mount=type=cache,target=/root/.cache/ccache,id=ccache-x64-linux-release \
-    cmake -S . -B build -G Ninja \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-      -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-      -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
-      -DVCPKG_MANIFEST_INSTALL=OFF \
-      -DVCPKG_TARGET_TRIPLET=x64-linux-release \
-      -DVCPKG_HOST_TRIPLET=x64-linux-release \
-      -DVCPKG_OVERLAY_TRIPLETS=/repo/defay1x9/triplets
-
-RUN --mount=type=cache,target=/root/.cache/ccache,id=ccache-x64-linux-release \
-    --mount=type=cache,target=/root/.cache/vcpkg/bincache,id=vcpkg-bincache \
-    cmake --build /repo/defay1x9/build -j "$(nproc)"
-
-# -------- runtime --------
 FROM ubuntu:22.04 AS runtime
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y ca-certificates \
+RUN apt-get update && apt-get install -y ca-certificates libssl3 \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-
 COPY --from=builder /repo/defay1x9/build/defay1x9 /app/defay1x9
 COPY --from=builder /repo/defay1x9/api /app/api
-
-# runtime .so лежат в lib/
 COPY --from=builder /repo/defay1x9/build/vcpkg_installed/x64-linux-release/lib /app/lib
-ENV LD_LIBRARY_PATH=/app/lib
 
+ENV LD_LIBRARY_PATH=/app/lib
 ENV GW_LISTEN_HOST=0.0.0.0
 ENV GW_LISTEN_PORT=8080
 ENV GW_PUBLIC_BASE_URL=http://localhost:8080
