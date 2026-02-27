@@ -1,24 +1,42 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Controller, useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { Link } from 'react-router-dom'
 import { routes } from '../../app/router/routeMap'
+import { Skeleton } from '../../components/ui'
+import { useNotifications } from '../../app/providers/NotificationProvider'
 import { quizApi } from '../../services/quizApi'
 import { roomsApi } from '../../services/roomsApi'
+import { createRoomSchema, type CreateRoomFormData } from '../../shared/validation/formSchemas'
 import type { QuizListItemDto } from '../../types/quiz.types'
-import type { CreateRoomRequestDto, RoomDetailsDto, RoomVisibility } from '../../types/room.types'
+import type { CreateRoomRequestDto, RoomDetailsDto } from '../../types/room.types'
 import '../rooms/rooms.css'
 
 const CreateRoom = () => {
+  const notifications = useNotifications()
   const [quizzes, setQuizzes] = useState<QuizListItemDto[]>([])
-  const [quizId, setQuizId] = useState('')
-  const [playerLimit, setPlayerLimit] = useState(20)
-  const [privacy, setPrivacy] = useState<RoomVisibility>('private')
-  const [lobbyTimerSec, setLobbyTimerSec] = useState(45)
-  const [questionTimerSec, setQuestionTimerSec] = useState(30)
-  const [answerRevealSec, setAnswerRevealSec] = useState(10)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [createdRoom, setCreatedRoom] = useState<RoomDetailsDto | null>(null)
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useForm<CreateRoomFormData>({
+    resolver: zodResolver(createRoomSchema),
+    defaultValues: {
+      quizId: '',
+      playerLimit: 20,
+      privacy: 'private',
+      lobbyTimerSec: 45,
+      questionTimerSec: 30,
+      answerRevealSec: 10,
+    },
+  })
 
   useEffect(() => {
     let active = true
@@ -28,13 +46,15 @@ const CreateRoom = () => {
       .then((items) => {
         if (!active) return
         setQuizzes(items)
-        if (!quizId && items[0]) {
-          setQuizId(items[0].id)
+        if (items[0]) {
+          setValue('quizId', items[0].id, { shouldValidate: true })
         }
       })
       .catch((apiError: unknown) => {
         if (active) {
-          setError(apiError instanceof Error ? apiError.message : 'Не удалось получить опубликованные квизы.')
+          const message = apiError instanceof Error ? apiError.message : 'Не удалось получить опубликованные квизы.'
+          setError(message)
+          notifications.error(message)
         }
       })
       .finally(() => {
@@ -46,7 +66,7 @@ const CreateRoom = () => {
     return () => {
       active = false
     }
-  }, [quizId])
+  }, [notifications, setValue])
 
   const inviteLink = useMemo(() => {
     if (!createdRoom?.inviteLink) return ''
@@ -59,37 +79,37 @@ const CreateRoom = () => {
   const copyText = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text)
+      notifications.success('Скопировано в буфер обмена.')
     } catch {
-      setError('Не удалось скопировать в буфер обмена.')
+      const message = 'Не удалось скопировать в буфер обмена.'
+      setError(message)
+      notifications.error(message)
     }
   }
 
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault()
-    if (!quizId) {
-      setError('Выберите опубликованный квиз.')
-      return
-    }
-
+  const onSubmit = async (data: CreateRoomFormData) => {
     setSaving(true)
     setError('')
     try {
       const payload: CreateRoomRequestDto = {
-        quizId,
+        quizId: data.quizId,
         settings: {
-          playerLimit,
-          privacy,
+          playerLimit: data.playerLimit,
+          privacy: data.privacy,
           timers: {
-            lobbyTimerSec,
-            questionTimerSec,
-            answerRevealSec,
+            lobbyTimerSec: data.lobbyTimerSec,
+            questionTimerSec: data.questionTimerSec,
+            answerRevealSec: data.answerRevealSec,
           },
         },
       }
       const room = await roomsApi.create(payload)
       setCreatedRoom(room)
+      notifications.success('Комната успешно создана.')
     } catch (apiError: unknown) {
-      setError(apiError instanceof Error ? apiError.message : 'Не удалось создать комнату.')
+      const message = apiError instanceof Error ? apiError.message : 'Не удалось создать комнату.'
+      setError(message)
+      notifications.error(message)
     } finally {
       setSaving(false)
     }
@@ -109,69 +129,72 @@ const CreateRoom = () => {
 
       {error && <div className="roomError">{error}</div>}
 
-      <form className="pageCard roomForm" onSubmit={onSubmit}>
-        <label>
-          Квиз
-          <select value={quizId} onChange={(event) => setQuizId(event.target.value)} disabled={loading || quizzes.length === 0}>
-            {quizzes.length === 0 ? (
-              <option value="">Нет опубликованных квизов</option>
-            ) : (
-              quizzes.map((quiz) => (
-                <option key={quiz.id} value={quiz.id}>
-                  {quiz.title} · {quiz.questionsCount} вопросов
-                </option>
-              ))
-            )}
-          </select>
-        </label>
+      <form className="pageCard roomForm" onSubmit={handleSubmit((data) => void onSubmit(data))}>
+        {loading ? (
+          <>
+            <Skeleton height={42} />
+            <Skeleton height={42} />
+            <Skeleton height={42} />
+          </>
+        ) : (
+          <>
+            <label>
+              Квиз
+              <Controller
+                name="quizId"
+                control={control}
+                render={({ field }) => (
+                  <select {...field} disabled={quizzes.length === 0} className={errors.quizId ? 'error' : ''}>
+                    {quizzes.length === 0 ? (
+                      <option value="">Нет опубликованных квизов</option>
+                    ) : (
+                      quizzes.map((quiz) => (
+                        <option key={quiz.id} value={quiz.id}>
+                          {quiz.title} · {quiz.questionsCount} вопросов
+                        </option>
+                      ))
+                    )}
+                  </select>
+                )}
+              />
+              {errors.quizId && <span className="ui-help">{errors.quizId.message}</span>}
+            </label>
 
-        <label>
-          Лимит игроков
-          <input
-            type="number"
-            min={2}
-            max={200}
-            value={playerLimit}
-            onChange={(event) => setPlayerLimit(Number(event.target.value) || 2)}
-          />
-        </label>
+            <label>
+              Лимит игроков
+              <input type="number" {...register('playerLimit')} className={errors.playerLimit ? 'error' : ''} />
+              {errors.playerLimit && <span className="ui-help">{errors.playerLimit.message}</span>}
+            </label>
 
-        <label>
-          Приватность
-          <select value={privacy} onChange={(event) => setPrivacy(event.target.value as RoomVisibility)}>
-            <option value="private">Приватная (по PIN/invite)</option>
-            <option value="public">Публичная (видна в open games)</option>
-          </select>
-        </label>
+            <label>
+              Приватность
+              <select {...register('privacy')}>
+                <option value="private">Приватная (по PIN/invite)</option>
+                <option value="public">Публичная (видна в open games)</option>
+              </select>
+            </label>
 
-        <div className="roomsGrid">
-          <label>
-            Таймер лобби (сек)
-            <input type="number" min={10} max={600} value={lobbyTimerSec} onChange={(event) => setLobbyTimerSec(Number(event.target.value) || 10)} />
-          </label>
-          <label>
-            Таймер вопроса (сек)
-            <input
-              type="number"
-              min={5}
-              max={300}
-              value={questionTimerSec}
-              onChange={(event) => setQuestionTimerSec(Number(event.target.value) || 5)}
-            />
-          </label>
-          <label>
-            Пауза перед ответом (сек)
-            <input
-              type="number"
-              min={3}
-              max={120}
-              value={answerRevealSec}
-              onChange={(event) => setAnswerRevealSec(Number(event.target.value) || 3)}
-            />
-          </label>
-        </div>
+            <div className="roomsGrid">
+              <label>
+                Таймер лобби (сек)
+                <input type="number" {...register('lobbyTimerSec')} className={errors.lobbyTimerSec ? 'error' : ''} />
+                {errors.lobbyTimerSec && <span className="ui-help">{errors.lobbyTimerSec.message}</span>}
+              </label>
+              <label>
+                Таймер вопроса (сек)
+                <input type="number" {...register('questionTimerSec')} className={errors.questionTimerSec ? 'error' : ''} />
+                {errors.questionTimerSec && <span className="ui-help">{errors.questionTimerSec.message}</span>}
+              </label>
+              <label>
+                Пауза перед ответом (сек)
+                <input type="number" {...register('answerRevealSec')} className={errors.answerRevealSec ? 'error' : ''} />
+                {errors.answerRevealSec && <span className="ui-help">{errors.answerRevealSec.message}</span>}
+              </label>
+            </div>
+          </>
+        )}
 
-        <button className="roomButton primary" disabled={saving || quizzes.length === 0}>
+        <button className="roomButton primary" disabled={saving || quizzes.length === 0 || loading}>
           {saving ? 'Создание...' : 'Создать комнату'}
         </button>
       </form>

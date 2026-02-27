@@ -34,3 +34,11 @@
 .ui-modal-backdrop{position:fixed;inset:0;background:var(--overlay);display:grid;place-items:center;z-index:50;padding:16px}
 .ui-modal{width:min(520px,100%);background:var(--bg-elevated);border:1px solid var(--border);border-radius:16px;padding:20px}
 @media (max-width:760px){.ui-button{width:100%}.ui-table{min-width:520px}}
+.ui-toast.success{border-color:rgba(58,210,139,.35);background:rgba(58,210,139,.16)}
+.ui-toast.error{border-color:rgba(255,111,142,.45);background:rgba(255,111,142,.16)}
+.ui-toast.info{border-color:var(--border-strong)}
+.ui-skeleton{position:relative;overflow:hidden;border-radius:10px;background:rgba(157,174,255,.18)}
+.ui-skeleton::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);animation:ui-shimmer 1.5s infinite}
+@keyframes ui-shimmer{100%{transform:translateX(100%)}}
+.ui-progress{height:8px;border-radius:999px;background:rgba(157,174,255,.18);overflow:hidden}
+.ui-progress-value{height:100%;background:linear-gradient(90deg,var(--primary),#5f46db);transition:width .25s ease}

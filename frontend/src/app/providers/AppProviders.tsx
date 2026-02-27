@@ -4,6 +4,7 @@ import { ThemeProvider } from 'styled-components'
 import { BrowserRouter } from 'react-router-dom'
 import { store } from '../../store/store'
 import { theme } from '../../theme/theme'
+import NotificationProvider from './NotificationProvider'
 
 interface AppProvidersProps {
   children: React.ReactNode
@@ -13,7 +14,9 @@ const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
   return (
     <Provider store={store}>
       <ThemeProvider theme={theme}>
-        <BrowserRouter>{children}</BrowserRouter>
+        <BrowserRouter>
+          <NotificationProvider>{children}</NotificationProvider>
+        </BrowserRouter>
       </ThemeProvider>
     </Provider>
   )

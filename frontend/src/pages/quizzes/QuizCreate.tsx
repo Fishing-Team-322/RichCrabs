@@ -1,7 +1,15 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate } from 'react-router-dom'
 import { routes } from '../../app/router/routeMap'
+import { Progress } from '../../components/ui'
+import { useNotifications } from '../../app/providers/NotificationProvider'
 import { quizApi } from '../../services/quizApi'
+import {
+  quizCreateSchema,
+  type QuizCreateFormData,
+} from '../../shared/validation/formSchemas'
 import type { GenerateQuizDraftRequestDto, QuizDifficulty, QuizGenerationStatus, QuizQuestionFormat } from '../../types/quiz.types'
 import './quizzes.css'
 
@@ -25,19 +33,36 @@ const statusLabel: Record<QuizGenerationStatus, string> = {
   failed: 'Генерация завершилась ошибкой',
 }
 
+const statusProgress: Record<QuizGenerationStatus, number> = {
+  queued: 20,
+  running: 65,
+  done: 100,
+  failed: 100,
+}
+
 const QuizCreate = () => {
   const navigate = useNavigate()
+  const notifications = useNotifications()
   const [mode, setMode] = useState<CreateMode>('manual')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [generationStatus, setGenerationStatus] = useState<QuizGenerationStatus | null>(null)
   const [lastAiPayload, setLastAiPayload] = useState<GenerateQuizDraftRequestDto | null>(null)
 
-  const [topic, setTopic] = useState('')
-  const [difficulty, setDifficulty] = useState<QuizDifficulty>('medium')
-  const [questionCount, setQuestionCount] = useState(10)
-  const [language, setLanguage] = useState('Русский')
-  const [format, setFormat] = useState<QuizQuestionFormat>('single')
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<QuizCreateFormData>({
+    resolver: zodResolver(quizCreateSchema),
+    defaultValues: {
+      topic: '',
+      difficulty: 'medium',
+      questionCount: 10,
+      language: 'Русский',
+      format: 'single',
+    },
+  })
 
   const openEditor = (draftId: string) => {
     navigate(routes.quizzesEdit.replace(':quizId', draftId))
@@ -49,33 +74,18 @@ const QuizCreate = () => {
 
     try {
       const draft = await quizApi.draft()
+      notifications.success('Черновик создан.')
       openEditor(draft.id)
     } catch (apiError: unknown) {
-      setError(apiError instanceof Error ? apiError.message : 'Не удалось создать черновик.')
+      const message = apiError instanceof Error ? apiError.message : 'Не удалось создать черновик.'
+      setError(message)
+      notifications.error(message)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleCreateWithAi = async (retryPayload?: GenerateQuizDraftRequestDto) => {
-    const payload = retryPayload || {
-      topic: topic.trim(),
-      difficulty,
-      questionCount,
-      language: language.trim(),
-      format,
-    }
-
-    if (!payload.topic) {
-      setError('Укажите тему для AI-генерации.')
-      return
-    }
-
-    if (!payload.language) {
-      setError('Укажите язык квиза.')
-      return
-    }
-
+  const handleCreateWithAi = async (payload: GenerateQuizDraftRequestDto) => {
     setLoading(true)
     setError('')
     setGenerationStatus('queued')
@@ -84,10 +94,13 @@ const QuizCreate = () => {
     try {
       const draft = await quizApi.generateDraft(payload, setGenerationStatus)
       setGenerationStatus('done')
+      notifications.success('AI-генерация завершена, открываем редактор.')
       openEditor(draft.id)
     } catch (apiError: unknown) {
       setGenerationStatus('failed')
-      setError(apiError instanceof Error ? apiError.message : 'Не удалось сгенерировать квиз через AI.')
+      const message = apiError instanceof Error ? apiError.message : 'Не удалось сгенерировать квиз через AI.'
+      setError(message)
+      notifications.error(message)
     } finally {
       setLoading(false)
     }
@@ -100,11 +113,7 @@ const QuizCreate = () => {
         <p className="quizMuted">Выберите режим: вручную или через AI, после чего откроется стандартный редактор.</p>
 
         <div className="quizModeSwitch" role="tablist" aria-label="Режим создания квиза">
-          <button
-            className={`quizButton ${mode === 'manual' ? 'primary' : ''}`}
-            onClick={() => setMode('manual')}
-            type="button"
-          >
+          <button className={`quizButton ${mode === 'manual' ? 'primary' : ''}`} onClick={() => setMode('manual')} type="button">
             Ручной
           </button>
           <button className={`quizButton ${mode === 'ai' ? 'primary' : ''}`} onClick={() => setMode('ai')} type="button">
@@ -122,17 +131,18 @@ const QuizCreate = () => {
           </button>
         </div>
       ) : (
-        <div className="quizPanel">
+        <form className="quizPanel" onSubmit={handleSubmit((data) => void handleCreateWithAi(data))}>
           <h2>Генерация через AI</h2>
           <div className="quizGrid">
             <label>
               Тема
-              <input className="quizInput" value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="Например, космос" />
+              <input className={`quizInput ${errors.topic ? 'error' : ''}`} {...register('topic')} placeholder="Например, космос" />
+              {errors.topic && <span className="ui-help">{errors.topic.message}</span>}
             </label>
 
             <label>
               Уровень сложности
-              <select className="quizSelect" value={difficulty} onChange={(event) => setDifficulty(event.target.value as QuizDifficulty)}>
+              <select className="quizSelect" {...register('difficulty')}>
                 {difficultyOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -143,24 +153,19 @@ const QuizCreate = () => {
 
             <label>
               Количество вопросов
-              <input
-                className="quizInput"
-                type="number"
-                min={1}
-                max={50}
-                value={questionCount}
-                onChange={(event) => setQuestionCount(Math.max(1, Number(event.target.value) || 1))}
-              />
+              <input className={`quizInput ${errors.questionCount ? 'error' : ''}`} type="number" {...register('questionCount')} />
+              {errors.questionCount && <span className="ui-help">{errors.questionCount.message}</span>}
             </label>
 
             <label>
               Язык
-              <input className="quizInput" value={language} onChange={(event) => setLanguage(event.target.value)} placeholder="Русский" />
+              <input className={`quizInput ${errors.language ? 'error' : ''}`} {...register('language')} placeholder="Русский" />
+              {errors.language && <span className="ui-help">{errors.language.message}</span>}
             </label>
 
             <label>
               Формат
-              <select className="quizSelect" value={format} onChange={(event) => setFormat(event.target.value as QuizQuestionFormat)}>
+              <select className="quizSelect" {...register('format')}>
                 {formatOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -171,19 +176,24 @@ const QuizCreate = () => {
           </div>
 
           <div className="quizQuestionActions">
-            <button className="quizButton primary" onClick={() => void handleCreateWithAi()} disabled={loading}>
+            <button className="quizButton primary" type="submit" disabled={loading}>
               {loading ? 'Генерация...' : 'Сгенерировать'}
             </button>
 
             {generationStatus === 'failed' && lastAiPayload && (
-              <button className="quizButton" onClick={() => void handleCreateWithAi(lastAiPayload)} disabled={loading}>
+              <button className="quizButton" onClick={() => void handleCreateWithAi(lastAiPayload)} type="button" disabled={loading}>
                 Повторить
               </button>
             )}
           </div>
 
-          {generationStatus && <div className="quizMuted">Статус генерации: {statusLabel[generationStatus]}</div>}
-        </div>
+          {generationStatus && (
+            <>
+              <div className="quizMuted">Статус генерации: {statusLabel[generationStatus]}</div>
+              <Progress value={statusProgress[generationStatus]} label="Прогресс AI-операции" />
+            </>
+          )}
+        </form>
       )}
 
       {error && <div className="quizError">{error}</div>}

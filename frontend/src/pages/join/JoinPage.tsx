@@ -1,9 +1,18 @@
-import { FormEvent, useState } from 'react'
+import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate } from 'react-router-dom'
 import { routes } from '../../app/router/routeMap'
+import { useNotifications } from '../../app/providers/NotificationProvider'
 import { joinApi } from '../../services/joinApi'
 import { playerSession } from '../../services/playerSession'
 import { AppError } from '../../services/api'
+import {
+  joinByInviteSchema,
+  joinByPinSchema,
+  type JoinByInviteFormData,
+  type JoinByPinFormData,
+} from '../../shared/validation/formSchemas'
 import '../rooms/rooms.css'
 
 type JoinMethod = 'pin' | 'invite'
@@ -37,53 +46,52 @@ const humanizeJoinError = (error: unknown) => {
 
 const JoinPage = () => {
   const [tab, setTab] = useState<JoinMethod>('pin')
-  const [pin, setPin] = useState('')
-  const [inviteToken, setInviteToken] = useState('')
-  const [playerName, setPlayerName] = useState(playerSession.getPlayerName())
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const navigate = useNavigate()
+  const notifications = useNotifications()
+  const defaultPlayerName = playerSession.getPlayerName()
 
-  const validate = () => {
-    if (!playerName.trim()) {
-      return 'Введите имя игрока.'
-    }
+  const pinForm = useForm<JoinByPinFormData>({
+    resolver: zodResolver(joinByPinSchema),
+    defaultValues: { playerName: defaultPlayerName, pin: '' },
+  })
 
-    if (tab === 'pin' && !pin.trim()) {
-      return 'Введите PIN комнаты.'
-    }
+  const inviteForm = useForm<JoinByInviteFormData>({
+    resolver: zodResolver(joinByInviteSchema),
+    defaultValues: { playerName: defaultPlayerName, inviteToken: '' },
+  })
 
-    if (tab === 'invite' && !inviteToken.trim()) {
-      return 'Введите invite-token.'
-    }
-
-    return ''
-  }
-
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault()
-
-    const validationError = validate()
-    if (validationError) {
-      setError(validationError)
-      return
-    }
-
+  const onSubmitPin = async (data: JoinByPinFormData) => {
     setLoading(true)
-    setError('')
-
     try {
-      const response =
-        tab === 'pin'
-          ? await joinApi.joinByPin(pin.trim(), playerName.trim())
-          : await joinApi.joinByInviteToken(inviteToken.trim(), playerName.trim())
-
+      const response = await joinApi.joinByPin(data.pin.trim(), data.playerName.trim())
       playerSession.saveToken(response.token)
-      playerSession.savePlayerName(playerName.trim())
+      playerSession.savePlayerName(data.playerName.trim())
       playerSession.savePlayerId(response.playerId)
+      notifications.success('Вы успешно подключились к комнате.')
       navigate(routes.quizRuntime.replace(':roomId', response.gameId))
     } catch (joinError: unknown) {
-      setError(humanizeJoinError(joinError))
+      const message = humanizeJoinError(joinError)
+      pinForm.setError('root', { message })
+      notifications.error(message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const onSubmitInvite = async (data: JoinByInviteFormData) => {
+    setLoading(true)
+    try {
+      const response = await joinApi.joinByInviteToken(data.inviteToken.trim(), data.playerName.trim())
+      playerSession.saveToken(response.token)
+      playerSession.savePlayerName(data.playerName.trim())
+      playerSession.savePlayerId(response.playerId)
+      notifications.success('Вы успешно подключились к комнате.')
+      navigate(routes.quizRuntime.replace(':roomId', response.gameId))
+    } catch (joinError: unknown) {
+      const message = humanizeJoinError(joinError)
+      inviteForm.setError('root', { message })
+      notifications.error(message)
     } finally {
       setLoading(false)
     }
@@ -102,34 +110,51 @@ const JoinPage = () => {
           </button>
         </div>
 
-        <form className="roomForm" onSubmit={(event) => void handleSubmit(event)}>
-          <label>
-            Имя игрока
-            <input value={playerName} onChange={(event) => setPlayerName(event.target.value)} placeholder="Например: Alice" />
-          </label>
-
-          {tab === 'pin' ? (
+        {tab === 'pin' ? (
+          <form className="roomForm" onSubmit={pinForm.handleSubmit((data) => void onSubmitPin(data))}>
+            <label>
+              Имя игрока
+              <input {...pinForm.register('playerName')} className={pinForm.formState.errors.playerName ? 'error' : ''} placeholder="Например: Alice" />
+              {pinForm.formState.errors.playerName && <span className="ui-help">{pinForm.formState.errors.playerName.message}</span>}
+            </label>
             <label>
               PIN комнаты
-              <input value={pin} onChange={(event) => setPin(event.target.value)} placeholder="123456" />
+              <input {...pinForm.register('pin')} className={pinForm.formState.errors.pin ? 'error' : ''} placeholder="123456" />
+              {pinForm.formState.errors.pin && <span className="ui-help">{pinForm.formState.errors.pin.message}</span>}
             </label>
-          ) : (
+
+            {pinForm.formState.errors.root?.message && <div className="roomError">{pinForm.formState.errors.root.message}</div>}
+            <button className="roomButton primary" type="submit" disabled={loading}>
+              {loading ? 'Подключаем...' : 'Войти в игру'}
+            </button>
+          </form>
+        ) : (
+          <form className="roomForm" onSubmit={inviteForm.handleSubmit((data) => void onSubmitInvite(data))}>
+            <label>
+              Имя игрока
+              <input
+                {...inviteForm.register('playerName')}
+                className={inviteForm.formState.errors.playerName ? 'error' : ''}
+                placeholder="Например: Alice"
+              />
+              {inviteForm.formState.errors.playerName && <span className="ui-help">{inviteForm.formState.errors.playerName.message}</span>}
+            </label>
             <label>
               Invite-token
               <input
-                value={inviteToken}
-                onChange={(event) => setInviteToken(event.target.value)}
+                {...inviteForm.register('inviteToken')}
+                className={inviteForm.formState.errors.inviteToken ? 'error' : ''}
                 placeholder="token из ссылки invite"
               />
+              {inviteForm.formState.errors.inviteToken && <span className="ui-help">{inviteForm.formState.errors.inviteToken.message}</span>}
             </label>
-          )}
 
-          {error && <div className="roomError">{error}</div>}
-
-          <button className="roomButton primary" type="submit" disabled={loading}>
-            {loading ? 'Подключаем...' : 'Войти в игру'}
-          </button>
-        </form>
+            {inviteForm.formState.errors.root?.message && <div className="roomError">{inviteForm.formState.errors.root.message}</div>}
+            <button className="roomButton primary" type="submit" disabled={loading}>
+              {loading ? 'Подключаем...' : 'Войти в игру'}
+            </button>
+          </form>
+        )}
       </article>
     </section>
   )

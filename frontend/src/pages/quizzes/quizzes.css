@@ -115,3 +115,7 @@
   display: flex;
   gap: 8px;
 }
+.quizInput.error,
+.quizSelect.error {
+  border-color: #dc2626;
+}

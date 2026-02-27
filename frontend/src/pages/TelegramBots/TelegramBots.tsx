@@ -1,5 +1,10 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { botsApi } from '../../services/botsApi'
+import { Skeleton } from '../../components/ui'
+import { useNotifications } from '../../app/providers/NotificationProvider'
+import { botTokenSchema, type BotTokenFormData } from '../../shared/validation/formSchemas'
 import type { BotRuntimeOperationDto, TelegramBotRuntimeStatusDto, ValidateTelegramBotResponseDto } from '../../types/bot.types'
 import './telegramBots.css'
 
@@ -24,7 +29,7 @@ const operationLabel = (operation: BotRuntimeOperationDto) => {
 }
 
 const TelegramBots = () => {
-  const [token, setToken] = useState('')
+  const notifications = useNotifications()
   const [isLoading, setIsLoading] = useState(true)
   const [isValidating, setIsValidating] = useState(false)
   const [isBinding, setIsBinding] = useState(false)
@@ -36,6 +41,19 @@ const TelegramBots = () => {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
+  const {
+    register,
+    handleSubmit,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<BotTokenFormData>({
+    resolver: zodResolver(botTokenSchema),
+    defaultValues: { token: '' },
+  })
+
+  const tokenValue = watch('token')
+
   const loadStatus = async () => {
     setIsLoading(true)
     setError(null)
@@ -45,6 +63,7 @@ const TelegramBots = () => {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Не удалось загрузить статус бота'
       setError(message)
+      notifications.error(message)
       setStatus(null)
     } finally {
       setIsLoading(false)
@@ -55,47 +74,50 @@ const TelegramBots = () => {
     void loadStatus()
   }, [])
 
-  const onValidate = async (event: FormEvent) => {
-    event.preventDefault()
-    if (!token.trim()) return
-
+  const onValidate = async (data: BotTokenFormData) => {
     setIsValidating(true)
     setError(null)
     setSuccess(null)
     setValidation(null)
 
     try {
-      const result = await botsApi.validate({ token: token.trim() })
+      const result = await botsApi.validate({ token: data.token.trim() })
       setValidation(result)
       if (!result.ok) {
-        setError(result.message || 'Токен не прошёл проверку')
+        const message = result.message || 'Токен не прошёл проверку'
+        setError(message)
+        notifications.error(message)
       } else {
-        setSuccess(`Токен валиден${result.username ? ` (@${result.username})` : ''}`)
+        const message = `Токен валиден${result.username ? ` (@${result.username})` : ''}`
+        setSuccess(message)
+        notifications.success(message)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Не удалось проверить токен'
       setError(message)
+      notifications.error(message)
     } finally {
       setIsValidating(false)
     }
   }
 
-  const onBind = async () => {
-    if (!token.trim()) return
-
+  const onBind = async (data: BotTokenFormData) => {
     setIsBinding(true)
     setError(null)
     setSuccess(null)
 
     try {
-      await botsApi.bind({ token: token.trim() })
-      setToken('')
+      await botsApi.bind({ token: data.token.trim() })
+      reset({ token: '' })
       setValidation(null)
-      setSuccess('Бот успешно привязан к вашему аккаунту')
+      const message = 'Бот успешно привязан к вашему аккаунту'
+      setSuccess(message)
+      notifications.success(message)
       await loadStatus()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Не удалось привязать бота'
       setError(message)
+      notifications.error(message)
     } finally {
       setIsBinding(false)
     }
@@ -110,10 +132,13 @@ const TelegramBots = () => {
       await botsApi.unbind()
       setStatus(null)
       setValidation(null)
-      setSuccess('Привязка Telegram-бота отключена')
+      const message = 'Привязка Telegram-бота отключена'
+      setSuccess(message)
+      notifications.success(message)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Не удалось отключить токен'
       setError(message)
+      notifications.error(message)
     } finally {
       setIsUnbinding(false)
     }
@@ -125,34 +150,27 @@ const TelegramBots = () => {
         <h1>Telegram-боты</h1>
         <p className="telegramBotsMuted">Подключите bot token, чтобы создавать комнаты и выдавать приглашения через Telegram.</p>
 
-        <div className="telegramBotsWarning">
-          ⚠️ Пользовательский код бота не исполняется. Используется общий runtime платформы RichCrabs.
-        </div>
+        <div className="telegramBotsWarning">⚠️ Пользовательский код бота не исполняется. Используется общий runtime платформы RichCrabs.</div>
 
         {error && <div className="telegramBotsError">{error}</div>}
         {success && <div className="telegramBotsSuccess">{success}</div>}
 
-        <form className="telegramBotsForm" onSubmit={onValidate}>
+        <form className="telegramBotsForm" onSubmit={handleSubmit((data) => void onValidate(data))}>
           <label>
             Bot token
-            <input
-              type="password"
-              value={token}
-              onChange={(event) => setToken(event.target.value)}
-              placeholder="123456789:AA..."
-              autoComplete="off"
-            />
+            <input type="password" {...register('token')} className={errors.token ? 'error' : ''} placeholder="123456789:AA..." autoComplete="off" />
+            {errors.token && <span className="ui-help">{errors.token.message}</span>}
           </label>
 
           <div className="telegramBotsActions">
-            <button type="submit" disabled={isValidating || isBinding || !token.trim()}>
+            <button type="submit" disabled={isValidating || isBinding || !tokenValue.trim()}>
               {isValidating ? 'Проверяем...' : 'Проверить токен'}
             </button>
             <button
               type="button"
               className="secondary"
-              onClick={() => void onBind()}
-              disabled={isBinding || isValidating || !token.trim() || validation?.ok === false}
+              onClick={handleSubmit((data) => void onBind(data))}
+              disabled={isBinding || isValidating || !tokenValue.trim() || validation?.ok === false}
             >
               {isBinding ? 'Привязываем...' : 'Сохранить привязку'}
             </button>
@@ -181,8 +199,15 @@ const TelegramBots = () => {
           </button>
         </div>
 
-        {!status ? (
-          <p className="telegramBotsMuted">{isLoading ? 'Загружаем статус...' : 'Бот пока не привязан.'}</p>
+        {isLoading ? (
+          <div className="telegramBotsStatusSkeleton">
+            <Skeleton height={20} />
+            <Skeleton height={20} />
+            <Skeleton height={20} />
+            <Skeleton height={120} />
+          </div>
+        ) : !status ? (
+          <p className="telegramBotsMuted">Бот пока не привязан.</p>
         ) : (
           <div className="telegramBotsStatusGrid">
             <div>

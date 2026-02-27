@@ -1,50 +1,63 @@
-import { FormEvent, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import useAuth from '../../hooks/useAuth'
 import { routes } from '../../app/router/routeMap'
 import { Button, Input } from '../../components/ui'
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+import { registerSchema, type RegisterFormData } from '../../shared/validation/formSchemas'
+import { useNotifications } from '../../app/providers/NotificationProvider'
 
 const Register = () => {
   const navigate = useNavigate()
-  const { signUp, isLoading, error } = useAuth()
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [formError, setFormError] = useState<string | null>(null)
+  const { signUp, isLoading } = useAuth()
+  const notifications = useNotifications()
 
-  const validationError = useMemo(() => {
-    if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) return 'Заполните все поля.'
-    if (name.trim().length < 2) return 'Имя должно быть длиннее 1 символа.'
-    if (!EMAIL_PATTERN.test(email)) return 'Введите корректный email.'
-    if (password.length < 6) return 'Пароль должен быть не короче 6 символов.'
-    if (password !== confirmPassword) return 'Пароли не совпадают.'
-    return null
-  }, [name, email, password, confirmPassword])
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setError,
+  } = useForm<RegisterFormData>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
+  })
 
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault()
-    if (validationError) return setFormError(validationError)
-    setFormError(null)
-    const result = await signUp(name.trim(), email.trim(), password)
-    if (result.meta.requestStatus === 'fulfilled') navigate(routes.profile, { replace: true })
+  const onSubmit = async (data: RegisterFormData) => {
+    const result = await signUp(data.name.trim(), data.email.trim(), data.password)
+    if (result.meta.requestStatus === 'fulfilled') {
+      notifications.success('Аккаунт создан. Добро пожаловать!')
+      navigate(routes.profile, { replace: true })
+      return
+    }
+
+    const message = typeof result.payload === 'string' ? result.payload : 'Не удалось зарегистрироваться.'
+    setError('root', { message })
+    notifications.error(message)
   }
 
   return (
     <section className="authCard">
       <h1>Регистрация</h1>
       <p className="homeMuted">Создайте аккаунт, чтобы играть и управлять квизами.</p>
-      <form onSubmit={onSubmit} className="homePage">
-        <Input label="Имя" value={name} onChange={(e) => setName(e.target.value)} placeholder="Crab Master" />
-        <Input label="Email" value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="name@example.com" />
-        <Input label="Пароль" value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••••" />
-        <Input label="Повторите пароль" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} type="password" placeholder="••••••••" />
-        {(formError || error) && <div className="ui-help">{formError || error}</div>}
-        <Button variant="primary" type="submit" loading={isLoading} fullWidth>{isLoading ? 'Создаем аккаунт...' : 'Зарегистрироваться'}</Button>
+      <form onSubmit={handleSubmit((data) => void onSubmit(data))} className="homePage">
+        <Input label="Имя" error={errors.name?.message} placeholder="Crab Master" {...register('name')} />
+        <Input label="Email" error={errors.email?.message} type="email" placeholder="name@example.com" {...register('email')} />
+        <Input label="Пароль" error={errors.password?.message} type="password" placeholder="••••••••" {...register('password')} />
+        <Input
+          label="Повторите пароль"
+          error={errors.confirmPassword?.message}
+          type="password"
+          placeholder="••••••••"
+          {...register('confirmPassword')}
+        />
+        {errors.root?.message && <div className="ui-help">{errors.root.message}</div>}
+        <Button variant="primary" type="submit" loading={isLoading} fullWidth>
+          {isLoading ? 'Создаем аккаунт...' : 'Зарегистрироваться'}
+        </Button>
       </form>
-      <p className="homeMuted">Уже есть аккаунт? <Link to={routes.authLogin}>Войти</Link></p>
+      <p className="homeMuted">
+        Уже есть аккаунт? <Link to={routes.authLogin}>Войти</Link>
+      </p>
     </section>
   )
 }
