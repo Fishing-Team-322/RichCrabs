@@ -4,8 +4,10 @@
 .ui-button:focus-visible,.ui-tab:focus-visible,.ui-input:focus-visible,.ui-select:focus-visible{outline:3px solid #7c3aed;outline-offset:2px}
 .ui-button:disabled,.ui-button.is-disabled{cursor:not-allowed;background:var(--disabled);opacity:.7}
 .ui-button.is-loading{opacity:.85}
-.ui-button.primary{background:linear-gradient(90deg,var(--primary),var(--accent-pink) 60%,var(--accent-blue));background-size:200% 200%;border-color:transparent;box-shadow:0 10px 24px rgba(139,92,246,.36);animation:gradientShift 4s ease-in-out infinite alternate}
-.ui-button.primary:hover{filter:brightness(1.05);box-shadow:var(--shadow-glow);animation:gradientShift 1.4s ease-in-out infinite alternate,glowPulse 2s ease-in-out infinite}
+.ui-button.primary{position:relative;overflow:hidden;background:linear-gradient(102deg,var(--primary) 0%,var(--accent-pink) 58%,var(--accent-blue) 100%);border-color:transparent;box-shadow:0 12px 26px rgba(139,92,246,.34)}
+.ui-button.primary::after{content:'';position:absolute;inset:0;transform:translateX(-130%);background:linear-gradient(110deg,transparent 18%,rgba(255,255,255,.42) 48%,transparent 82%);opacity:0;pointer-events:none}
+.ui-button.primary:hover{filter:brightness(1.06);transform:translateY(-1px);box-shadow:0 0 0 1px rgba(163,122,255,.42),0 14px 34px rgba(139,92,246,.42)}
+.ui-button.primary:hover::after{opacity:1;animation:sheenSweep 900ms ease}
 .ui-button.ghost{background:transparent}
 .ui-field{display:grid;gap:6px}
 .ui-label{font-size:12px;color:var(--text-secondary)}
@@ -44,4 +46,4 @@
 .ui-progress{height:8px;border-radius:999px;background:rgba(157,174,255,.18);overflow:hidden}
 .ui-progress-value{height:100%;background:linear-gradient(90deg,var(--primary),#ec4899);transition:width .25s ease}
 
-@media (prefers-reduced-motion: reduce){.ui-button.primary{animation:none !important}}
+@media (prefers-reduced-motion: reduce){.ui-button.primary:hover::after{animation:none !important}}

@@ -5,8 +5,6 @@ import useAuth from '../../hooks/useAuth'
 import { routes } from '../../app/router/routeMap'
 import { preloadJoinFlow } from '../../app/router/lazyPages'
 import { Badge } from '../../components/ui'
-import heroBlob from '../../assets/home-blob-primary.svg'
-import heroOrb from '../../assets/home-blob-orb.svg'
 import './Home.css'
 
 type HomeItem = { title: string; description: string }
@@ -101,8 +99,15 @@ const HomePage: React.FC = () => {
           </div>
         </div>
         <div className="heroVisual" aria-hidden>
-          <img src={heroBlob} alt="" className="blobMain" />
-          <img src={heroOrb} alt="" className="blobOrb" />
+          <div className="heroGlow" />
+          <div className="heroOrb heroOrbMain">
+            <div className="heroOrbSheen" />
+            <div className="heroOrbCore" />
+          </div>
+          <div className="heroOrb heroOrbSmall">
+            <div className="heroOrbSheen" />
+          </div>
+          <div className="heroRing" />
         </div>
       </section>
 
