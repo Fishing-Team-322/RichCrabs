@@ -9,6 +9,7 @@
 #include <regex>
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include "controllers/BotStateStorage.hpp"
 #include "controllers/ControllerUtils.hpp"
@@ -282,8 +283,16 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
                                     details));
           return;
         }
-        const std::string botId = "bot_" + util::random_hex(24);
-        const std::string secret = util::random_hex(24);
+        std::string botId;
+        std::string secret;
+        try {
+          botId = "bot_" + util::random_hex(24);
+          secret = util::random_hex(24);
+        } catch (const std::exception& ex) {
+          spdlog::error("telegram_connect random_generation_failed request_id={} error={}", requestId, ex.what());
+          cb(api::jsonErrorResponse(500, api::ErrorCode::kInternalError, "failed to generate secure token"));
+          return;
+        }
         const std::string webhookPath = "/api/v1/telegram/webhook/" + botId + "/" + secret;
         const std::string webhookUrl = conf.public_base_url + webhookPath;
         const std::string botTokenValue = *botToken;
@@ -311,10 +320,22 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
                              static_cast<int>(reg.status));
               }
 
+              TelegramBotBinding::ProtectedToken protectedToken;
+              try {
+                protectedToken = TelegramBotBinding::ProtectedToken::fromPlain(botTokenValue);
+              } catch (const std::exception& ex) {
+                spdlog::error("telegram_connect token_protection_failed request_id={} bot_id={} error={}",
+                              requestId,
+                              botId,
+                              ex.what());
+                cb(api::jsonErrorResponse(500, api::ErrorCode::kInternalError, "failed to generate secure token"));
+                return;
+              }
+
               const auto saved = saveBinding(conf, {
                   .bot_id = botId,
                   .secret = secret,
-                  .token = TelegramBotBinding::ProtectedToken::fromPlain(botTokenValue),
+                  .token = std::move(protectedToken),
                   .owner_user_id = ownerUserId,
                   .name = botName,
               });
