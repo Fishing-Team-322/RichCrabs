@@ -26,6 +26,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
   gateway:
     build:
       context: .
@@ -38,40 +39,29 @@ services:
       GW_LISTEN_PORT: "8080"
       GW_PUBLIC_BASE_URL: "http://localhost:8080"
       GW_OPENAPI_PATH: "./api/openapi.yaml"
-
       GW_GRPC_GAME_ADDR: "game:50051"
       GW_GRPC_JOIN_ADDR: "join:50052"
       GW_GRPC_QUIZ_ADDR: "quiz:50053"
       GW_GRPC_ENTITLEMENTS_ADDR: "entitlements:50054"
       GW_GRPC_BOT_ADDR: "bot:50055"
-
       GW_DEFAULT_USER_ID: "00000000-0000-0000-0000-000000000001"
       GW_SESSION_SIGNING_KEY: "dev-insecure-session-key"
-
       GW_GRPC_DEADLINE_MS_CREATE_ROOM: "1500"
       GW_GRPC_DEADLINE_MS_ISSUE_JOIN_TICKET: "1500"
       GW_GRPC_DEADLINE_MS_JOIN_ROOM: "1500"
       GW_GRPC_DEADLINE_MS_START_GAME: "1500"
       GW_GRPC_DEADLINE_MS_GET_ROOM_STATE: "1000"
-
       GW_CSRF_COOKIE_NAME: "XSRF-TOKEN"
       GW_CSRF_HEADER_NAME: "X-XSRF-TOKEN"
       GW_CSRF_COOKIE_SECURE: "false"
       GW_CSRF_COOKIE_HTTPONLY: "false"
       GW_CSRF_COOKIE_PATH: "/"
-
       GW_SESSION_COOKIE_NAME: "QB-SESSION"
       GW_SESSION_COOKIE_SECURE: "false"
       GW_SESSION_COOKIE_HTTPONLY: "true"
       GW_SESSION_COOKIE_PATH: "/"
       GW_SESSION_TTL_SECONDS: "86400"
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      entitlements:
-        condition: service_started
       game:
         condition: service_started
       join:
@@ -79,6 +69,8 @@ services:
       quiz:
         condition: service_started
       bot:
+        condition: service_started
+      entitlements:
         condition: service_started
     restart: unless-stopped
 
@@ -94,14 +86,12 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-local-dev-encryption-key-change-me}
       TELEGRAM_WEBHOOK_BASE_URL: ${TELEGRAM_WEBHOOK_BASE_URL:-http://bot_ingress:8090}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-
-      # bind-адреса (ОК для самого сервиса, который слушает порт)
-      SERVICE_ADDR_GAME: "0.0.0.0:50051"
-      SERVICE_ADDR_JOIN: "0.0.0.0:50052"
-      SERVICE_ADDR_QUIZ: "0.0.0.0:50053"
-      SERVICE_ADDR_ENTITLEMENTS: "0.0.0.0:50054"
-      SERVICE_ADDR_BOT: "0.0.0.0:50055"
-      SERVICE_ADDR_BOT_INGRESS: "0.0.0.0:8090"
+      SERVICE_ADDR_GAME: ${SERVICE_ADDR_GAME:-0.0.0.0:50051}
+      SERVICE_ADDR_JOIN: ${SERVICE_ADDR_JOIN:-0.0.0.0:50052}
+      SERVICE_ADDR_QUIZ: ${SERVICE_ADDR_QUIZ:-0.0.0.0:50053}
+      SERVICE_ADDR_ENTITLEMENTS: ${SERVICE_ADDR_ENTITLEMENTS:-0.0.0.0:50054}
+      SERVICE_ADDR_BOT: ${SERVICE_ADDR_BOT:-0.0.0.0:50055}
+      SERVICE_ADDR_BOT_INGRESS: ${SERVICE_ADDR_BOT_INGRESS:-0.0.0.0:8090}
     depends_on:
       postgres:
         condition: service_healthy
@@ -109,16 +99,12 @@ services:
         condition: service_healthy
     ports:
       - "50054:50054"
-    restart: unless-stopped
 
   game:
     image: richcrabs/game:local
     build: *rust_build
     command: ["/usr/local/bin/game"]
-    environment:
-      <<: *service_env
-      # ВАЖНО: game коннектится к entitlements => нужен hostname, не 0.0.0.0
-      SERVICE_ADDR_ENTITLEMENTS: "entitlements:50054"
+    environment: *service_env
     depends_on:
       entitlements:
         condition: service_started
@@ -126,16 +112,12 @@ services:
         condition: service_healthy
     ports:
       - "50051:50051"
-    restart: unless-stopped
 
   join:
     image: richcrabs/join:local
     build: *rust_build
     command: ["/usr/local/bin/join"]
-    environment:
-      <<: *service_env
-      # на всякий случай тоже даём connect-адрес (если join проверяет лимиты)
-      SERVICE_ADDR_ENTITLEMENTS: "entitlements:50054"
+    environment: *service_env
     depends_on:
       redis:
         condition: service_healthy
@@ -143,15 +125,12 @@ services:
         condition: service_healthy
     ports:
       - "50052:50052"
-    restart: unless-stopped
 
   quiz:
     image: richcrabs/quiz:local
     build: *rust_build
     command: ["/usr/local/bin/quiz"]
-    environment:
-      <<: *service_env
-      SERVICE_ADDR_ENTITLEMENTS: "entitlements:50054"
+    environment: *service_env
     depends_on:
       entitlements:
         condition: service_started
@@ -159,15 +138,12 @@ services:
         condition: service_healthy
     ports:
       - "50053:50053"
-    restart: unless-stopped
 
   bot:
     image: richcrabs/bot:local
     build: *rust_build
     command: ["/usr/local/bin/bot"]
-    environment:
-      <<: *service_env
-      SERVICE_ADDR_ENTITLEMENTS: "entitlements:50054"
+    environment: *service_env
     depends_on:
       entitlements:
         condition: service_started
@@ -175,18 +151,12 @@ services:
         condition: service_healthy
     ports:
       - "50055:50055"
-    restart: unless-stopped
 
   bot_ingress:
     image: richcrabs/bot-ingress:local
     build: *rust_build
     command: ["/usr/local/bin/bot_ingress"]
-    environment:
-      <<: *service_env
-      # ВАЖНО: bot_ingress коннектится к game => нужен hostname, не 0.0.0.0
-      SERVICE_ADDR_GAME: "game:50051"
-      # а слушать ingress должен на 0.0.0.0
-      SERVICE_ADDR_BOT_INGRESS: "0.0.0.0:8090"
+    environment: *service_env
     depends_on:
       game:
         condition: service_started
@@ -194,7 +164,6 @@ services:
         condition: service_healthy
     ports:
       - "8090:8090"
-    restart: unless-stopped
 
 volumes:
   pg_data:
