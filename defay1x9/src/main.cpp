@@ -27,6 +27,10 @@ int main() {
                               conf.grpc_deadline_ms_issue_join_ticket,
                               conf.grpc_deadline_ms_join_room,
                               conf.grpc_deadline_ms_start_game,
+                              conf.grpc_deadline_ms_pause_game,
+                              conf.grpc_deadline_ms_resume_game,
+                              conf.grpc_deadline_ms_next_question,
+                              conf.grpc_deadline_ms_submit_answer,
                               conf.grpc_deadline_ms_get_room_state);
 
   controllers::RegisterServiceRoutes(conf, quizCore);

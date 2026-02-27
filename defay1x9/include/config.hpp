@@ -22,6 +22,10 @@ struct Config final {
   int grpc_deadline_ms_issue_join_ticket = 1500;
   int grpc_deadline_ms_join_room = 1500;
   int grpc_deadline_ms_start_game = 1500;
+  int grpc_deadline_ms_pause_game = 1500;
+  int grpc_deadline_ms_resume_game = 1500;
+  int grpc_deadline_ms_next_question = 1500;
+  int grpc_deadline_ms_submit_answer = 1500;
   int grpc_deadline_ms_get_room_state = 1000;
   bool ws_mock_stream_enabled = false;
   bool ws_mock_stream_auto_on_unavailable = true;
