@@ -124,7 +124,10 @@ services:
     image: richcrabs/game:local
     build: *rust_build
     command: ["/usr/local/bin/game"]
-    environment: *service_env
+    environment:
+      <<: *service_env
+      SERVICE_ADDR_ENTITLEMENTS: "entitlements:50054"
+      SERVICE_ADDR_QUIZ: "quiz:50053"
     depends_on:
       entitlements:
         condition: service_started
@@ -154,7 +157,9 @@ services:
     image: richcrabs/quiz:local
     build: *rust_build
     command: ["/usr/local/bin/quiz"]
-    environment: *service_env
+    environment:
+      <<: *service_env
+      SERVICE_ADDR_ENTITLEMENTS: "entitlements:50054"
     depends_on:
       entitlements:
         condition: service_started
@@ -170,7 +175,9 @@ services:
     image: richcrabs/bot:local
     build: *rust_build
     command: ["/usr/local/bin/bot"]
-    environment: *service_env
+    environment:
+      <<: *service_env
+      SERVICE_ADDR_ENTITLEMENTS: "entitlements:50054"
     depends_on:
       entitlements:
         condition: service_started
