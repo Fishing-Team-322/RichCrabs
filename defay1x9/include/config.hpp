@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 
 #include "csrf.hpp"
 #include "session.hpp"
@@ -35,6 +36,8 @@ struct Config final {
   int grpc_deadline_ms_start_ai_quiz_job = 1500;
   int grpc_deadline_ms_entitlements = 1200;
   std::string redis_url = "redis://redis:6379";
+  std::string database_url = "postgres://richcrab:richcrab@postgres:5432/richcrab";
+  std::unordered_set<std::string> admin_emails;
   uint64_t entitlements_rooms_daily_limit = 10;
   uint64_t entitlements_bots_daily_limit = 20;
   uint64_t entitlements_ai_daily_limit = 30;
