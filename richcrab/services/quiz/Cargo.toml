@@ -16,7 +16,7 @@ prost-types = "0.13"
 serde = { version = "1", features = ["derive"] }
 
 anyhow.workspace = true
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 tonic-health = "0.12"
 tracing = "0.1"
 

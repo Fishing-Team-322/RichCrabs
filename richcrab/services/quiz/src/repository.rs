@@ -16,6 +16,20 @@ pub struct Quiz {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone)]
+pub struct AiQuizJob {
+    pub id: Uuid,
+    pub owner_user_id: Uuid,
+    pub prompt: String,
+    pub desired_question_count: Option<i32>,
+    pub status: String,
+    pub result_quiz_json: Option<Value>,
+    pub error_message: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Clone)]
 pub struct QuizRepository {
     pool: PgPool,
 }
@@ -192,6 +206,97 @@ impl QuizRepository {
             status: row.get("status"),
             published_version: row.get("published_version"),
             questions_json: row.get("questions_json"),
+            created_at: row.get("created_at"),
+            updated_at: row.get("updated_at"),
+        }
+    }
+
+    pub async fn create_ai_quiz_job(&self, job: &AiQuizJob) -> sqlx::Result<()> {
+        sqlx::query(
+            "INSERT INTO ai_quiz_jobs
+                (id, owner_user_id, prompt, desired_question_count, status, result_quiz_json, error_message, created_at, updated_at)
+             VALUES
+                ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+        )
+        .bind(job.id)
+        .bind(job.owner_user_id)
+        .bind(&job.prompt)
+        .bind(job.desired_question_count)
+        .bind(&job.status)
+        .bind(&job.result_quiz_json)
+        .bind(&job.error_message)
+        .bind(job.created_at)
+        .bind(job.updated_at)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn find_ai_quiz_job_by_id(&self, job_id: Uuid) -> sqlx::Result<Option<AiQuizJob>> {
+        let row = sqlx::query(
+            "SELECT id, owner_user_id, prompt, desired_question_count, status, result_quiz_json, error_message, created_at, updated_at
+             FROM ai_quiz_jobs
+             WHERE id = $1",
+        )
+        .bind(job_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(Self::map_ai_quiz_job))
+    }
+
+    pub async fn set_ai_quiz_job_status(&self, job_id: Uuid, status: &str) -> sqlx::Result<()> {
+        sqlx::query(
+            "UPDATE ai_quiz_jobs
+             SET status = $2, updated_at = NOW()
+             WHERE id = $1",
+        )
+        .bind(job_id)
+        .bind(status)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn complete_ai_quiz_job(&self, job_id: Uuid, quiz_json: Value) -> sqlx::Result<()> {
+        sqlx::query(
+            "UPDATE ai_quiz_jobs
+             SET status = 'done', result_quiz_json = $2, error_message = NULL, updated_at = NOW()
+             WHERE id = $1",
+        )
+        .bind(job_id)
+        .bind(quiz_json)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn fail_ai_quiz_job(&self, job_id: Uuid, error_message: &str) -> sqlx::Result<()> {
+        sqlx::query(
+            "UPDATE ai_quiz_jobs
+             SET status = 'failed', error_message = $2, result_quiz_json = NULL, updated_at = NOW()
+             WHERE id = $1",
+        )
+        .bind(job_id)
+        .bind(error_message)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    fn map_ai_quiz_job(row: sqlx::postgres::PgRow) -> AiQuizJob {
+        AiQuizJob {
+            id: row.get("id"),
+            owner_user_id: row.get("owner_user_id"),
+            prompt: row.get("prompt"),
+            desired_question_count: row.get("desired_question_count"),
+            status: row.get("status"),
+            result_quiz_json: row.get("result_quiz_json"),
+            error_message: row.get("error_message"),
             created_at: row.get("created_at"),
             updated_at: row.get("updated_at"),
         }
