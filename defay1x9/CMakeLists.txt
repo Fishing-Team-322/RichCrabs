@@ -56,6 +56,7 @@ add_executable(defay1x9
   src/csrf.cpp
   src/session.cpp
   src/http_api_utils.cpp
+  src/redis_utils.cpp
   src/controllers/ControllerUtils.cpp
   src/controllers/BotStateStorage.cpp
   src/controllers/AuthStorage.cpp
@@ -83,6 +84,7 @@ add_executable(defay1x9
   include/controllers/TelegramController.hpp
   include/controllers/AdminController.hpp
   include/entitlements_client.hpp
+  include/redis_utils.hpp
   ${PROTO_SRCS}
   ${GRPC_SRCS}
   ${GRPC_HDRS}

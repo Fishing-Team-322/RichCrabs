@@ -2,6 +2,7 @@
 
 #include "config.hpp"
 #include "game.grpc.pb.h"
+#include "redis_utils.hpp"
 #include "session.hpp"
 
 #include <drogon/drogon.h>
@@ -12,6 +13,7 @@
 #include <spdlog/spdlog.h>
 
 #include <chrono>
+#include <atomic>
 #include <condition_variable>
 #include <random>
 #include <deque>
@@ -43,6 +45,8 @@ using richcrab::v1::SubscribeRoomEventsRequest;
 
 constexpr size_t kMaxRoomQueue = 256;
 constexpr int kStreamMaxRetries = 3;
+constexpr uint64_t kPresenceTtlSec = 30;
+constexpr uint64_t kPresenceHeartbeatSec = 10;
 
 struct ConnSession final {
   std::string room_id;
@@ -75,6 +79,31 @@ std::unordered_map<std::string, std::shared_ptr<RoomHubEntry>> g_room_hub;
 
 std::mutex g_conn_mu;
 std::unordered_map<const void*, ConnSession> g_conn_sessions;
+
+struct PresenceHeartbeat final {
+  std::atomic<bool> stop{false};
+  std::thread thread;
+};
+
+std::mutex g_presence_mu;
+std::unordered_map<const void*, std::unique_ptr<PresenceHeartbeat>> g_presence_threads;
+
+std::optional<security::SessionClaims> SessionFromJoinTicket(const drogon::HttpRequestPtr& req) {
+  auto ticket = req->getParameter("joinTicket");
+  if (ticket.empty()) {
+    const auto auth = req->getHeader("authorization");
+    static const std::string kBearer = "Bearer ";
+    if (auth.rfind(kBearer, 0) == 0) ticket = auth.substr(kBearer.size());
+  }
+  if (ticket.empty()) return std::nullopt;
+  return security::VerifySessionToken(ticket);
+}
+
+std::string PresenceActorId(const ConnSession& cs) {
+  if (!cs.player_id.empty()) return "player:" + cs.player_id;
+  if (!cs.user_id.empty()) return "user:" + cs.user_id;
+  return cs.role + ":anonymous";
+}
 
 std::shared_ptr<grpc::Channel> MakeChannel() {
   const auto conf = Config::LoadFromEnv();
@@ -352,6 +381,11 @@ void WsGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
   auto conf = Config::LoadFromEnv();
 
   auto claims = security::VerifySessionFromRequest(req, conf.session);
+  bool usedJoinTicket = false;
+  if (!claims) {
+    claims = SessionFromJoinTicket(req);
+    usedJoinTicket = claims.has_value();
+  }
   if (!claims || claims->room_id.empty()) {
     conn->shutdown();
     return;
@@ -379,10 +413,34 @@ void WsGateway::handleNewConnection(const drogon::HttpRequestPtr& req,
   }
   EnsureRoomThreads(roomEntry);
 
+  const auto actorId = PresenceActorId(cs);
+  RedisSetPresenceOnline(conf.redis_url, cs.room_id, actorId, kPresenceTtlSec);
+  auto hb = std::make_unique<PresenceHeartbeat>();
+  auto* hbRaw = hb.get();
+  hb->thread = std::thread([conf, roomId = cs.room_id, actorId, hbRaw] {
+    while (!hbRaw->stop.load()) {
+      RedisSetPresenceOnline(conf.redis_url, roomId, actorId, kPresenceTtlSec);
+      for (uint64_t elapsed = 0; elapsed < kPresenceHeartbeatSec && !hbRaw->stop.load(); ++elapsed) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      }
+    }
+  });
+  {
+    std::lock_guard<std::mutex> lock(g_presence_mu);
+    g_presence_threads[conn.get()] = std::move(hb);
+  }
+
   Json::Value hello;
   hello["type"] = WsGateway::Protocol::kServerHello;
   hello["roomId"] = cs.room_id;
   hello["role"] = cs.role;
+  if (usedJoinTicket) {
+    Json::Value auth;
+    auth["mode"] = "joinTicket";
+    auth["confirmed"] = false;
+    auth["fallback"] = "confirm_join_rpc_not_available";
+    hello["auth"] = auth;
+  }
   conn->send(JsonString(hello));
 }
 
@@ -596,6 +654,22 @@ void WsGateway::handleNewMessage(const drogon::WebSocketConnectionPtr& conn,
 }
 
 void WsGateway::handleConnectionClosed(const drogon::WebSocketConnectionPtr& conn) {
+  {
+    std::unique_ptr<PresenceHeartbeat> hb;
+    {
+      std::lock_guard<std::mutex> lock(g_presence_mu);
+      auto it = g_presence_threads.find(conn.get());
+      if (it != g_presence_threads.end()) {
+        hb = std::move(it->second);
+        g_presence_threads.erase(it);
+      }
+    }
+    if (hb) {
+      hb->stop = true;
+      if (hb->thread.joinable()) hb->thread.join();
+    }
+  }
+
   std::optional<ConnSession> removed;
   {
     std::lock_guard<std::mutex> lock(g_conn_mu);
@@ -606,6 +680,8 @@ void WsGateway::handleConnectionClosed(const drogon::WebSocketConnectionPtr& con
     }
   }
   if (!removed) return;
+  const auto conf = Config::LoadFromEnv();
+  RedisSetPresenceOffline(conf.redis_url, removed->room_id, PresenceActorId(*removed));
   spdlog::info("ws_disconnected pin=- room_id={} player_id={}", removed->room_id, removed->player_id.empty() ? "-" : removed->player_id);
 
   std::shared_ptr<RoomHubEntry> entry;

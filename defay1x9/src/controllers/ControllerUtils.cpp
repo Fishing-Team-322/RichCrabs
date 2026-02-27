@@ -34,6 +34,18 @@ std::string requestIdFromRequest(const drogon::HttpRequestPtr& req) {
   return incoming.empty() ? generateRequestId() : incoming;
 }
 
+std::string clientIpFromRequest(const drogon::HttpRequestPtr& req) {
+  const auto forwardedFor = req->getHeader("x-forwarded-for");
+  if (!forwardedFor.empty()) {
+    const auto comma = forwardedFor.find(',');
+    if (comma == std::string::npos) return forwardedFor;
+    return forwardedFor.substr(0, comma);
+  }
+  const auto realIp = req->getHeader("x-real-ip");
+  if (!realIp.empty()) return realIp;
+  return req->peerAddr().toIp();
+}
+
 std::string resolveUserId(const drogon::HttpRequestPtr& req, const Config& conf) {
   auto session = security::VerifySessionFromRequest(req, conf.session);
   if (session && session->role == "host" && !session->user_id.empty()) return session->user_id;

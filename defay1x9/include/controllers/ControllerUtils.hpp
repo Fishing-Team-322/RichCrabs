@@ -12,6 +12,7 @@
 namespace controllers {
 
 std::string requestIdFromRequest(const drogon::HttpRequestPtr& req);
+std::string clientIpFromRequest(const drogon::HttpRequestPtr& req);
 std::string resolveUserId(const drogon::HttpRequestPtr& req, const Config& conf);
 Json::Value botToJson(const QuizCoreBot& bot, const std::optional<BotState>& state = std::nullopt);
 drogon::HttpResponsePtr notImplemented(const std::string& endpoint);
