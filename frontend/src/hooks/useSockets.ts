@@ -6,10 +6,10 @@ import {
   setTeams,
   setCurrentQuestion,
   setTimeLeft,
-  updateScore,
+  setScores,
   setStatus,
   setMyTeamTurn,
-} from '../store/slices/gameSlice'
+} from '../store/slices/gameSessionSlice'
 
 export const useGameSocket = (pin: string, playerId: string) => {
   const dispatch = useAppDispatch()
@@ -45,7 +45,7 @@ export const useGameSocket = (pin: string, playerId: string) => {
     }
 
     const onScoreUpdate = (data: { teamA: number; teamB: number }) => {
-      dispatch(updateScore({ teamA: data.teamA, teamB: data.teamB }))
+      dispatch(setScores({ teamA: data.teamA, teamB: data.teamB }))
     }
 
     const onTimeUpdate = (data: { timeLeft: number }) => {

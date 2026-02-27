@@ -3,6 +3,8 @@ import { authApi } from '../../services/authApi'
 import { clearAuthTokens } from '../../services/api'
 import { profileApi } from '../../services/profileApi'
 import type { UserDto } from '../../types/auth.types'
+import type { RootState } from '../store'
+import { getErrorMessage } from './asyncUtils'
 
 const ACCESS_TOKEN_KEY = 'token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
@@ -31,14 +33,6 @@ const initialState: AuthState = {
   isInitialized: false,
 }
 
-const mapErrorMessage = (error: unknown, fallback: string) => {
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-
-  return fallback
-}
-
 export const login = createAsyncThunk<AuthPayload, { email: string; password: string }, { rejectValue: string }>(
   'auth/login',
   async (credentials, { rejectWithValue }) => {
@@ -50,7 +44,7 @@ export const login = createAsyncThunk<AuthPayload, { email: string; password: st
         profile: response.user,
       }
     } catch (error) {
-      return rejectWithValue(mapErrorMessage(error, 'Не удалось выполнить вход.'))
+      return rejectWithValue(getErrorMessage(error, 'Не удалось выполнить вход.'))
     }
   },
 )
@@ -68,7 +62,7 @@ export const register = createAsyncThunk<
       profile: response.user,
     }
   } catch (error) {
-    return rejectWithValue(mapErrorMessage(error, 'Не удалось выполнить регистрацию.'))
+    return rejectWithValue(getErrorMessage(error, 'Не удалось выполнить регистрацию.'))
   }
 })
 
@@ -89,7 +83,7 @@ export const restoreSession = createAsyncThunk<
     return { token, refreshToken, profile }
   } catch (error) {
     clearAuthTokens()
-    return rejectWithValue(mapErrorMessage(error, 'Сессия истекла. Войдите заново.'))
+    return rejectWithValue(getErrorMessage(error, 'Сессия истекла. Войдите заново.'))
   }
 })
 
@@ -173,4 +167,5 @@ const authSlice = createSlice({
 })
 
 export const { clearAuthError, setProfile } = authSlice.actions
+export const selectAuthState = (state: RootState) => state.auth
 export default authSlice.reducer
