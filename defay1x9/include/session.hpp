@@ -16,6 +16,7 @@ struct SessionCookieConfig final {
 };
 
 struct SessionClaims final {
+  std::string session_type;  // "auth" | "game"
   std::string role;  // "host" | "player"
   std::string pin;
   std::string room_id;
