@@ -5,6 +5,7 @@ import { restoreSession } from '../../store/slices'
 import Layout from '../../components/Layout'
 import Login from '../../pages/auth/Login'
 import Register from '../../pages/auth/Register'
+import HomePage from '../../pages/Home/Home'
 import AuthGuard from './guards/AuthGuard'
 import GuestGuard from './guards/GuestGuard'
 import { routes } from './routeMap'
@@ -42,7 +43,7 @@ const AppRouter: React.FC = () => {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
-        <Route path={routes.home} element={<AppPage title="Главная" description="Публичная главная страница." />} />
+        <Route path={routes.home} element={<HomePage />} />
         <Route path={routes.join} element={<AppPage title="Join" description="Ввод PIN или invite-кода." />} />
         <Route path={routes.invite} element={<AppPage title="Invite" description="Прямой вход по invite-токену." />} />
 
