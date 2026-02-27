@@ -24,6 +24,7 @@ int main() {
 
   QuizCoreClientGrpc quizCore(conf.grpc_game_addr,
                               conf.grpc_join_addr,
+                              conf.grpc_quiz_addr,
                               conf.grpc_bot_addr,
                               conf.grpc_deadline_ms_create_room,
                               conf.grpc_deadline_ms_issue_join_ticket,
@@ -33,7 +34,13 @@ int main() {
                               conf.grpc_deadline_ms_resume_game,
                               conf.grpc_deadline_ms_next_question,
                               conf.grpc_deadline_ms_submit_answer,
-                              conf.grpc_deadline_ms_get_room_state);
+                              conf.grpc_deadline_ms_get_room_state,
+                              conf.grpc_deadline_ms_create_quiz,
+                              conf.grpc_deadline_ms_list_quizzes,
+                              conf.grpc_deadline_ms_get_quiz,
+                              conf.grpc_deadline_ms_update_quiz,
+                              conf.grpc_deadline_ms_publish_quiz,
+                              conf.grpc_deadline_ms_start_ai_quiz_job);
 
   controllers::RegisterServiceRoutes(conf, quizCore);
   controllers::RegisterAuthRoutes(conf);

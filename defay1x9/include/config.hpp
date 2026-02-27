@@ -27,6 +27,12 @@ struct Config final {
   int grpc_deadline_ms_next_question = 1500;
   int grpc_deadline_ms_submit_answer = 1500;
   int grpc_deadline_ms_get_room_state = 1000;
+  int grpc_deadline_ms_create_quiz = 1500;
+  int grpc_deadline_ms_list_quizzes = 1500;
+  int grpc_deadline_ms_get_quiz = 1500;
+  int grpc_deadline_ms_update_quiz = 1500;
+  int grpc_deadline_ms_publish_quiz = 1500;
+  int grpc_deadline_ms_start_ai_quiz_job = 1500;
   bool ws_mock_stream_enabled = false;
   bool ws_mock_stream_auto_on_unavailable = true;
   std::string app_env = "development";
