@@ -4,7 +4,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
   git curl zip unzip tar ca-certificates \
   build-essential pkg-config cmake ninja-build libssl-dev \
-  bison flex linux-libc-dev \
+  bison flex autoconf automake libtool m4 linux-libc-dev \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt
