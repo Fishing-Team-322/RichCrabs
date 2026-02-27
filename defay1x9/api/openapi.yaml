@@ -558,6 +558,40 @@ components:
         status:
           type: string
 
+    QuizTelegramDegradedResponse:
+      type: object
+      required: [status, code, note, details]
+      properties:
+        status:
+          type: string
+          enum: [degraded]
+        code:
+          type: string
+          example: not_implemented_in_rust
+        note:
+          type: string
+          example: quiz rpc unavailable
+        details:
+          type: object
+          additionalProperties: true
+
+    QuizTelegramErrorResponse:
+      type: object
+      required: [status, code, note, details]
+      properties:
+        status:
+          type: string
+          enum: [error]
+        code:
+          type: string
+          example: validation_error
+        note:
+          type: string
+          example: request validation failed
+        details:
+          type: object
+          additionalProperties: true
+
     WsClientPauseGame:
       type: object
       required: [type]
@@ -1285,11 +1319,31 @@ paths:
               $ref: '#/components/schemas/CreateQuizRequest'
       responses:
         '200':
-          description: Quiz created
+          description: Quiz created or degraded fallback
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/QuizResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/QuizResponse'
+                  - $ref: '#/components/schemas/QuizTelegramDegradedResponse'
+        '400':
+          description: Invalid JSON or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '403':
+          description: CSRF required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '5xx':
+          description: Backend/internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
     get:
       tags: [Quizzes]
       summary: List quizzes
@@ -1308,11 +1362,19 @@ paths:
           schema: { type: boolean }
       responses:
         '200':
-          description: Quiz list
+          description: Quiz list or degraded fallback
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/QuizListResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/QuizListResponse'
+                  - $ref: '#/components/schemas/QuizTelegramDegradedResponse'
+        '5xx':
+          description: Backend/internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
 
   /api/v1/quizzes/{quizId}:
     get:
@@ -1325,11 +1387,25 @@ paths:
           schema: { type: string }
       responses:
         '200':
-          description: Quiz
+          description: Quiz or degraded fallback
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/QuizResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/QuizResponse'
+                  - $ref: '#/components/schemas/QuizTelegramDegradedResponse'
+        '404':
+          description: Quiz not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '5xx':
+          description: Backend/internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
     patch:
       tags: [Quizzes]
       summary: Update quiz draft
@@ -1349,11 +1425,37 @@ paths:
               $ref: '#/components/schemas/UpdateQuizRequest'
       responses:
         '200':
-          description: Updated quiz
+          description: Updated quiz or degraded fallback
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/QuizResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/QuizResponse'
+                  - $ref: '#/components/schemas/QuizTelegramDegradedResponse'
+        '400':
+          description: Invalid JSON or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '403':
+          description: CSRF required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '404':
+          description: Quiz not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '5xx':
+          description: Backend/internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
 
   /api/v1/quizzes/{quizId}/publish:
     post:
@@ -1369,11 +1471,31 @@ paths:
           schema: { type: string }
       responses:
         '200':
-          description: Published quiz
+          description: Published quiz or degraded fallback
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/QuizResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/QuizResponse'
+                  - $ref: '#/components/schemas/QuizTelegramDegradedResponse'
+        '403':
+          description: CSRF required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '404':
+          description: Quiz not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '5xx':
+          description: Backend/internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
 
   /api/v1/quizzes/ai-generate:
     post:
@@ -1396,7 +1518,37 @@ paths:
                 language: { type: string }
       responses:
         '200':
-          description: Job accepted
+          description: Job accepted or degraded fallback
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [jobId, status]
+                    properties:
+                      jobId:
+                        type: string
+                      status:
+                        type: string
+                  - $ref: '#/components/schemas/QuizTelegramDegradedResponse'
+        '400':
+          description: Invalid JSON or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '403':
+          description: CSRF required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '5xx':
+          description: Backend/internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
 
   /api/v1/telegram/bots/connect:
     post:
@@ -1413,16 +1565,37 @@ paths:
               $ref: '#/components/schemas/TelegramConnectRequest'
       responses:
         '200':
-          description: Bot connected
+          description: Bot connected or degraded fallback
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TelegramConnectResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/TelegramConnectResponse'
+                  - $ref: '#/components/schemas/QuizTelegramDegradedResponse'
+        '400':
+          description: Invalid JSON/token format/validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '403':
+          description: CSRF required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '5xx':
+          description: Backend/internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
 
   /telegram/webhook/{botId}/{secret}:
     post:
       tags: [Telegram]
       summary: Telegram webhook ingress (no CSRF/cookie required)
+      security: []
       parameters:
         - name: botId
           in: path
@@ -1442,6 +1615,24 @@ paths:
       responses:
         '200':
           description: Accepted
+        '400':
+          description: Invalid telegram update JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '403':
+          description: Invalid webhook secret (path or header)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '404':
+          description: Unknown bot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
 
   /api/v1/bots:
     get:
