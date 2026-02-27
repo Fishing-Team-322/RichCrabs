@@ -5,7 +5,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
   git curl zip unzip tar ca-certificates \
-  build-essential pkg-config \
+  build-essential pkg-config ccache \
   cmake ninja-build \
   && rm -rf /var/lib/apt/lists/*
 
@@ -45,8 +45,11 @@ RUN --mount=type=cache,target=/opt/vcpkg/downloads,id=vcpkg-downloads \
     --mount=type=cache,target=/opt/vcpkg/buildtrees,id=vcpkg-buildtrees-x64-linux-release \
     --mount=type=cache,target=/opt/vcpkg/packages,id=vcpkg-packages-x64-linux-release \
     --mount=type=cache,target=/root/.cache/vcpkg/bincache,id=vcpkg-bincache \
+    --mount=type=cache,target=/root/.cache/ccache,id=gateway-ccache \
     cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+      -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
       -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
       -DVCPKG_TARGET_TRIPLET=x64-linux-release \
       -DVCPKG_HOST_TRIPLET=x64-linux-release \
