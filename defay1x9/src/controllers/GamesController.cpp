@@ -251,6 +251,106 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore) {
       },
       {drogon::Post});
 
+
+  drogon::app().registerHandler(
+      "/api/v1/games/{1}/pause",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req,
+                        std::function<void(const drogon::HttpResponsePtr&)>&& cb,
+                        std::string) {
+        auto session = security::VerifySessionFromRequest(req, conf.session);
+        if (!session) {
+          cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
+          return;
+        }
+        if (session->role != "host") {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "only host can pause game"));
+          return;
+        }
+        if (session->room_id.empty()) {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "room_id is not present in session"));
+          return;
+        }
+        if (!RequireCsrf(req, conf, cb)) return;
+
+        const auto requestId = requestIdFromRequest(req);
+        const auto result = quizCore.pauseGame(session->room_id, session->user_id, requestId);
+        if (result.status != QuizCoreRpcStatus::kOk || !result.paused) {
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "pause_game")));
+          return;
+        }
+
+        auto response = drogon::HttpResponse::newHttpResponse();
+        response->setStatusCode(drogon::k204NoContent);
+        cb(response);
+      },
+      {drogon::Post});
+
+  drogon::app().registerHandler(
+      "/api/v1/games/{1}/resume",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req,
+                        std::function<void(const drogon::HttpResponsePtr&)>&& cb,
+                        std::string) {
+        auto session = security::VerifySessionFromRequest(req, conf.session);
+        if (!session) {
+          cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
+          return;
+        }
+        if (session->role != "host") {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "only host can resume game"));
+          return;
+        }
+        if (session->room_id.empty()) {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "room_id is not present in session"));
+          return;
+        }
+        if (!RequireCsrf(req, conf, cb)) return;
+
+        const auto requestId = requestIdFromRequest(req);
+        const auto result = quizCore.resumeGame(session->room_id, session->user_id, requestId);
+        if (result.status != QuizCoreRpcStatus::kOk || !result.resumed) {
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "resume_game")));
+          return;
+        }
+
+        auto response = drogon::HttpResponse::newHttpResponse();
+        response->setStatusCode(drogon::k204NoContent);
+        cb(response);
+      },
+      {drogon::Post});
+
+  drogon::app().registerHandler(
+      "/api/v1/games/{1}/next",
+      [&quizCore, conf](const drogon::HttpRequestPtr& req,
+                        std::function<void(const drogon::HttpResponsePtr&)>&& cb,
+                        std::string) {
+        auto session = security::VerifySessionFromRequest(req, conf.session);
+        if (!session) {
+          cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
+          return;
+        }
+        if (session->role != "host") {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "only host can move to next question"));
+          return;
+        }
+        if (session->room_id.empty()) {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "room_id is not present in session"));
+          return;
+        }
+        if (!RequireCsrf(req, conf, cb)) return;
+
+        const auto requestId = requestIdFromRequest(req);
+        const auto result = quizCore.nextQuestion(session->room_id, session->user_id, requestId);
+        if (result.status != QuizCoreRpcStatus::kOk || !result.advanced) {
+          cb(api::jsonErrorResponse(api::mapRpcError(result.status, "next_question")));
+          return;
+        }
+
+        auto response = drogon::HttpResponse::newHttpResponse();
+        response->setStatusCode(drogon::k204NoContent);
+        cb(response);
+      },
+      {drogon::Post});
+
   drogon::app().registerHandler(
       "/api/v1/games/{1}/state",
       [&quizCore, conf](const drogon::HttpRequestPtr& req,

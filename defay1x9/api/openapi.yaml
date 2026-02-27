@@ -17,6 +17,10 @@ tags:
     description: Real-time channel and message contracts.
   - name: Bots
     description: Bot management APIs.
+  - name: Quizzes
+    description: Quiz authoring and publishing APIs.
+  - name: Telegram
+    description: Telegram bot connect and webhook ingress APIs.
   - name: Admin
     description: Administrative endpoints under /admin/api/*.
   - name: Auth
@@ -426,6 +430,9 @@ components:
       oneOf:
         - $ref: '#/components/schemas/WsClientPing'
         - $ref: '#/components/schemas/WsClientStartGame'
+        - $ref: '#/components/schemas/WsClientPauseGame'
+        - $ref: '#/components/schemas/WsClientResumeGame'
+        - $ref: '#/components/schemas/WsClientNextQuestion'
         - $ref: '#/components/schemas/WsClientGetState'
         - $ref: '#/components/schemas/WsClientSubmitAnswer'
       discriminator:
@@ -437,9 +444,143 @@ components:
         - $ref: '#/components/schemas/WsServerRoomEvent'
         - $ref: '#/components/schemas/WsServerRoomState'
         - $ref: '#/components/schemas/WsServerPong'
+        - $ref: '#/components/schemas/WsServerStartGameResult'
+        - $ref: '#/components/schemas/WsServerPauseGameResult'
+        - $ref: '#/components/schemas/WsServerResumeGameResult'
+        - $ref: '#/components/schemas/WsServerNextQuestionResult'
         - $ref: '#/components/schemas/WsServerError'
       discriminator:
         propertyName: type
+
+
+    QuizQuestion:
+      type: object
+      required: [text, options, correctIndex]
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+        correctIndex:
+          type: integer
+        timeLimitSec:
+          type: integer
+
+    Quiz:
+      type: object
+      required: [quizId, ownerUserId, title, published, questions]
+      properties:
+        quizId:
+          type: string
+        ownerUserId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        published:
+          type: boolean
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuizQuestion'
+
+    QuizResponse:
+      type: object
+      required: [quiz]
+      properties:
+        quiz:
+          $ref: '#/components/schemas/Quiz'
+
+    QuizListResponse:
+      type: object
+      required: [items, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Quiz'
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    CreateQuizRequest:
+      type: object
+      required: [title, questions]
+      properties:
+        ownerUserId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuizQuestion'
+
+    UpdateQuizRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuizQuestion'
+
+    TelegramConnectRequest:
+      type: object
+      required: [botToken]
+      properties:
+        botToken:
+          type: string
+        name:
+          type: string
+
+    TelegramConnectResponse:
+      type: object
+      required: [botId, webhookUrl, status]
+      properties:
+        botId:
+          type: string
+        webhookUrl:
+          type: string
+        status:
+          type: string
+
+    WsClientPauseGame:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: pause_game
+
+    WsClientResumeGame:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: resume_game
+
+    WsClientNextQuestion:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: next_question
 
     WsClientPing:
       type: object
@@ -579,6 +720,46 @@ components:
           const: pong
       example:
         type: pong
+
+    WsServerStartGameResult:
+      type: object
+      required: [type, started]
+      properties:
+        type:
+          type: string
+          const: start_game_result
+        started:
+          type: boolean
+
+    WsServerPauseGameResult:
+      type: object
+      required: [type, paused]
+      properties:
+        type:
+          type: string
+          const: pause_game_result
+        paused:
+          type: boolean
+
+    WsServerResumeGameResult:
+      type: object
+      required: [type, resumed]
+      properties:
+        type:
+          type: string
+          const: resume_game_result
+        resumed:
+          type: boolean
+
+    WsServerNextQuestionResult:
+      type: object
+      required: [type, advanced]
+      properties:
+        type:
+          type: string
+          const: next_question_result
+        advanced:
+          type: boolean
 
     WsServerError:
       type: object
@@ -963,6 +1144,55 @@ paths:
         '204':
           description: Started
 
+
+  /api/v1/games/{pin}/pause:
+    post:
+      tags: [Games]
+      summary: Pause game
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - name: pin
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Paused
+
+  /api/v1/games/{pin}/resume:
+    post:
+      tags: [Games]
+      summary: Resume game
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - name: pin
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Resumed
+
+  /api/v1/games/{pin}/next:
+    post:
+      tags: [Games]
+      summary: Move to next question
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - name: pin
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Advanced
+
   /api/v1/games/{pin}/state:
     get:
       tags: [Games]
@@ -1031,6 +1261,180 @@ paths:
         '204':
           description: Player kicked
 
+
+  /api/v1/quizzes:
+    post:
+      tags: [Quizzes]
+      summary: Create quiz draft
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQuizRequest'
+      responses:
+        '200':
+          description: Quiz created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizResponse'
+    get:
+      tags: [Quizzes]
+      summary: List quizzes
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer }
+        - name: offset
+          in: query
+          schema: { type: integer }
+        - name: ownerUserId
+          in: query
+          schema: { type: string }
+        - name: published
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Quiz list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizListResponse'
+
+  /api/v1/quizzes/{quizId}:
+    get:
+      tags: [Quizzes]
+      summary: Get quiz
+      parameters:
+        - name: quizId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Quiz
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizResponse'
+    patch:
+      tags: [Quizzes]
+      summary: Update quiz draft
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - name: quizId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateQuizRequest'
+      responses:
+        '200':
+          description: Updated quiz
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizResponse'
+
+  /api/v1/quizzes/{quizId}/publish:
+    post:
+      tags: [Quizzes]
+      summary: Publish quiz
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - name: quizId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Published quiz
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizResponse'
+
+  /api/v1/quizzes/ai-generate:
+    post:
+      tags: [Quizzes]
+      summary: Start AI quiz generation (mock/degraded in gateway)
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt: { type: string }
+                numQuestions: { type: integer }
+                difficulty: { type: string }
+                language: { type: string }
+      responses:
+        '200':
+          description: Job accepted
+
+  /api/v1/telegram/bots/connect:
+    post:
+      tags: [Telegram]
+      summary: Connect Telegram bot token
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelegramConnectRequest'
+      responses:
+        '200':
+          description: Bot connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramConnectResponse'
+
+  /telegram/webhook/{botId}/{secret}:
+    post:
+      tags: [Telegram]
+      summary: Telegram webhook ingress (no CSRF/cookie required)
+      parameters:
+        - name: botId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: secret
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Accepted
+
   /api/v1/bots:
     get:
       tags: [Bots]
@@ -1091,7 +1495,7 @@ paths:
                 $ref: '#/components/schemas/BotResponse'
     patch:
       tags: [Bots]
-      summary: Update bot
+      summary: Update bot (not implemented)
       security:
         - sessionCookie: []
         - csrfHeader: []
@@ -1108,12 +1512,12 @@ paths:
             schema:
               $ref: '#/components/schemas/UpdateBotRequest'
       responses:
-        '200':
-          description: Updated bot
+        '501':
+          description: Not implemented
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BotResponse'
+                $ref: '#/components/schemas/ErrorResponse'
     delete:
       tags: [Bots]
       summary: Delete bot
@@ -1216,8 +1620,8 @@ paths:
       description: |
         Upgrade to WebSocket and exchange typed messages.
 
-        Client message types: `ping`, `start_game`, `submit_answer`, `get_state`.
-        Server message types: `hello`, `room_event`, `room_state`, `error`, `pong`.
+        Client message types: `ping`, `start_game`, `pause_game`, `resume_game`, `next_question`, `submit_answer`, `get_state`.
+        Server message types: `hello`, `room_event`, `room_state`, `error`, `pong`, `start_game_result`, `pause_game_result`, `resume_game_result`, `next_question_result`.
 
         Client -> Server schema: `WsClientMessage`
         Server -> Client schema: `WsServerMessage`
