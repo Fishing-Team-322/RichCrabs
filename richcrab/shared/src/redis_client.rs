@@ -129,6 +129,31 @@ impl RedisClient {
         }
     }
 
+    pub async fn delete_key(&self, key: &str) -> Result<(), RedisClientError> {
+        let mut attempt = 0;
+        loop {
+            let mut conn = self.get_connection().await?;
+            let mut command = redis::cmd("DEL");
+            command.arg(key);
+            let command = command.query_async::<u64>(&mut conn);
+
+            match timeout(self.command_timeout, command).await {
+                Ok(Ok(_)) => return Ok(()),
+                Ok(Err(err)) if attempt < self.max_retries => {
+                    attempt += 1;
+                    let _ = err;
+                    tokio::time::sleep(self.retry_backoff).await;
+                }
+                Ok(Err(err)) => return Err(RedisClientError::Redis(err)),
+                Err(_) if attempt < self.max_retries => {
+                    attempt += 1;
+                    tokio::time::sleep(self.retry_backoff).await;
+                }
+                Err(_) => return Err(RedisClientError::Timeout(self.command_timeout)),
+            }
+        }
+    }
+
     pub async fn get_value(&self, key: &str) -> Result<Option<String>, RedisClientError> {
         let mut attempt = 0;
         loop {
