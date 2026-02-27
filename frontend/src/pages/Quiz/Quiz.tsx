@@ -1,25 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Lobby from './Lobby'
 import Question from './Question'
 import Result from './Result'
 import { routes } from '../../app/router/routeMap'
-import { useInterval } from '../../hooks/useInterval'
-import { playerSession } from '../../services/playerSession'
-import {
-  connectSocket,
-  disconnectSocket,
-  getConnectionState,
-  requestGameState,
-  sendAnswer,
-  sendStartGame,
-} from '../../services/socket'
-import type { RoomStateDto, Team } from '../../types/room.types'
-import type { QuizAnswerResultDto } from '../../types/quiz.types'
+import { useGames } from '../../hooks/useGames'
 import '../rooms/rooms.css'
 import './quiz.css'
-
-type QuizScreen = 'lobby' | 'question' | 'feedback' | 'scoreboard' | 'final'
 
 const STATUS_LABEL: Record<string, string> = {
   connecting: 'Подключение... ',
@@ -29,135 +15,33 @@ const STATUS_LABEL: Record<string, string> = {
   idle: 'Отключено',
 }
 
-const SCOREBOARD_DELAY_MS = 2500
-const FEEDBACK_DELAY_MS = 2500
+const QUALITY_LABEL: Record<string, string> = {
+  excellent: 'Отличное',
+  degraded: 'Стабильное',
+  poor: 'Нестабильное',
+  offline: 'Оффлайн',
+}
 
 const Quiz = () => {
   const { roomId = '' } = useParams()
-  const token = playerSession.getToken()
-  const playerName = playerSession.getPlayerName()
-  const playerId = playerSession.getPlayerId()
+  const {
+    token,
+    gameState,
+    answerResult,
+    screen,
+    questionTimer,
+    hasAnswered,
+    error,
+    connectionState,
+    connectionQuality,
+    latencyMs,
+    playerTeam,
+    canStart,
+    handleAnswer,
+    handleStartGame,
+  } = useGames(roomId)
 
-  const [gameState, setGameState] = useState<RoomStateDto | null>(null)
-  const [answerResult, setAnswerResult] = useState<QuizAnswerResultDto | null>(null)
-  const [screen, setScreen] = useState<QuizScreen>('lobby')
-  const [questionTimer, setQuestionTimer] = useState(0)
-  const [hasAnswered, setHasAnswered] = useState(false)
-  const [connectionLabel, setConnectionLabel] = useState(STATUS_LABEL[getConnectionState()])
-  const [error, setError] = useState('')
-
-  const player = useMemo(() => {
-    if (!gameState) {
-      return null
-    }
-
-    return gameState.players.find((entry) => entry.id === playerId || entry.name === playerName) ?? null
-  }, [gameState, playerId, playerName])
-
-  const playerTeam: Team | null = player?.team ?? null
-
-  useInterval(
-    () => {
-      setQuestionTimer((prev) => (prev > 0 ? prev - 1 : 0))
-    },
-    screen === 'question' && questionTimer > 0 ? 1000 : null,
-  )
-
-  useEffect(() => {
-    if (!token || !roomId) {
-      return
-    }
-
-    const socket = connectSocket(token, roomId)
-
-    const updateByGameState = (state: RoomStateDto) => {
-      setGameState(state)
-      setQuestionTimer(state.timeLeft)
-
-      if (state.phase === 'finished') {
-        setScreen('final')
-        return
-      }
-
-      if (state.phase === 'lobby') {
-        setScreen('lobby')
-        return
-      }
-
-      if (state.currentQuestion) {
-        setScreen('question')
-      }
-    }
-
-    const onGameState = (state: RoomStateDto) => {
-      setError('')
-      updateByGameState(state)
-      setHasAnswered(false)
-    }
-
-    const onReconnectState = (state: RoomStateDto) => {
-      setError('Состояние восстановлено после переподключения.')
-      updateByGameState(state)
-      setHasAnswered(!state.canAnswer)
-    }
-
-    const onAnswerResult = (result: QuizAnswerResultDto) => {
-      setAnswerResult(result)
-      setScreen('feedback')
-      setTimeout(() => {
-        setScreen((prev) => (prev === 'feedback' ? 'scoreboard' : prev))
-      }, FEEDBACK_DELAY_MS)
-      setTimeout(() => {
-        setScreen((prev) => (prev === 'scoreboard' ? 'question' : prev))
-      }, FEEDBACK_DELAY_MS + SCOREBOARD_DELAY_MS)
-    }
-
-    const syncConnectionLabel = () => {
-      setConnectionLabel(STATUS_LABEL[getConnectionState()])
-    }
-
-    const onDisconnect = () => {
-      syncConnectionLabel()
-      setError('Соединение потеряно, пытаемся переподключиться...')
-    }
-
-    const onConnectError = () => {
-      syncConnectionLabel()
-      setError('Проблема с websocket соединением.')
-    }
-
-    socket.on('gameState', onGameState)
-    socket.on('reconnectState', onReconnectState)
-    socket.on('answerResult', onAnswerResult)
-    socket.on('disconnect', onDisconnect)
-    socket.on('connect', syncConnectionLabel)
-    socket.on('reconnect', syncConnectionLabel)
-    socket.on('connect_error', onConnectError)
-
-    requestGameState()
-
-    return () => {
-      socket.off('gameState', onGameState)
-      socket.off('reconnectState', onReconnectState)
-      socket.off('answerResult', onAnswerResult)
-      socket.off('disconnect', onDisconnect)
-      socket.off('connect', syncConnectionLabel)
-      socket.off('reconnect', syncConnectionLabel)
-      socket.off('connect_error', onConnectError)
-      disconnectSocket()
-    }
-  }, [roomId, token])
-
-  const handleAnswer = (index: number) => {
-    if (!gameState || hasAnswered || !gameState.canAnswer) {
-      return
-    }
-
-    setHasAnswered(true)
-    sendAnswer(index)
-  }
-
-  const canStart = Boolean(gameState?.isCreator)
+  const connectionLabel = STATUS_LABEL[connectionState]
 
   if (!token) {
     return (
@@ -186,6 +70,11 @@ const Quiz = () => {
 
   return (
     <section className="roomsPage">
+      <div className={`quizConnectionBadge quality-${connectionQuality}`}>
+        Связь: {QUALITY_LABEL[connectionQuality]}
+        {latencyMs !== null && ` · ${latencyMs}мс`}
+      </div>
+
       {error && <div className="roomError">{error}</div>}
 
       {screen === 'lobby' && (
@@ -194,7 +83,7 @@ const Quiz = () => {
           canStart={canStart}
           playerTeam={playerTeam}
           connectionLabel={connectionLabel}
-          onStart={() => sendStartGame()}
+          onStart={handleStartGame}
         />
       )}
 
