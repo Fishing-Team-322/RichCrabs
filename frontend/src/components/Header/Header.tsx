@@ -16,7 +16,7 @@ const Header = () => {
         {profile ? (
           <>
             <div className="accountMeta">
-              <span className="accountName">{profile.name}</span>
+              <span className="accountName">{profile.displayName}</span>
               <span className="accountEmail">{profile.email}</span>
             </div>
             <Link className="accountAction" to={routes.profile}>

@@ -39,7 +39,7 @@ components:
     csrfHeader:
       type: apiKey
       in: header
-      name: X-CSRF-Token
+      name: X-XSRF-TOKEN
 
   schemas:
     ErrorDetail:
@@ -987,7 +987,8 @@ paths:
   /csrf:
     get:
       tags: [Service]
-      summary: Issue CSRF token (service endpoint)
+      summary: Issue CSRF token (legacy alias)
+      deprecated: true
       responses:
         '200':
           description: CSRF token issued
@@ -999,7 +1000,8 @@ paths:
   /logout:
     post:
       tags: [Service]
-      summary: Logout from service endpoint
+      summary: Logout from service endpoint (legacy alias)
+      deprecated: true
       security:
         - sessionCookie: []
         - csrfHeader: []
@@ -1128,6 +1130,20 @@ paths:
       responses:
         '204':
           description: Password changed
+
+  /api/v1/me/sessions:
+    get:
+      tags: [Profile]
+      summary: List active sessions for current user
+      security:
+        - sessionCookie: []
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/auth/register:
     post:

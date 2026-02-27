@@ -8,7 +8,7 @@ describe('reducers and selectors', () => {
     const state = authReducer(undefined, setProfile({
       id: 'u-1',
       email: 'user@example.com',
-      name: 'User',
+      displayName: 'User',
       gamesPlayed: 1,
       wins: 0,
     }))
@@ -17,7 +17,7 @@ describe('reducers and selectors', () => {
       auth: state,
     } as RootState
 
-    expect(state.profile?.name).toBe('User')
+    expect(state.profile?.displayName).toBe('User')
     expect(selectAuthState(rootState).profile?.email).toBe('user@example.com')
   })
 

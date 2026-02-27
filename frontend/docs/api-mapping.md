@@ -4,11 +4,14 @@
 
 ## Аутентификация
 
+> Сессионная модель: cookie (`QB-SESSION`) + CSRF (`XSRF-TOKEN` cookie + `X-XSRF-TOKEN` header), без bearer access/refresh токенов.
+
+
 | UI экран | Роут | Endpoint | Метод | Назначение |
 |---|---|---|---|---|
-| Login | `/auth/login` | `/api/auth/login` | POST | Вход пользователя |
-| Register | `/auth/register` | `/api/auth/register` | POST | Регистрация пользователя |
-| Session restore (boot) | n/a (app init) | `/api/auth/refresh` | POST | Обновление access token по refresh token |
+| Login | `/auth/login` | `/api/v1/auth/login` | POST | Вход пользователя |
+| Register | `/auth/register` | `/api/v1/auth/register` | POST | Регистрация пользователя |
+| CSRF bootstrap (before auth mutating calls) | n/a (app init / перед POST) | `/api/v1/auth/csrf` | GET | Получить CSRF token cookie/header pair |
 
 ## Квизы (authoring + publish)
 
@@ -59,10 +62,10 @@
 
 | UI экран | Роут | Endpoint | Метод | Назначение |
 |---|---|---|---|---|
-| Profile | `/profile` | `/api/user/profile` | GET | Получить профиль |
-| Profile | `/profile` | `/api/user/profile` | PATCH | Обновить профиль |
-| Profile | `/profile` | `/api/user/profile/password` | POST | Смена пароля |
-| Profile | `/profile` | `/api/user/profile/sessions` | GET | Активные сессии |
+| Profile | `/profile` | `/api/v1/me` | GET | Получить профиль |
+| Profile | `/profile` | `/api/v1/me` | PATCH | Обновить профиль |
+| Profile | `/profile` | `/api/v1/me/password` | POST | Смена пароля |
+| Profile | `/profile` | `/api/v1/me/sessions` | GET | Активные сессии |
 | Subscriptions | `/subscriptions` | `/api/billing/plans` | GET | Доступные планы |
 | Subscriptions | `/subscriptions` | `/api/billing/current` | GET | Текущая подписка |
 | Subscriptions | `/subscriptions` | `/api/billing/checkout` | POST | Создать checkout-сессию |
