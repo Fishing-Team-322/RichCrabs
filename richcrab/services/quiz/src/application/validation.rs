@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::Utc;
 use serde::Deserialize;
+use std::collections::HashSet;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -14,7 +15,7 @@ pub(crate) struct GeneratedQuizPayload {
 pub(crate) struct GeneratedQuestionPayload {
     pub(crate) text: String,
     pub(crate) options: Vec<String>,
-    pub(crate) correct_option_index: u32,
+    pub(crate) correct_option_index: Option<u32>,
 }
 
 pub(crate) fn validate_questions(
@@ -28,20 +29,48 @@ pub(crate) fn validate_questions(
         if q.text.trim().is_empty() {
             return Err(format!("question[{idx}] text must not be empty"));
         }
-        if q.options.len() < 2 {
-            return Err(format!("question[{idx}] must contain at least two options"));
+        if q.text.len() > 160 {
+            return Err(format!(
+                "question[{idx}] text must be at most 160 characters"
+            ));
         }
+        if q.options.len() != 4 {
+            return Err(format!("question[{idx}] must contain exactly 4 options"));
+        }
+
+        let mut unique_options = HashSet::new();
         for (opt_idx, option) in q.options.iter().enumerate() {
-            if option.trim().is_empty() {
+            let trimmed = option.trim();
+            if trimmed.is_empty() {
                 return Err(format!(
                     "question[{idx}] option[{opt_idx}] must not be empty"
                 ));
             }
-        }
-        if let Some(correct_idx) = q.correct_option_index {
-            if (correct_idx as usize) >= q.options.len() {
-                return Err(format!("question[{idx}] has invalid correct_option_index"));
+            if trimmed.len() > 160 {
+                return Err(format!(
+                    "question[{idx}] option[{opt_idx}] must be at most 160 characters"
+                ));
             }
+
+            let normalized = trimmed.to_lowercase();
+            if !unique_options.insert(normalized) {
+                return Err(format!(
+                    "question[{idx}] option[{opt_idx}] duplicates another option"
+                ));
+            }
+        }
+
+        let Some(correct_idx) = q.correct_option_index else {
+            return Err(format!("question[{idx}] correct_option_index is required"));
+        };
+
+        if correct_idx > 3 {
+            return Err(format!(
+                "question[{idx}] correct_option_index must be in range 0..=3"
+            ));
+        }
+        if (correct_idx as usize) >= q.options.len() {
+            return Err(format!("question[{idx}] has invalid correct_option_index"));
         }
     }
 
@@ -72,7 +101,7 @@ pub(crate) fn build_quiz_from_generated_payload(
             id: format!("ai-{}", idx + 1),
             text: q.text,
             options: q.options,
-            correct_option_index: Some(q.correct_option_index),
+            correct_option_index: q.correct_option_index,
         })
         .collect::<Vec<_>>();
 
@@ -131,12 +160,33 @@ mod tests {
 
     #[test]
     fn validate_questions_rejects_invalid_correct_index() {
-        assert!(validate_questions(&[q("Q", &["a", "b"], Some(2))]).is_err());
+        assert!(validate_questions(&[q("Q", &["a", "b", "c", "d"], Some(4))]).is_err());
     }
 
     #[test]
     fn validate_questions_accepts_valid_payload() {
-        assert!(validate_questions(&[q("Q", &["a", "b"], Some(1))]).is_ok());
+        assert!(validate_questions(&[q("Q", &["a", "b", "c", "d"], Some(1))]).is_ok());
+    }
+
+    #[test]
+    fn validate_questions_rejects_text_longer_than_160() {
+        let text = "q".repeat(161);
+        assert!(validate_questions(&[q(&text, &["a", "b", "c", "d"], Some(1))]).is_err());
+    }
+
+    #[test]
+    fn validate_questions_rejects_missing_correct_option_index() {
+        assert!(validate_questions(&[q("Q", &["a", "b", "c", "d"], None)]).is_err());
+    }
+
+    #[test]
+    fn validate_questions_rejects_non_four_options() {
+        assert!(validate_questions(&[q("Q", &["a", "b", "c"], Some(1))]).is_err());
+    }
+
+    #[test]
+    fn validate_questions_rejects_duplicate_options_after_normalization() {
+        assert!(validate_questions(&[q("Q", &["Option", " option ", "c", "d"], Some(2))]).is_err());
     }
 
     #[test]
