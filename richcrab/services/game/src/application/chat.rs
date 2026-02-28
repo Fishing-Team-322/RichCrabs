@@ -5,6 +5,17 @@ use tonic::{Request, Response, Status};
 
 use crate::{domain::RoomState, room_actor::RoomCommand, service::GameServiceImpl};
 
+fn validate_chat_body(body: &str) -> Result<String, &'static str> {
+    let body = body.trim().to_string();
+    if body.is_empty() {
+        return Err("body is required");
+    }
+    if body.len() > 500 {
+        return Err("body is too long");
+    }
+    Ok(body)
+}
+
 impl GameServiceImpl {
     pub(crate) async fn resolve_chat_author(
         &self,
@@ -57,13 +68,7 @@ impl GameServiceImpl {
             .room_id
             .map(|v| v.value)
             .ok_or_else(|| Status::invalid_argument("room_id is required"))?;
-        let body = req.body.trim().to_string();
-        if body.is_empty() {
-            return Err(Status::invalid_argument("body is required"));
-        }
-        if body.len() > 500 {
-            return Err(Status::invalid_argument("body is too long"));
-        }
+        let body = validate_chat_body(&req.body).map_err(Status::invalid_argument)?;
         let room = self.resolve_room(&room_id).await?;
         let (state_tx, state_rx) = oneshot::channel();
         room.tx
@@ -132,8 +137,26 @@ impl GameServiceImpl {
 
 #[cfg(test)]
 mod tests {
+    use super::validate_chat_body;
+
     #[test]
-    fn body_length_limit_exists() {
-        assert!(500 < 501);
+    fn validate_chat_body_rejects_empty_message() {
+        let result = validate_chat_body("   ");
+        assert!(result.is_err());
+        assert_eq!(result.expect_err("error expected"), "body is required");
+    }
+
+    #[test]
+    fn validate_chat_body_rejects_too_long_message() {
+        let oversized = "a".repeat(501);
+        let result = validate_chat_body(&oversized);
+        assert!(result.is_err());
+        assert_eq!(result.expect_err("error expected"), "body is too long");
+    }
+
+    #[test]
+    fn validate_chat_body_trims_valid_message() {
+        let result = validate_chat_body("  hello  ").expect("valid body expected");
+        assert_eq!(result, "hello");
     }
 }
