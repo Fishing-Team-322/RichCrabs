@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState, type CSSProperties, type UIEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties, type UIEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { routes } from '../../app/router/routeMap'
 import { useInterval } from '../../hooks/useInterval'
@@ -17,7 +17,15 @@ const VIRTUALIZATION_THRESHOLD = 24
 const CARD_HEIGHT = 190
 const VIEWPORT_HEIGHT = 620
 
-const RoomCard = memo(({ room }: { room: RoomSummaryDto }) => (
+const resolveVisibility = (room: RoomSummaryDto): 'public' | 'private' | 'unknown' => {
+  // TODO: switch to explicit backend visibility field as soon as list API exposes it.
+  const raw = (room as RoomSummaryDto & { visibility?: string; privacy?: string }).visibility
+    ?? (room as RoomSummaryDto & { visibility?: string; privacy?: string }).privacy
+  if (raw === 'public' || raw === 'private') return raw
+  return 'unknown'
+}
+
+const RoomCard = memo(({ room, visibility }: { room: RoomSummaryDto; visibility: 'public' | 'private' | 'unknown' }) => (
   <article className="roomCard" key={room.id}>
     <strong>{room.quizTitle}</strong>
     <span className={`roomStatus ${room.status}`}>{room.status}</span>
@@ -25,6 +33,7 @@ const RoomCard = memo(({ room }: { room: RoomSummaryDto }) => (
       Игроки: {room.playersCount}/{room.playerLimit}
     </div>
     <div className="roomMeta">PIN: {room.pin}</div>
+    <div className="roomMeta">Видимость: {visibility === 'unknown' ? 'visibility unknown' : visibility}</div>
     <div className="roomsInline">
       <Link className="roomLink" to={routes.roomDetails.replace(':roomId', room.id)}>
         Карточка комнаты
@@ -61,7 +70,6 @@ const OpenGames = () => {
     void loadRooms()
   }, 5000)
 
-
   useEffect(() => {
     const updateColumns = () => {
       if (window.innerWidth < 760) {
@@ -80,14 +88,21 @@ const OpenGames = () => {
     return () => window.removeEventListener('resize', updateColumns)
   }, [])
 
-  const virtualized = rooms.length >= VIRTUALIZATION_THRESHOLD
-  const totalRows = Math.ceil(rooms.length / columns)
+  const publicRooms = useMemo(() => {
+    const withVisibility = rooms.map((room) => ({ room, visibility: resolveVisibility(room) }))
+    const hasVisibility = withVisibility.some((entry) => entry.visibility !== 'unknown')
+    if (!hasVisibility) return withVisibility
+    return withVisibility.filter((entry) => entry.visibility === 'public')
+  }, [rooms])
+
+  const virtualized = publicRooms.length >= VIRTUALIZATION_THRESHOLD
+  const totalRows = Math.ceil(publicRooms.length / columns)
   const startRow = Math.floor(scrollTop / CARD_HEIGHT)
   const visibleRows = Math.ceil(VIEWPORT_HEIGHT / CARD_HEIGHT) + 2
   const endRow = Math.min(totalRows, startRow + visibleRows)
   const startIndex = startRow * columns
-  const endIndex = Math.min(rooms.length, endRow * columns)
-  const visibleRooms = virtualized ? rooms.slice(startIndex, endIndex) : rooms
+  const endIndex = Math.min(publicRooms.length, endRow * columns)
+  const visibleRooms = virtualized ? publicRooms.slice(startIndex, endIndex) : publicRooms
   const topSpacerHeight = virtualized ? startRow * CARD_HEIGHT : 0
   const bottomSpacerHeight = virtualized ? Math.max(0, (totalRows - endRow) * CARD_HEIGHT) : 0
 
@@ -124,14 +139,14 @@ const OpenGames = () => {
 
       {error && <div className="roomError">{error}</div>}
 
-      {rooms.length === 0 ? (
+      {publicRooms.length === 0 ? (
         <article className="pageCard">{loading ? 'Загрузка комнат...' : 'Подходящих комнат не найдено.'}</article>
       ) : (
         <div className="roomsVirtualized" onScroll={onScroll} style={virtualized ? { maxHeight: VIEWPORT_HEIGHT, overflowY: 'auto' } : undefined}>
           {topSpacerHeight > 0 ? <div style={{ height: topSpacerHeight }} aria-hidden="true" /> : null}
           <div className={`roomsGrid ${virtualized ? 'is-virtualized' : ''}`} style={virtualized ? ({ ['--rooms-columns' as string]: String(columns) } as CSSProperties) : undefined}>
-            {visibleRooms.map((room) => (
-              <RoomCard room={room} key={room.id} />
+            {visibleRooms.map(({ room, visibility }) => (
+              <RoomCard room={room} visibility={visibility} key={room.id} />
             ))}
           </div>
           {bottomSpacerHeight > 0 ? <div style={{ height: bottomSpacerHeight }} aria-hidden="true" /> : null}

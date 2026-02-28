@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CreateRoom from '../../pages/CreateRoom/CreateRoom'
+import RoomDetails from '../../pages/rooms/RoomDetails'
 import JoinPage from '../../pages/join/JoinPage'
 import { renderWithProviders } from '../../test/renderWithProviders'
 import { createAppStore } from '../../store/store'
@@ -19,6 +20,12 @@ vi.mock('../../services/quizApi', () => ({
 vi.mock('../../services/roomsApi', () => ({
   roomsApi: {
     create: vi.fn(),
+    subscribeRoomDetails: vi.fn(),
+    regenerateInvite: vi.fn(),
+    open: vi.fn(),
+    pause: vi.fn(),
+    close: vi.fn(),
+    details: vi.fn(),
   },
 }))
 
@@ -30,7 +37,7 @@ vi.mock('../../services/joinApi', () => ({
 }))
 
 describe('integration: room create + join flow', () => {
-  it('creates room and shows pin', async () => {
+  it('creates room and redirects to room card', async () => {
     vi.mocked(quizApi.list).mockResolvedValue([
       {
         id: 'quiz-1',
@@ -63,6 +70,30 @@ describe('integration: room create + join flow', () => {
       players: [],
     })
 
+    vi.mocked(roomsApi.regenerateInvite).mockResolvedValue({ inviteToken: 'room-token', invitePath: '/invite/room-token', inviteQrSvg: '<svg />' })
+    vi.mocked(roomsApi.subscribeRoomDetails).mockImplementation((_roomId, cb) => {
+      cb({
+        id: 'room-1',
+        quizId: 'quiz-1',
+        quizTitle: 'Space',
+        pin: '654321',
+        inviteLink: '/invite/room-token',
+        status: 'waiting',
+        playersCount: 0,
+        playerLimit: 20,
+        hostId: 'u-1',
+        updatedAt: new Date().toISOString(),
+        isHost: true,
+        settings: {
+          playerLimit: 20,
+          privacy: 'private',
+          timers: { lobbyTimerSec: 45, questionTimerSec: 30, answerRevealSec: 10 },
+        },
+        players: [],
+      })
+      return () => undefined
+    })
+
     const user = userEvent.setup()
     const store = createAppStore()
     store.dispatch(
@@ -75,11 +106,17 @@ describe('integration: room create + join flow', () => {
       }),
     )
 
-    renderWithProviders(<CreateRoom />, { store })
+    renderWithProviders(
+      <Routes>
+        <Route path="/rooms/new" element={<CreateRoom />} />
+        <Route path="/rooms/:roomId" element={<RoomDetails />} />
+      </Routes>,
+      { route: '/rooms/new', store },
+    )
 
     await user.click(await screen.findByRole('button', { name: 'Создать комнату' }))
 
-    expect(await screen.findByText('Комната создана')).toBeInTheDocument()
+    expect(await screen.findByText('Пригласить игроков')).toBeInTheDocument()
     expect(screen.getByText('654321')).toBeInTheDocument()
   })
 

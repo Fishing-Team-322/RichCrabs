@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
+import { routes } from '../../app/router/routeMap'
 import { profileApi } from '../../services/profileApi'
 import { useAppDispatch } from '../../store/hooks'
 import { setProfile } from '../../store/slices'
@@ -163,6 +165,17 @@ const Profile = () => {
               <div className="statsLabel">Квизов пройдено</div>
               <div className="statsValue">{profile.quizzesPlayed ?? '—'}</div>
             </div>
+          </div>
+        </article>
+
+
+        <article className="pageCard">
+          <h2>Быстрый старт</h2>
+          <div className="profileQuickActions">
+            <Link to={routes.rooms} className="accountAction">Открытые игры</Link>
+            <Link to={routes.roomsNew} className="accountAction">Создать игру</Link>
+            <Link to={routes.quizzesNew} className="accountAction">Создать квиз</Link>
+            <Link to={routes.bots} className="accountAction">Telegram-боты</Link>
           </div>
         </article>
 

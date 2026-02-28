@@ -159,6 +159,15 @@ export async function apiFetch<T>(
     return undefined as T
   }
 
-  const json = await response.json()
-  return normalizeResponse<T>(json)
+  try {
+    const rawBody = await response.text()
+    if (!rawBody) {
+      return undefined as T
+    }
+
+    const parsedBody = JSON.parse(rawBody) as unknown
+    return normalizeResponse<T>(parsedBody)
+  } catch {
+    return undefined as T
+  }
 }

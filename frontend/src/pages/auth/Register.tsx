@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth'
 import { routes } from '../../app/router/routeMap'
 import { Button, Input } from '../../components/ui'
@@ -9,11 +9,14 @@ import { useTranslation } from 'react-i18next'
 
 const Register = () => {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { signUp, isLoading } = useAuth()
   const notifications = useNotifications()
   const { t } = useTranslation()
   const [form, setForm] = useState<RegisterFormData>({ name: '', email: '', password: '', confirmPassword: '' })
   const [errors, setErrors] = useState<Partial<Record<'name' | 'email' | 'password' | 'confirmPassword' | 'root', string>>>({})
+
+  const returnTo = searchParams.get('returnTo') || routes.profile
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -27,7 +30,7 @@ const Register = () => {
     const result = await signUp(form.name.trim(), form.email.trim(), form.password)
     if (result.meta.requestStatus === 'fulfilled') {
       notifications.success('Аккаунт создан. Добро пожаловать!')
-      navigate(routes.profile, { replace: true })
+      navigate(returnTo, { replace: true })
       return
     }
 
@@ -60,7 +63,7 @@ const Register = () => {
         </Button>
       </form>
       <p className="homeMuted">
-        Уже есть аккаунт? <Link to={routes.authLogin}>Войти</Link>
+        Уже есть аккаунт? <Link to={`${routes.authLogin}?returnTo=${encodeURIComponent(returnTo)}`}>Войти</Link>
       </p>
       </section>
     </div>

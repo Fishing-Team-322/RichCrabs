@@ -115,7 +115,11 @@ const Quiz = () => {
 
       {screen === 'final' && <Result mode="final" scores={gameState.scores} players={gameState.players} />}
 
-      <ChatPanel messages={chatMessages} onSend={sendChat} />
+      {gameState.phase === 'playing' || gameState.phase === 'finished' ? (
+        <ChatPanel messages={chatMessages} onSend={sendChat} team={playerTeam} />
+      ) : (
+        <article className="pageCard roomMeta">Чат будет доступен после старта игры.</article>
+      )}
     </main>
   )
 }

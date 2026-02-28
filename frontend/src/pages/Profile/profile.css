@@ -76,3 +76,13 @@
   .statsGrid { grid-template-columns: 1fr; }
   .profileForm button { width: 100%; }
 }
+
+.profileQuickActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.profileQuickActions a {
+  text-decoration: none;
+}

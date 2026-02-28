@@ -143,3 +143,9 @@
   .roomLink { width: 100%; }
   .roomsActions { width: 100%; }
 }
+
+.roomInviteSection {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}

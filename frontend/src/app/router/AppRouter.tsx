@@ -3,6 +3,7 @@ import { Link, Route, Routes, useLocation } from 'react-router-dom'
 import { useAppDispatch } from '../../store/hooks'
 import { restoreSession } from '../../store/slices'
 import Layout from '../../components/Layout'
+import ScenarioNav from '../../components/ScenarioNav'
 import AuthGuard from './guards/AuthGuard'
 import GuestGuard from './guards/GuestGuard'
 import {
@@ -65,39 +66,42 @@ const AppRouter: React.FC = () => {
 
   return (
     <Suspense fallback={<LoadingFallback />}>
-      <Routes>
-        <Route path={routes.home} element={<HomePage />} />
-        <Route path={routes.join} element={<JoinPage />} />
-        <Route path={routes.invite} element={<InviteJoinPage />} />
-        <Route path={routes.quizRuntime} element={<RuntimePage />} />
+      <ScenarioNav />
+      <div className="scenarioPageOffset">
+        <Routes>
+          <Route path={routes.home} element={<HomePage />} />
+          <Route path={routes.join} element={<JoinPage />} />
+          <Route path={routes.invite} element={<InviteJoinPage />} />
+          <Route path={routes.quizRuntime} element={<RuntimePage />} />
 
-        <Route element={<GuestGuard />}>
-          <Route path={routes.authLogin} element={<Login />} />
-          <Route path={routes.authRegister} element={<Register />} />
-        </Route>
-
-        <Route element={<AuthGuard />}>
-          <Route element={<Layout />}>
-            <Route path={routes.quizzes} element={<QuizzesList />} />
-            <Route path={routes.quizzesNew} element={<QuizCreate />} />
-            <Route path={routes.quizzesEdit} element={<QuizEdit />} />
-            <Route path={routes.quizzesPublish} element={<QuizPublish />} />
-            <Route path={routes.rooms} element={<OpenGames />} />
-            <Route path={routes.roomsNew} element={<CreateRoom />} />
-            <Route path={routes.roomDetails} element={<RoomDetails />} />
-            <Route path={routes.profile} element={<Profile />} />
-            <Route path={routes.subscriptions} element={<Subscriptions />} />
-            <Route path={routes.bots} element={<TelegramBots />} />
+          <Route element={<GuestGuard />}>
+            <Route path={routes.authLogin} element={<Login />} />
+            <Route path={routes.authRegister} element={<Register />} />
           </Route>
 
-          <Route element={<AdminLayout />}>
-            <Route path={routes.adminDashboard} element={<AdminDashboard />} />
-            <Route path={routes.adminSecurity} element={<AdminSecurity />} />
-          </Route>
-        </Route>
+          <Route element={<AuthGuard />}>
+            <Route element={<Layout />}>
+              <Route path={routes.quizzes} element={<QuizzesList />} />
+              <Route path={routes.quizzesNew} element={<QuizCreate />} />
+              <Route path={routes.quizzesEdit} element={<QuizEdit />} />
+              <Route path={routes.quizzesPublish} element={<QuizPublish />} />
+              <Route path={routes.rooms} element={<OpenGames />} />
+              <Route path={routes.roomsNew} element={<CreateRoom />} />
+              <Route path={routes.roomDetails} element={<RoomDetails />} />
+              <Route path={routes.profile} element={<Profile />} />
+              <Route path={routes.subscriptions} element={<Subscriptions />} />
+              <Route path={routes.bots} element={<TelegramBots />} />
+            </Route>
 
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+            <Route element={<AdminLayout />}>
+              <Route path={routes.adminDashboard} element={<AdminDashboard />} />
+              <Route path={routes.adminSecurity} element={<AdminSecurity />} />
+            </Route>
+          </Route>
+
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </div>
     </Suspense>
   )
 }

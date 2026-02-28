@@ -106,7 +106,8 @@ const HomePage: React.FC = () => {
           </h1>
           <p className="homeMuted heroSubtitle">{t('home.subtitle')}</p>
           <div className="homeActions">
-            <Link to={routes.quizzesNew} className="ui-button primary">{t('home.actions.createQuiz')}</Link>
+            <Link to={isAuthenticated ? routes.quizzesNew : `${routes.authLogin}?returnTo=${encodeURIComponent(routes.quizzesNew)}`} className="ui-button primary">{t('home.actions.createQuiz')}</Link>
+            <Link to={isAuthenticated ? routes.roomsNew : `${routes.authLogin}?returnTo=${encodeURIComponent(routes.roomsNew)}`} className="ui-button">Создать игру</Link>
             <Link
               to={routes.join}
               className="ui-button"

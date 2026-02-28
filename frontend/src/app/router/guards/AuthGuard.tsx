@@ -1,8 +1,9 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAppSelector } from '../../../store/hooks'
 import { routes } from '../routeMap'
 
 const AuthGuard = () => {
+  const location = useLocation()
   const { profile, isInitialized, isLoading } = useAppSelector((state) => state.auth)
 
   if (!isInitialized || isLoading) {
@@ -10,7 +11,8 @@ const AuthGuard = () => {
   }
 
   if (!profile) {
-    return <Navigate to={routes.authLogin} replace />
+    const returnTo = `${location.pathname}${location.search}`
+    return <Navigate to={`${routes.authLogin}?returnTo=${encodeURIComponent(returnTo)}`} replace />
   }
 
   return <Outlet />
