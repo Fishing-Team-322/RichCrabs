@@ -189,13 +189,12 @@ export const quizApi: QuizApi = {
       },
     ).then((res) => mapQuizToDraft(res.quiz)),
 
-  publish: (quizId: string, _payload: PublishQuizRequestDto = {}) =>
-    apiFetch<{ quiz: { quizId: string; title?: string; description?: string; questions?: Array<{ id: string; text: string; options: string[] }> } }>(
-      `${QUIZZES_BASE}/${encodeURIComponent(quizId)}/publish`,
-      {
-        method: 'POST',
-      },
-    ).then((res) => mapQuizToDraft(res.quiz)),
+  publish: async (quizId: string, _payload: PublishQuizRequestDto = {}) => {
+    await apiFetch<{ quiz: { quizId: string } }>(`${QUIZZES_BASE}/${encodeURIComponent(quizId)}/publish`, {
+      method: 'POST',
+    })
+    return quizApi.getDraft(quizId)
+  },
 
   unpublish: (quizId: string) => quizApi.getDraft(quizId),
 

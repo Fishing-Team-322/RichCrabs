@@ -2,11 +2,15 @@ import grpc
 
 
 class DummyRpcError(grpc.RpcError):
-    def __init__(self, status):
+    def __init__(self, status, details=""):
         self._status = status
+        self._details = details
 
     def code(self):
         return self._status
+
+    def details(self):
+        return self._details
 
 
 
@@ -54,3 +58,19 @@ def test_create_quiz_maps_grpc_error(client, host_session_cookie, csrf_headers, 
         headers=csrf_headers["headers"],
     )
     assert response.status_code == 400
+
+
+def test_update_quiz_maps_grpc_error(client, host_session_cookie, csrf_headers, fake_clients):
+    fake_clients.quiz.UpdateQuiz = lambda req: (_ for _ in ()).throw(
+        DummyRpcError(grpc.StatusCode.INVALID_ARGUMENT, "question[0] option[2] must not be empty")
+    )
+    cookies = {**host_session_cookie, **csrf_headers["cookies"]}
+    response = client.patch(
+        "/api/v1/quizzes/q1",
+        json={"questions": [{"id": "q-1", "text": "Q", "options": ["A", "B", ""]}]},
+        cookies=cookies,
+        headers=csrf_headers["headers"],
+    )
+    assert response.status_code == 400
+    assert response.json()["error"] == "validation_error"
+    assert response.json()["message"] == "question[0] option[2] must not be empty"

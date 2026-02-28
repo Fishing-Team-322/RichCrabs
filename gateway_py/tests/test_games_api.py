@@ -93,3 +93,11 @@ def test_host_action_requires_host_role(client, player_session_cookie, csrf_head
     cookies = {**player_session_cookie, **csrf_headers["cookies"]}
     response = client.post("/api/v1/games/123456/start", cookies=cookies, headers=csrf_headers["headers"])
     assert response.status_code == 401
+
+
+def test_host_action_maps_grpc_precondition_error(client, host_session_cookie, csrf_headers, fake_clients):
+    fake_clients.game.StartGame = lambda req: (_ for _ in ()).throw(DummyRpcError(grpc.StatusCode.FAILED_PRECONDITION))
+    cookies = {**host_session_cookie, **csrf_headers["cookies"]}
+    response = client.post("/api/v1/games/123456/start", cookies=cookies, headers=csrf_headers["headers"])
+    assert response.status_code == 409
+    assert response.json()["error"] == "validation_error"
