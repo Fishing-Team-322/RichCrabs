@@ -214,6 +214,19 @@ def me_sessions():
     return err(501, "not_implemented", "/api/v1/me/sessions is not implemented")
 
 
+@app.get("/api/v1/games", tags=["games"])
+def list_games(req: Request):
+    s = session_from_req(req)
+    if not s or not s.room_id or not s.pin:
+        return []
+    try:
+        x = clients.game.GetRoomState(game_pb2.GetRoomStateRequest(room_id=common_pb2.RoomId(value=s.room_id)))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "list_games")
+        return JSONResponse(b, status_code=c)
+    players = [{"playerId": p.player_id.value, "name": p.display_name} for p in x.players]
+    return [{"pin": s.pin, "state": x.state, "players": players}]
+
 @app.post("/api/v1/games", tags=["games"])
 def create_game(req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)): return e
