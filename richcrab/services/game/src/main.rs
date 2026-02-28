@@ -1,10 +1,14 @@
+mod application;
 mod domain;
+mod infrastructure;
 mod repository;
 mod room_actor;
 mod service;
+mod transport;
 
 use std::{env, net::SocketAddr, time::Duration};
 
+use infrastructure::{entitlements_client::GrpcEntitlementsClient, quiz_client::GrpcQuizClient};
 use repository::RoomChatRepository;
 use service::{GameServiceImpl, HealthServiceImpl};
 use shared::redis_client::RedisClient;
@@ -117,7 +121,12 @@ async fn main() -> anyhow::Result<()> {
 
     let entitlements = connect_entitlements_with_retry(&entitlements_addr).await?;
     let quiz = connect_quiz_with_retry(&quiz_addr).await?;
-    let game_service = GameServiceImpl::new(redis, entitlements, quiz, chat_repository);
+    let game_service = GameServiceImpl::new(
+        redis,
+        GrpcEntitlementsClient::new(entitlements),
+        GrpcQuizClient::new(quiz),
+        chat_repository,
+    );
     let health_ping_service = HealthServiceImpl;
 
     let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
