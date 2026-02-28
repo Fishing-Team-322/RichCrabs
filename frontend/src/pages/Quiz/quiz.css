@@ -64,3 +64,41 @@
 .quizConnectionBadge.quality-degraded { background: rgba(234, 179, 8, 0.2); color: #fde68a; border-color: rgba(250,204,21,.45); }
 .quizConnectionBadge.quality-poor,
 .quizConnectionBadge.quality-offline { background: rgba(185, 28, 28, 0.2); color: #ffd0da; border-color: rgba(255,111,142,.45); }
+
+.quizChatCard {
+  display: grid;
+  gap: 10px;
+}
+
+.quizChatHistory {
+  max-height: 240px;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.quizChatMessage {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.quizChatMessage p {
+  margin: 4px 0 0;
+}
+
+.quizChatForm {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.quizChatForm input {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.45);
+  color: inherit;
+}

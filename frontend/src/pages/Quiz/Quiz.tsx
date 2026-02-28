@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom'
 import Lobby from './Lobby'
 import Question from './Question'
 import Result from './Result'
+import ChatPanel from './ChatPanel'
 import { routes } from '../../app/router/routeMap'
 import { useGames } from '../../hooks/useGames'
 import { useTranslation } from 'react-i18next'
@@ -39,6 +40,8 @@ const Quiz = () => {
     latencyMs,
     playerTeam,
     canStart,
+    chatMessages,
+    sendChat,
     handleAnswer,
     handleStartGame,
   } = useGames(roomId)
@@ -111,6 +114,8 @@ const Quiz = () => {
       {screen === 'scoreboard' && <Result mode="scoreboard" scores={gameState.scores} players={gameState.players} />}
 
       {screen === 'final' && <Result mode="final" scores={gameState.scores} players={gameState.players} />}
+
+      <ChatPanel messages={chatMessages} onSend={sendChat} />
     </main>
   )
 }
