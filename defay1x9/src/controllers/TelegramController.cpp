@@ -628,104 +628,11 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
         const auto messageId = extractInt64(message["message_id"]);
 
         Json::Value commandResult;
-        commandResult["status"] = "ignored";
-
+        commandResult["status"] = "queued";
+        commandResult["processor"] = "bot_runner";
         auto command = parseTelegramCommand(text);
-        if (command && command->command == "/create_game") {
-          const std::string quizId = command->argument.value_or(kDefaultTelegramQuizId);
-          const auto room = quizCore.createRoom(binding->owner_user_id, quizId, "Telegram room", requestId);
-          if (room && room->status == QuizCoreRpcStatus::kOk) {
-            TelegramRoomSnapshot snapshot{
-                .room_id = room->room_id,
-                .pin = room->pin,
-                .invite_token = room->invite_token,
-                .invite_path = room->invite_path,
-            };
-            if (!saveLastRoom(conf, botId, snapshot)) {
-              spdlog::warn("telegram_room_snapshot_persist_failed request_id={} bot_id={}", requestId, botId);
-            }
-            commandResult["status"] = "ok";
-            commandResult["message"] = "room_created";
-            commandResult["pin"] = snapshot.pin;
-            commandResult["inviteUrl"] = conf.public_base_url + snapshot.invite_path;  // invite_path domain-agnostic by design
-            appendRuntimeOperation(conf, botId, "room_created", snapshot.room_id, std::string("Telegram room"), snapshot.pin);
-
-            sendTelegramReply(webhookClient,
-                              *binding,
-                              chatId,
-                              messageId,
-                              buildCreateGameMessage(snapshot, conf.public_base_url),
-                              requestId,
-                              botId);
-            spdlog::info("telegram_create_game_ok request_id={} bot_id={} pin={}", requestId, botId, room->pin);
-          } else {
-            commandResult["status"] = "degraded";
-            commandResult["error"] = "create_room_rpc_unavailable";
-            if (room) {
-              commandResult["rpcStatus"] = static_cast<int>(room->status);
-              if (!room->error_code.empty()) commandResult["rpcErrorCode"] = room->error_code;
-              if (!room->error_message.empty()) commandResult["rpcErrorMessage"] = room->error_message;
-            } else {
-              commandResult["rpcStatus"] = "null";
-            }
-
-            sendTelegramReply(webhookClient,
-                              *binding,
-                              chatId,
-                              messageId,
-                              "⚠️ create_game временно недоступен (degraded). Попробуйте позже.",
-                              requestId,
-                              botId);
-            spdlog::warn("telegram_create_game_failed request_id={} bot_id={}", requestId, botId);
-          }
-        } else if (command && command->command == "/invite") {
-          auto lastRoom = getLastRoom(conf, botId);
-          if (lastRoom) {
-            commandResult["status"] = "ok";
-            commandResult["inviteUrl"] = conf.public_base_url + lastRoom->invite_path;  // invite_path domain-agnostic by design
-            appendRuntimeOperation(conf, botId, "invite_issued", lastRoom->room_id, std::nullopt, conf.public_base_url + lastRoom->invite_path);
-            sendTelegramReply(webhookClient,
-                              *binding,
-                              chatId,
-                              messageId,
-                              buildInviteMessage(*lastRoom, conf.public_base_url),
-                              requestId,
-                              botId);
-          } else {
-            commandResult["status"] = "degraded";
-            commandResult["error"] = "room_not_initialized";
-            sendTelegramReply(webhookClient,
-                              *binding,
-                              chatId,
-                              messageId,
-                              "Нет данных о комнате. Сначала выполните /create_game",
-                              requestId,
-                              botId);
-          }
-        } else if (command && command->command == "/pin") {
-          auto lastRoom = getLastRoom(conf, botId);
-          if (lastRoom) {
-            commandResult["status"] = "ok";
-            commandResult["pin"] = lastRoom->pin;
-            appendRuntimeOperation(conf, botId, "pin_issued", lastRoom->room_id, std::nullopt, lastRoom->pin);
-            sendTelegramReply(webhookClient,
-                              *binding,
-                              chatId,
-                              messageId,
-                              buildPinMessage(*lastRoom),
-                              requestId,
-                              botId);
-          } else {
-            commandResult["status"] = "degraded";
-            commandResult["error"] = "room_not_initialized";
-            sendTelegramReply(webhookClient,
-                              *binding,
-                              chatId,
-                              messageId,
-                              "Нет данных о комнате. Сначала выполните /create_game",
-                              requestId,
-                              botId);
-          }
+        if (command.has_value()) {
+          commandResult["command"] = command->command;
         }
 
         Json::Value ok;

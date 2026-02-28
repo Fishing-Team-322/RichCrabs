@@ -26,6 +26,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     -p quiz \
     -p bot \
     -p bot_ingress \
+    -p bot_runner \
     -p auth \
     && install -m 0755 target/release/entitlements /usr/local/bin/entitlements \
     && install -m 0755 target/release/game         /usr/local/bin/game \
@@ -33,8 +34,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     && install -m 0755 target/release/quiz         /usr/local/bin/quiz \
     && install -m 0755 target/release/bot          /usr/local/bin/bot \
     && install -m 0755 target/release/bot_ingress  /usr/local/bin/bot_ingress \
+    && install -m 0755 target/release/bot_runner   /usr/local/bin/bot_runner \
     && install -m 0755 target/release/auth         /usr/local/bin/auth \
-    && strip /usr/local/bin/entitlements /usr/local/bin/game /usr/local/bin/join /usr/local/bin/quiz /usr/local/bin/bot /usr/local/bin/bot_ingress /usr/local/bin/auth
+    && strip /usr/local/bin/entitlements /usr/local/bin/game /usr/local/bin/join /usr/local/bin/quiz /usr/local/bin/bot /usr/local/bin/bot_ingress /usr/local/bin/bot_runner /usr/local/bin/auth
 
 FROM debian:bookworm-slim AS runtime
 
@@ -56,4 +58,5 @@ COPY --from=builder /usr/local/bin/join         /usr/local/bin/join
 COPY --from=builder /usr/local/bin/quiz         /usr/local/bin/quiz
 COPY --from=builder /usr/local/bin/bot          /usr/local/bin/bot
 COPY --from=builder /usr/local/bin/bot_ingress  /usr/local/bin/bot_ingress
+COPY --from=builder /usr/local/bin/bot_runner   /usr/local/bin/bot_runner
 COPY --from=builder /usr/local/bin/auth         /usr/local/bin/auth
