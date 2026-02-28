@@ -36,6 +36,10 @@ app = FastAPI(
 )
 
 
+def _canonical_invite_path(invite_token: str) -> str:
+    return f"/invite/{invite_token}"
+
+
 def _room_event_to_dict(ev: Any) -> dict[str, Any]:
     try:
         return MessageToDict(ev, preserving_proto_field_name=True)
@@ -280,7 +284,7 @@ def create_game(req: Request, body: dict[str, Any]):
     except grpc.RpcError as ex:
         c,b = map_grpc_err(ex, "create_room"); return JSONResponse(b,status_code=c)
     claims = SessionClaims(session_type="game", role="host", pin=x.pin, room_id=x.room_id.value, user_id=uid)
-    invite_path = x.invite_path or f"/join?inviteToken={x.invite_token}"
+    invite_path = _canonical_invite_path(x.invite_token)
     out = JSONResponse({
         "pin": x.pin,
         "inviteToken": x.invite_token,
@@ -313,7 +317,7 @@ def regenerate_invite(pin: str, req: Request):
         return JSONResponse(b, status_code=c)
     return {
         "inviteToken": x.invite_token,
-        "invitePath": x.invite_path,
+        "invitePath": _canonical_invite_path(x.invite_token),
         "inviteQrSvg": x.invite_qr_svg,
     }
 

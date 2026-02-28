@@ -103,6 +103,23 @@ class FakeRedis:
     def delete(self, key):
         self._data.pop(key, None)
 
+    def lpush(self, key, value):
+        items = self._lists.setdefault(key, [])
+        items.insert(0, value)
+
+    def ltrim(self, key, start, end):
+        items = self._lists.get(key, [])
+        if end == -1:
+            self._lists[key] = items[start:]
+        else:
+            self._lists[key] = items[start:end + 1]
+
+    def lrange(self, key, start, end):
+        items = self._lists.get(key, [])
+        if end == -1:
+            return items[start:]
+        return items[start:end + 1]
+
 
 class FakeClients:
     def __init__(self):
@@ -113,8 +130,8 @@ class FakeClients:
             SetUserBan=lambda req: _ns(),
         )
         self.game = _ns(
-            CreateRoom=lambda req: _ns(pin="123456", invite_token="inv1", invite_path="/join?inviteToken=inv1", invite_qr_svg="<svg></svg>", room_id=_ns(value="room-1")),
-            RegenerateInvite=lambda req: _ns(invite_token="inv2", invite_path="/join?inviteToken=inv2", invite_qr_svg="<svg></svg>"),
+            CreateRoom=lambda req: _ns(pin="123456", invite_token="inv1", invite_path="/invite/inv1", invite_qr_svg="<svg></svg>", room_id=_ns(value="room-1")),
+            RegenerateInvite=lambda req: _ns(invite_token="inv2", invite_path="/invite/inv2", invite_qr_svg="<svg></svg>"),
             GetRoomState=lambda req: _ns(room_id=_ns(value="room-1"), state="LOBBY", players=[_ns(player_id=_ns(value="p1"), display_name="P1", score=0)]),
             JoinRoom=lambda req: _ns(player_id=_ns(value="p1")),
             StartGame=lambda req: _ns(started=True),
