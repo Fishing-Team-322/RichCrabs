@@ -46,6 +46,7 @@ fn invite_qr_svg(path: &str) -> Result<String, String> {
 pub struct GameServiceImpl {
     redis: RedisClient,
     rooms: RoomRegistry,
+    room_pins: Arc<RwLock<HashMap<String, String>>>,
     chat_repository: RoomChatRepository,
     chat_rate_limit: Arc<RwLock<HashMap<String, Instant>>>,
     entitlements: proto::richcrab::v1::entitlements_service_client::EntitlementsServiceClient<
@@ -70,6 +71,7 @@ impl GameServiceImpl {
         Self {
             redis,
             rooms: Arc::new(RwLock::new(HashMap::new())),
+            room_pins: Arc::new(RwLock::new(HashMap::new())),
             entitlements,
             quiz,
             chat_repository,
@@ -229,6 +231,66 @@ impl GameServiceImpl {
             }),
         }
     }
+
+    async fn room_snapshot(
+        &self,
+        room_id: &str,
+        pin: &str,
+    ) -> Result<proto::richcrab::v1::RoomSnapshot, Status> {
+        let room = self.resolve_room(room_id).await?;
+        let (tx, rx) = oneshot::channel();
+        room.tx
+            .send(RoomCommand::GetState { response: tx })
+            .await
+            .map_err(|_| Status::unavailable("room is unavailable"))?;
+        let state = rx
+            .await
+            .map_err(|_| Status::internal("room actor response dropped"))?;
+
+        let players: Vec<proto::richcrab::v1::PlayerState> = state
+            .players
+            .values()
+            .map(|p| proto::richcrab::v1::PlayerState {
+                player_id: Some(proto::richcrab::v1::PlayerId {
+                    value: p.player_id.clone(),
+                }),
+                display_name: p.display_name.clone(),
+                score: p.score,
+                team_id: p.team_id.clone(),
+            })
+            .collect();
+
+        let invite_token = self
+            .redis
+            .get_value(&redis_keys::room_invite_token_key(room_id))
+            .await
+            .map_err(|e| Status::internal(format!("failed to load room invite token: {e}")))?;
+
+        let invite_path = invite_token
+            .map(|token| invite_path(&token))
+            .unwrap_or_default();
+
+        Ok(proto::richcrab::v1::RoomSnapshot {
+            room_id: Some(proto::richcrab::v1::RoomId {
+                value: state.room_id,
+            }),
+            pin: pin.to_string(),
+            owner_user_id: Some(proto::richcrab::v1::UserId {
+                value: state.owner_user_id,
+            }),
+            quiz_id: Some(proto::richcrab::v1::QuizId {
+                value: state.quiz_id,
+            }),
+            title: state.title,
+            state: state.state.as_str().to_string(),
+            players,
+            updated_at: Some(prost_types::Timestamp {
+                seconds: state.updated_at.timestamp(),
+                nanos: state.updated_at.timestamp_subsec_nanos() as i32,
+            }),
+            invite_path,
+        })
+    }
 }
 
 type EventStream =
@@ -309,6 +371,10 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
 
         let (handle, _task) = spawn_room_actor(initial_state, 64);
         self.rooms.write().await.insert(room_id.clone(), handle);
+        self.room_pins
+            .write()
+            .await
+            .insert(room_id.clone(), pin.clone());
         metrics.rooms_active.inc();
         self.report_usage(&owner_id, "CREATE_ROOM", 1).await?;
 
@@ -956,6 +1022,62 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             error: None,
             teams,
             current_question,
+        }))
+    }
+
+    async fn list_rooms(
+        &self,
+        request: Request<proto::richcrab::v1::ListRoomsRequest>,
+    ) -> Result<Response<proto::richcrab::v1::ListRoomsResponse>, Status> {
+        let req = request.into_inner();
+        let owner_user_id = req
+            .owner_user_id
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("owner_user_id is required"))?;
+        let limit = if req.limit == 0 {
+            usize::MAX
+        } else {
+            req.limit as usize
+        };
+
+        let room_ids: Vec<String> = self.rooms.read().await.keys().cloned().collect();
+        let room_pins = self.room_pins.read().await.clone();
+
+        let mut rooms = Vec::new();
+        for room_id in room_ids {
+            let Some(pin) = room_pins.get(&room_id) else {
+                continue;
+            };
+            let snapshot = self.room_snapshot(&room_id, pin).await?;
+            if snapshot
+                .owner_user_id
+                .as_ref()
+                .map(|owner| owner.value.as_str())
+                != Some(owner_user_id.as_str())
+            {
+                continue;
+            }
+            rooms.push(snapshot);
+        }
+
+        rooms.sort_by(|a, b| {
+            let a_ts = a
+                .updated_at
+                .as_ref()
+                .map(|ts| (ts.seconds, ts.nanos))
+                .unwrap_or((0, 0));
+            let b_ts = b
+                .updated_at
+                .as_ref()
+                .map(|ts| (ts.seconds, ts.nanos))
+                .unwrap_or((0, 0));
+            b_ts.cmp(&a_ts)
+        });
+        rooms.truncate(limit);
+
+        Ok(Response::new(proto::richcrab::v1::ListRoomsResponse {
+            rooms,
+            error: None,
         }))
     }
 }
