@@ -31,10 +31,10 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 export const monitoringApi = {
-  overview: () => fetchJson<Overview>('/admin/api/overview'),
-  rooms: () => fetchJson<RoomsList>('/admin/api/rooms'),
-  room: (id: string) => fetchJson<RoomDetails>(`/admin/api/rooms/${encodeURIComponent(id)}`),
-  securityOverview: () => fetchJson<SecurityOverview>('/admin/api/security/overview'),
+  overview: () => fetchJson<Overview>('/api/admin/api/overview'),
+  rooms: () => fetchJson<RoomsList>('/api/admin/api/rooms'),
+  room: (id: string) => fetchJson<RoomDetails>(`/api/admin/api/rooms/${encodeURIComponent(id)}`),
+  securityOverview: () => fetchJson<SecurityOverview>('/api/admin/api/security/overview'),
   securityEvents: (limit = 40) =>
-    fetchJson<SecurityEventsResponse>(`/admin/api/security/events?limit=${limit}`),
+    fetchJson<SecurityEventsResponse>(`/api/admin/api/security/events?limit=${limit}`),
 }

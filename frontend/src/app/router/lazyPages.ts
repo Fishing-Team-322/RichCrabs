@@ -26,8 +26,8 @@ const roomDetails = createPreloadable(() => import('../../pages/rooms/RoomDetail
 const profile = createPreloadable(() => import('../../pages/Profile/Profile'))
 const subscriptions = createPreloadable(() => import('../../pages/Subscriptions/Subscriptions'))
 const telegramBots = createPreloadable(() => import('../../pages/TelegramBots/TelegramBots'))
-const adminDashboard = createPreloadable(() => import('../../pages/admin/Dashboard'))
-const adminSecurity = createPreloadable(() => import('../../pages/admin/Security'))
+const adminDashboard = createPreloadable(() => import('../../pages/admin/DashboardPage'))
+const adminSecurity = createPreloadable(() => import('../../pages/admin/SecurityPage'))
 const adminLayout = createPreloadable(() => import('../../components/admin/AdminLayout'))
 
 export const HomePage = home.Component
