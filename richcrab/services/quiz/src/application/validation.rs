@@ -106,9 +106,62 @@ pub(crate) fn parse_generated_quiz_content(
     owner_user_id: Uuid,
     raw_content: &str,
 ) -> Result<proto::richcrab::v1::Quiz> {
-    let parsed: GeneratedQuizPayload =
-        serde_json::from_str(strip_markdown_code_fence(raw_content))?;
+    let normalized = strip_markdown_code_fence(raw_content);
+    let parsed: GeneratedQuizPayload = match serde_json::from_str(normalized) {
+        Ok(parsed) => parsed,
+        Err(primary_err) => {
+            let json_fragment = extract_first_json_object(normalized)
+                .ok_or_else(|| anyhow::anyhow!(primary_err))?;
+            serde_json::from_str(json_fragment).map_err(|_| anyhow::anyhow!(primary_err))?
+        }
+    };
     build_quiz_from_generated_payload(owner_user_id, parsed)
+}
+
+fn extract_first_json_object(raw: &str) -> Option<&str> {
+    let mut depth = 0usize;
+    let mut start = None;
+    let mut in_string = false;
+    let mut escaped = false;
+
+    for (idx, ch) in raw.char_indices() {
+        if in_string {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            match ch {
+                '\\' => escaped = true,
+                '"' => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+
+        match ch {
+            '"' => in_string = true,
+            '{' => {
+                if depth == 0 {
+                    start = Some(idx);
+                }
+                depth += 1;
+            }
+            '}' => {
+                if depth == 0 {
+                    continue;
+                }
+                depth -= 1;
+                if depth == 0 {
+                    if let Some(start_idx) = start {
+                        return raw.get(start_idx..=idx);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -173,5 +226,25 @@ mod tests {
     fn parse_generated_quiz_content_fails_on_invalid_json() {
         let owner = Uuid::new_v4();
         assert!(parse_generated_quiz_content(owner, "```json\nnot-json\n```").is_err());
+    }
+
+    #[test]
+    fn parse_generated_quiz_content_accepts_json_with_extra_text() {
+        let owner = Uuid::new_v4();
+        let raw = r#"Конечно! Вот результат:
+        {
+            "title":"Rust Quiz",
+            "description":"desc",
+            "questions":[{
+                "text":"Q1",
+                "options":["A","B","C","D"],
+                "correct_option_index":2
+            }]
+        }
+        Спасибо!"#;
+
+        let quiz = parse_generated_quiz_content(owner, raw).expect("generated quiz must parse");
+        assert_eq!(quiz.title, "Rust Quiz");
+        assert_eq!(quiz.questions.len(), 1);
     }
 }
