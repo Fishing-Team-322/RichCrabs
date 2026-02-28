@@ -103,6 +103,23 @@ class FakeRedis:
     def delete(self, key):
         self._data.pop(key, None)
 
+    def lpush(self, key, value):
+        items = self._lists.setdefault(key, [])
+        items.insert(0, value)
+
+    def ltrim(self, key, start, end):
+        items = self._lists.get(key, [])
+        if end == -1:
+            self._lists[key] = items[start:]
+        else:
+            self._lists[key] = items[start:end + 1]
+
+    def lrange(self, key, start, end):
+        items = self._lists.get(key, [])
+        if end == -1:
+            return items[start:]
+        return items[start:end + 1]
+
 
 class FakeClients:
     def __init__(self):
