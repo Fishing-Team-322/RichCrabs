@@ -1,5 +1,5 @@
-use uuid::Uuid;
 use sqlx::{PgPool, Row};
+use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct BotRunnerBot {
     pub user_id: Uuid,
