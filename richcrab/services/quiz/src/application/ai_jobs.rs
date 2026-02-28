@@ -11,23 +11,37 @@ use crate::{
     repository::{AiQuizJob, QuizRepository},
 };
 
-pub(crate) async fn start_ai_quiz_job(
-    repository: &QuizRepository,
-    ai_generator: Option<AiGeneratorConfig>,
-    fallback_questions: Vec<proto::richcrab::v1::QuizQuestion>,
-    requester_uuid: Uuid,
+pub(crate) struct StartAiQuizJobParams {
+    pub requester_uuid: Uuid,
+    pub prompt: String,
+    pub desired_question_count: usize,
+    pub difficulty: Option<String>,
+    pub language: Option<String>,
+    pub question_format: Option<String>,
+}
+
+struct AiQuizWorkerParams {
+    job_id: Uuid,
+    owner_user_id: Uuid,
     prompt: String,
     desired_question_count: usize,
     difficulty: Option<String>,
     language: Option<String>,
     question_format: Option<String>,
+}
+
+pub(crate) async fn start_ai_quiz_job(
+    repository: &QuizRepository,
+    ai_generator: Option<AiGeneratorConfig>,
+    fallback_questions: Vec<proto::richcrab::v1::QuizQuestion>,
+    params: StartAiQuizJobParams,
 ) -> Result<String, Status> {
     let now = Utc::now();
     let job = AiQuizJob {
         id: Uuid::new_v4(),
-        owner_user_id: requester_uuid,
-        prompt: prompt.clone(),
-        desired_question_count: Some(desired_question_count as i32),
+        owner_user_id: params.requester_uuid,
+        prompt: params.prompt.clone(),
+        desired_question_count: Some(params.desired_question_count as i32),
         status: "queued".to_string(),
         result_quiz_json: None,
         error_message: None,
@@ -44,13 +58,15 @@ pub(crate) async fn start_ai_quiz_job(
         repository.clone(),
         ai_generator,
         fallback_questions,
-        job.id,
-        requester_uuid,
-        prompt,
-        desired_question_count,
-        difficulty,
-        language,
-        question_format,
+        AiQuizWorkerParams {
+            job_id: job.id,
+            owner_user_id: params.requester_uuid,
+            prompt: params.prompt,
+            desired_question_count: params.desired_question_count,
+            difficulty: params.difficulty,
+            language: params.language,
+            question_format: params.question_format,
+        },
     );
 
     Ok(job.id.to_string())
@@ -92,21 +108,18 @@ pub(crate) async fn get_ai_quiz_job(
     })
 }
 
-pub(crate) fn spawn_ai_quiz_worker(
+fn spawn_ai_quiz_worker(
     repository: QuizRepository,
     ai_generator: Option<AiGeneratorConfig>,
     fallback_questions: Vec<proto::richcrab::v1::QuizQuestion>,
-    job_id: Uuid,
-    owner_user_id: Uuid,
-    prompt: String,
-    desired_question_count: usize,
-    difficulty: Option<String>,
-    language: Option<String>,
-    question_format: Option<String>,
+    params: AiQuizWorkerParams,
 ) {
     tokio::spawn(async move {
-        if let Err(err) = repository.set_ai_quiz_job_status(job_id, "running").await {
-            tracing::error!(?err, %job_id, "failed to mark ai job running");
+        if let Err(err) = repository
+            .set_ai_quiz_job_status(params.job_id, "running")
+            .await
+        {
+            tracing::error!(?err, job_id = %params.job_id, "failed to mark ai job running");
             return;
         }
 
@@ -116,19 +129,19 @@ pub(crate) fn spawn_ai_quiz_worker(
             Some(cfg) => {
                 match generate_quiz_via_model(
                     &cfg,
-                    owner_user_id,
-                    &prompt,
-                    desired_question_count,
-                    difficulty.as_deref(),
-                    language.as_deref(),
-                    question_format.as_deref(),
+                    params.owner_user_id,
+                    &params.prompt,
+                    params.desired_question_count,
+                    params.difficulty.as_deref(),
+                    params.language.as_deref(),
+                    params.question_format.as_deref(),
                 )
                 .await
                 {
                     Ok(quiz) => quiz,
                     Err(err) => {
                         let _ = repository
-                            .fail_ai_quiz_job(job_id, &format!("generation failed: {err}"))
+                            .fail_ai_quiz_job(params.job_id, &format!("generation failed: {err}"))
                             .await;
                         return;
                     }
@@ -138,7 +151,7 @@ pub(crate) fn spawn_ai_quiz_worker(
                 if fallback_questions.is_empty() {
                     let _ = repository
                         .fail_ai_quiz_job(
-                            job_id,
+                            params.job_id,
                             "AI provider unavailable and fallback bank is empty",
                         )
                         .await;
@@ -147,7 +160,7 @@ pub(crate) fn spawn_ai_quiz_worker(
 
                 let selected = fallback_questions
                     .iter()
-                    .take(desired_question_count.max(1))
+                    .take(params.desired_question_count.max(1))
                     .cloned()
                     .collect::<Vec<_>>();
 
@@ -157,9 +170,9 @@ pub(crate) fn spawn_ai_quiz_worker(
                         value: Uuid::new_v4().to_string(),
                     }),
                     owner_user_id: Some(proto::richcrab::v1::UserId {
-                        value: owner_user_id.to_string(),
+                        value: params.owner_user_id.to_string(),
                     }),
-                    title: format!("AI fallback: {}", prompt),
+                    title: format!("AI fallback: {}", params.prompt),
                     description: "Generated from local fallback bank".to_string(),
                     questions: selected,
                     created_at: Some(prost_types::Timestamp {
@@ -176,15 +189,24 @@ pub(crate) fn spawn_ai_quiz_worker(
 
         if let Err(err) = validate_questions(&generated.questions) {
             let _ = repository
-                .fail_ai_quiz_job(job_id, &format!("generation failed validation: {err}"))
+                .fail_ai_quiz_job(
+                    params.job_id,
+                    &format!("generation failed validation: {err}"),
+                )
                 .await;
             return;
         }
 
         let result_json = quiz_to_json(&generated);
-        if let Err(err) = repository.complete_ai_quiz_job(job_id, result_json).await {
+        if let Err(err) = repository
+            .complete_ai_quiz_job(params.job_id, result_json)
+            .await
+        {
             let _ = repository
-                .fail_ai_quiz_job(job_id, &format!("failed to persist generated quiz: {err}"))
+                .fail_ai_quiz_job(
+                    params.job_id,
+                    &format!("failed to persist generated quiz: {err}"),
+                )
                 .await;
         }
     });
