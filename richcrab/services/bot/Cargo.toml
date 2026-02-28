@@ -24,3 +24,6 @@ anyhow.workspace = true
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tonic-health = "0.12"
 tracing = "0.1"
+
+[dev-dependencies]
+httpmock = "0.7"
