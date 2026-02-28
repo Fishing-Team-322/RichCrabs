@@ -4,12 +4,15 @@
 #include <spdlog/spdlog.h>
 
 #include <cstdint>
+#include <ctime>
+#include <iomanip>
 #include <memory>
 #include <optional>
 #include <regex>
 #include <sstream>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "controllers/BotStateStorage.hpp"
 #include "controllers/ControllerUtils.hpp"
@@ -82,6 +85,119 @@ std::string redisLastRoomKey(const std::string& botId) {
   return "gateway:telegram:last_room:" + botId;
 }
 
+std::string redisOwnerBindingKey(const std::string& ownerUserId) {
+  return "gateway:telegram:owner_binding:" + ownerUserId;
+}
+
+std::string redisRuntimeLastSeenKey(const std::string& botId) {
+  return "gateway:telegram:runtime:last_seen:" + botId;
+}
+
+std::string redisRuntimeOpsKey(const std::string& botId) {
+  return "gateway:telegram:runtime:ops:" + botId;
+}
+
+std::string nowIso8601Utc() {
+  const auto now = std::time(nullptr);
+  std::tm tm{};
+#ifdef _WIN32
+  gmtime_s(&tm, &now);
+#else
+  gmtime_r(&now, &tm);
+#endif
+  std::ostringstream out;
+  out << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
+  return out.str();
+}
+
+bool setOwnerBinding(const Config& conf, const std::string& ownerUserId, const std::string& botId) {
+  return RedisRunRaw(conf.redis_url,
+                     "SET " + quoteRedisArg(redisOwnerBindingKey(ownerUserId)) + " " + quoteRedisArg(botId)).has_value();
+}
+
+void touchRuntimeLastSeen(const Config& conf, const std::string& botId, const std::optional<std::string>& timestamp = std::nullopt) {
+  const auto lastSeen = timestamp.value_or(nowIso8601Utc());
+  RedisRunRaw(conf.redis_url,
+              "SET " + quoteRedisArg(redisRuntimeLastSeenKey(botId)) + " " + quoteRedisArg(lastSeen));
+}
+
+void appendRuntimeOperation(const Config& conf,
+                            const std::string& botId,
+                            const std::string& type,
+                            const std::optional<std::string>& roomId = std::nullopt,
+                            const std::optional<std::string>& roomTitle = std::nullopt,
+                            const std::optional<std::string>& value = std::nullopt) {
+  Json::Value operation;
+  operation["id"] = "op_" + util::random_hex(12);
+  operation["type"] = type;
+  operation["createdAt"] = nowIso8601Utc();
+  if (roomId.has_value()) operation["roomId"] = *roomId;
+  if (roomTitle.has_value()) operation["roomTitle"] = *roomTitle;
+  if (value.has_value()) operation["value"] = *value;
+
+  Json::StreamWriterBuilder writer;
+  const auto payload = Json::writeString(writer, operation);
+
+  RedisRunRaw(conf.redis_url,
+              "LPUSH " + quoteRedisArg(redisRuntimeOpsKey(botId)) + " " + quoteRedisArg(payload));
+  RedisRunRaw(conf.redis_url, "LTRIM " + quoteRedisArg(redisRuntimeOpsKey(botId)) + " 0 19");
+  touchRuntimeLastSeen(conf, botId, operation["createdAt"].asString());
+}
+
+Json::Value runtimeOperations(const Config& conf, const std::string& botId) {
+  Json::Value operations(Json::arrayValue);
+  const auto raw = RedisRunRaw(conf.redis_url, "LRANGE " + quoteRedisArg(redisRuntimeOpsKey(botId)) + " 0 19");
+  if (!raw || raw->empty()) return operations;
+
+  std::istringstream stream(*raw);
+  std::string line;
+  Json::CharReaderBuilder builder;
+  while (std::getline(stream, line)) {
+    if (line.empty()) continue;
+    Json::Value parsed;
+    std::string errors;
+    std::istringstream lineStream(line);
+    if (Json::parseFromStream(builder, lineStream, &parsed, &errors) && parsed.isObject()) {
+      operations.append(std::move(parsed));
+    }
+  }
+
+  return operations;
+}
+
+std::optional<std::string> findBindingBotIdByOwner(const Config& conf, const std::string& ownerUserId) {
+  auto botId = RedisRunRaw(conf.redis_url, "GET " + quoteRedisArg(redisOwnerBindingKey(ownerUserId)));
+  if (botId && !botId->empty()) return *botId;
+
+  const auto keys = RedisRunRaw(conf.redis_url, "KEYS " + quoteRedisArg("gateway:telegram:binding:*"));
+  if (!keys || keys->empty()) return std::nullopt;
+
+  std::istringstream stream(*keys);
+  std::string key;
+  while (std::getline(stream, key)) {
+    if (key.empty()) continue;
+    const auto storedOwner = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " owner_user_id");
+    if (!storedOwner || *storedOwner != ownerUserId) continue;
+
+    const auto lastColon = key.rfind(':');
+    if (lastColon == std::string::npos || lastColon + 1 >= key.size()) continue;
+    const auto derivedBotId = key.substr(lastColon + 1);
+    setOwnerBinding(conf, ownerUserId, derivedBotId);
+    return derivedBotId;
+  }
+
+  return std::nullopt;
+}
+
+bool deleteBinding(const Config& conf, const TelegramBotBinding& binding) {
+  const auto command = "DEL " + quoteRedisArg(redisBotBindingKey(binding.bot_id)) +
+                       " " + quoteRedisArg(redisLastRoomKey(binding.bot_id)) +
+                       " " + quoteRedisArg(redisOwnerBindingKey(binding.owner_user_id)) +
+                       " " + quoteRedisArg(redisRuntimeLastSeenKey(binding.bot_id)) +
+                       " " + quoteRedisArg(redisRuntimeOpsKey(binding.bot_id));
+  return RedisRunRaw(conf.redis_url, command).has_value();
+}
+
 bool saveBinding(const Config& conf, const TelegramBotBinding& binding) {
   const auto key = redisBotBindingKey(binding.bot_id);
   const auto command =
@@ -91,7 +207,9 @@ bool saveBinding(const Config& conf, const TelegramBotBinding& binding) {
       " token " + quoteRedisArg(binding.token.reveal()) +
       " owner_user_id " + quoteRedisArg(binding.owner_user_id) +
       " name " + quoteRedisArg(binding.name);
-  return RedisRunRaw(conf.redis_url, command).has_value();
+  const auto saved = RedisRunRaw(conf.redis_url, command).has_value();
+  if (!saved) return false;
+  return setOwnerBinding(conf, binding.owner_user_id, binding.bot_id);
 }
 
 std::optional<TelegramBotBinding> getBinding(const Config& conf, const std::string& botId) {
@@ -257,14 +375,27 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
         }
 
         api::JsonValidator validator(*body);
-        auto botToken = validator.requiredString("botToken");
+        auto token = validator.optionalString("token");
+        auto botToken = validator.optionalString("botToken");
         auto name = validator.optionalString("name");
-        if (!validator.ok() || !botToken) {
+        if (!validator.ok()) {
           cb(api::validationErrorResponse(validator.issues()));
           return;
         }
-        if (!isValidTelegramTokenFormat(*botToken)) {
-          cb(api::jsonErrorResponse(400, api::ErrorCode::kValidationError, "botToken has invalid format"));
+
+        const std::optional<std::string> resolvedToken = token.has_value() ? token : botToken;
+        if (!resolvedToken.has_value()) {
+          Json::Value details;
+          Json::Value issue(Json::objectValue);
+          issue["field"] = "token";
+          issue["message"] = "token or botToken is required";
+          details["issues"] = Json::arrayValue;
+          details["issues"].append(issue);
+          cb(api::jsonErrorResponse(422, api::ErrorCode::kValidationError, "validation failed", details));
+          return;
+        }
+        if (!isValidTelegramTokenFormat(*resolvedToken)) {
+          cb(api::jsonErrorResponse(400, api::ErrorCode::kValidationError, "token has invalid format"));
           return;
         }
 
@@ -295,7 +426,7 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
         }
         const std::string webhookPath = "/api/v1/telegram/webhook/" + botId + "/" + secret;
         const std::string webhookUrl = conf.public_base_url + webhookPath;
-        const std::string botTokenValue = *botToken;
+        const std::string botTokenValue = *resolvedToken;
         const std::string botName = name.value_or("Telegram Bot");
 
         spdlog::info("telegram_connect request_id={} bot_id={} owner_user_id={} token_masked={}",
@@ -347,7 +478,12 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
               SeedBotStateOwner(conf, botId, ownerUserId, botName, stateError);
 
               Json::Value out;
+              out["bindingId"] = botId;
               out["botId"] = botId;
+              out["name"] = botName;
+              out["active"] = webhookResult.confirmed;
+              out["lastSeenAt"] = nowIso8601Utc();
+              out["operations"] = Json::arrayValue;
               out["webhookUrl"] = webhookUrl;
 
               const bool grpcOk = reg.status == QuizCoreRpcStatus::kOk;
@@ -366,10 +502,85 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
               details["quizcore"]["code"] = static_cast<int>(reg.status);
               out["details"] = std::move(details);
 
+              touchRuntimeLastSeen(conf, botId, out["lastSeenAt"].asString());
               cb(drogon::HttpResponse::newHttpJsonResponse(out));
             });
       },
       {drogon::Post});
+
+  drogon::app().registerHandler(
+      "/api/v1/telegram/bots/status",
+      [conf](const drogon::HttpRequestPtr& req,
+             std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+        std::string ownerUserId;
+        if (!RequireUserId(req, conf, cb, ownerUserId)) return;
+
+        const auto botId = findBindingBotIdByOwner(conf, ownerUserId);
+        if (!botId.has_value()) {
+          Json::Value out;
+          out["bindingId"] = Json::nullValue;
+          out["botId"] = Json::nullValue;
+          out["active"] = false;
+          out["operations"] = Json::arrayValue;
+          cb(drogon::HttpResponse::newHttpJsonResponse(out));
+          return;
+        }
+
+        const auto binding = getBinding(conf, *botId);
+        if (!binding || binding->owner_user_id != ownerUserId) {
+          Json::Value out;
+          out["bindingId"] = Json::nullValue;
+          out["botId"] = Json::nullValue;
+          out["active"] = false;
+          out["operations"] = Json::arrayValue;
+          cb(drogon::HttpResponse::newHttpJsonResponse(out));
+          return;
+        }
+
+        std::string stateError;
+        const auto state = GetBotState(conf, *botId, stateError);
+
+        Json::Value out;
+        out["bindingId"] = *botId;
+        out["botId"] = *botId;
+        out["name"] = binding->name;
+        out["active"] = state ? state->enabled : true;
+        const auto lastSeenAt = RedisRunRaw(conf.redis_url, "GET " + quoteRedisArg(redisRuntimeLastSeenKey(*botId)));
+        if (lastSeenAt && !lastSeenAt->empty()) out["lastSeenAt"] = *lastSeenAt;
+        out["operations"] = runtimeOperations(conf, *botId);
+        cb(drogon::HttpResponse::newHttpJsonResponse(out));
+      },
+      {drogon::Get});
+
+  drogon::app().registerHandler(
+      "/api/v1/telegram/bots/{1}",
+      [conf, webhookClient](const drogon::HttpRequestPtr& req,
+                            std::function<void(const drogon::HttpResponsePtr&)>&& cb,
+                            std::string botId) {
+        if (!RequireCsrf(req, conf, cb)) return;
+
+        std::string ownerUserId;
+        if (!RequireUserId(req, conf, cb, ownerUserId)) return;
+
+        const auto binding = getBinding(conf, botId);
+        if (!binding || binding->owner_user_id != ownerUserId) {
+          cb(api::jsonErrorResponse(404, api::ErrorCode::kNotFound, "telegram binding not found"));
+          return;
+        }
+
+        const auto requestId = requestIdFromRequest(req);
+        webhookClient->deleteWebhook(binding->token.reveal(), requestId, [conf, cb = std::move(cb), binding, requestId](TelegramDeleteWebhookResult result) mutable {
+          if (!result.removed) {
+            spdlog::warn("telegram_unbind_delete_webhook_failed request_id={} bot_id={} status={}", requestId, binding->bot_id, result.status);
+          }
+          deleteBinding(conf, *binding);
+          auto response = drogon::HttpResponse::newHttpResponse();
+          response->setStatusCode(drogon::k204NoContent);
+          cb(response);
+        });
+      },
+      {drogon::Delete});
+
 
   drogon::app().registerHandler(
       "/api/v1/telegram/webhook/{1}/{2}",
@@ -410,6 +621,7 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
         }
 
         const auto requestId = requestIdFromRequest(req);
+        touchRuntimeLastSeen(conf, botId);
         const Json::Value& message = payload["message"];
         const std::string text = message.get("text", "").asString();
         const auto chatId = extractInt64(message["chat"]["id"]);
@@ -436,6 +648,7 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
             commandResult["message"] = "room_created";
             commandResult["pin"] = snapshot.pin;
             commandResult["inviteUrl"] = conf.public_base_url + snapshot.invite_path;  // invite_path domain-agnostic by design
+            appendRuntimeOperation(conf, botId, "room_created", snapshot.room_id, std::string("Telegram room"), snapshot.pin);
 
             sendTelegramReply(webhookClient,
                               *binding,
@@ -470,6 +683,7 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
           if (lastRoom) {
             commandResult["status"] = "ok";
             commandResult["inviteUrl"] = conf.public_base_url + lastRoom->invite_path;  // invite_path domain-agnostic by design
+            appendRuntimeOperation(conf, botId, "invite_issued", lastRoom->room_id, std::nullopt, conf.public_base_url + lastRoom->invite_path);
             sendTelegramReply(webhookClient,
                               *binding,
                               chatId,
@@ -493,6 +707,7 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
           if (lastRoom) {
             commandResult["status"] = "ok";
             commandResult["pin"] = lastRoom->pin;
+            appendRuntimeOperation(conf, botId, "pin_issued", lastRoom->room_id, std::nullopt, lastRoom->pin);
             sendTelegramReply(webhookClient,
                               *binding,
                               chatId,

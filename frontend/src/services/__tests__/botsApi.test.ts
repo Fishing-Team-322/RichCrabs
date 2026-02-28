@@ -27,8 +27,8 @@ describe('botsApi contract', () => {
   it('uses telegram backend contract for validate/bind/status/unbind', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(jsonResponse({ botId: 'b1', status: 'connected', metadata: { name: 'Bot' } }))
-      .mockResolvedValueOnce(jsonResponse({ botId: 'b1', status: 'connected', metadata: { name: 'Bot' } }))
+      .mockResolvedValueOnce(jsonResponse({ bindingId: 'b1', botId: 'b1', active: true, name: 'Bot', operations: [] }))
+      .mockResolvedValueOnce(jsonResponse({ bindingId: 'b1', botId: 'b1', active: true, name: 'Bot', operations: [] }))
       .mockResolvedValueOnce(jsonResponse({ bindingId: 'b1', botId: 'b1', active: true, operations: [] }))
       .mockResolvedValueOnce(jsonResponse({ bindingId: 'b1', botId: 'b1', active: true, operations: [] }))
       .mockResolvedValueOnce(jsonResponse(null, 204))
