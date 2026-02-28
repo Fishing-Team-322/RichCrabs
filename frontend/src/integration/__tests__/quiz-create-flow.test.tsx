@@ -44,4 +44,34 @@ describe('integration: quiz create flow', () => {
     expect(await screen.findByText('Quiz editor')).toBeInTheDocument()
     expect(quizApi.generateDraft).toHaveBeenCalled()
   })
+  it('falls back to manual draft when AI generation fails', async () => {
+    vi.mocked(quizApi.generateDraft).mockRejectedValue(new Error('Генерация квиза завершилась с ошибкой.'))
+    vi.mocked(quizApi.draft).mockResolvedValue({
+      id: 'draft-fallback',
+      meta: { title: 'Fallback quiz', language: 'ru', tags: [], coverUrl: '' },
+      questions: [],
+      status: 'draft',
+      version: 1,
+      updatedAt: new Date().toISOString(),
+    })
+
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/quizzes/new" element={<QuizCreate />} />
+        <Route path="/quizzes/:quizId/edit" element={<div>Quiz editor</div>} />
+      </Routes>,
+      { route: '/quizzes/new' },
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Через AI' }))
+    await user.type(screen.getByLabelText('Тема'), 'Космос')
+    await user.click(screen.getByRole('button', { name: 'Сгенерировать' }))
+
+    expect(await screen.findByText('Quiz editor')).toBeInTheDocument()
+    expect(quizApi.generateDraft).toHaveBeenCalled()
+    expect(quizApi.draft).toHaveBeenCalled()
+  })
+
 })
