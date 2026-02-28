@@ -66,6 +66,24 @@
 
 ## 4) Telegram bot integration flow
 
+
+### Telegram команды и WebApp lifecycle
+
+Подключённые Telegram-боты используют единый lifecycle:
+
+1. Пользователь отправляет `/start` в Telegram.
+2. Bot runtime отвечает приветствием и клавиатурой с кнопкой `web_app` (URL квиз-интерфейса).
+3. URL запуска содержит подписанный payload (`bot_id`, `user_id`, `chat_id`, `request_id`, `exp`) с коротким TTL.
+4. Backend endpoint `/api/v1/telegram/webapp/launch` проверяет подпись и срок действия.
+5. При валидном payload backend поднимает web-сессию quiz runtime и делает redirect в web-клиент (по умолчанию `/join`).
+6. UI продолжает стандартный join/runtime flow уже в контексте установленной сессии.
+
+Сопутствующие команды:
+- `/create_game` — создать комнату.
+- `/invite` — получить invite последней комнаты.
+- `/pin` — получить PIN последней комнаты.
+
+
 Экран: `/bots`.
 
 1. При открытии страницы UI запрашивает runtime-статус через `GET /api/bots/telegram/status`.

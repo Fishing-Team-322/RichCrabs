@@ -1,3 +1,3 @@
-from . import admin, auth, billing, bots, games, profile, quizzes, system, ws
+from . import admin, auth, billing, bots, games, profile, quizzes, system, telegram_webapp, ws
 
-__all__ = ["admin", "auth", "billing", "bots", "games", "profile", "quizzes", "system", "ws"]
+__all__ = ["admin", "auth", "billing", "bots", "games", "profile", "quizzes", "system", "telegram_webapp", "ws"]

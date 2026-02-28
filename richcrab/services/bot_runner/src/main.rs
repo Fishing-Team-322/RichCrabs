@@ -9,8 +9,10 @@ use aes_gcm::{
 use anyhow::{anyhow, Context};
 use base64::Engine;
 use deadpool_redis::redis;
+use hmac::{Hmac, Mac};
 use repository::BotRunnerRepository;
 use serde::Deserialize;
+use sha2::Sha256;
 use sqlx::postgres::PgPoolOptions;
 use tokio::sync::{Mutex, Semaphore};
 use tonic::transport::Channel;
@@ -27,7 +29,26 @@ struct AppState {
     limits: Limits,
     default_quiz_id: String,
     public_base_url: String,
+    command_config: BotCommandConfig,
+    webapp: WebAppConfig,
     per_bot_semaphores: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
+}
+
+#[derive(Clone)]
+struct BotCommandConfig {
+    start_command: String,
+    create_game_command: String,
+    invite_command: String,
+    pin_command: String,
+    start_greeting: String,
+    missing_room_text: String,
+}
+
+#[derive(Clone)]
+struct WebAppConfig {
+    launch_endpoint: String,
+    signing_key: String,
+    token_ttl_seconds: i64,
 }
 
 #[derive(Clone)]
@@ -54,7 +75,13 @@ struct TelegramUpdate {
 #[derive(Debug, Deserialize)]
 struct TelegramMessage {
     chat: TelegramChat,
+    from: Option<TelegramUser>,
     text: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TelegramUser {
+    id: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -130,6 +157,31 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_else(|_| "telegram-default-quiz".to_string()),
         public_base_url: env::var("GW_PUBLIC_BASE_URL")
             .unwrap_or_else(|_| "http://gateway:8080".to_string()),
+        command_config: BotCommandConfig {
+            start_command: env::var("BOT_CMD_START").unwrap_or_else(|_| "/start".to_string()),
+            create_game_command: env::var("BOT_CMD_CREATE_GAME")
+                .unwrap_or_else(|_| "/create_game".to_string()),
+            invite_command: env::var("BOT_CMD_INVITE").unwrap_or_else(|_| "/invite".to_string()),
+            pin_command: env::var("BOT_CMD_PIN").unwrap_or_else(|_| "/pin".to_string()),
+            start_greeting: env::var("BOT_TEXT_START_GREETING").unwrap_or_else(|_| {
+                "Привет! Нажми кнопку ниже, чтобы открыть квиз в WebApp.".to_string()
+            }),
+            missing_room_text: env::var("BOT_TEXT_MISSING_ROOM").unwrap_or_else(|_| {
+                "Нет данных о комнате. Сначала выполните /create_game".to_string()
+            }),
+        },
+        webapp: WebAppConfig {
+            launch_endpoint: env::var("BOT_WEBAPP_LAUNCH_ENDPOINT").unwrap_or_else(|_| {
+                "/api/v1/telegram/webapp/launch".to_string()
+            }),
+            signing_key: env::var("BOT_WEBAPP_SIGNING_KEY")
+                .or_else(|_| env::var(shared::config::ENCRYPTION_KEY))?,
+            token_ttl_seconds: env::var("BOT_WEBAPP_TOKEN_TTL_SECONDS")
+                .ok()
+                .and_then(|v| v.parse::<i64>().ok())
+                .unwrap_or(120)
+                .max(10),
+        },
         per_bot_semaphores: Arc::new(Mutex::new(HashMap::new())),
     };
 
@@ -367,6 +419,7 @@ async fn handle_update(state: &AppState, entry: &QueueEntry) -> anyhow::Result<&
     };
 
     let command = text.split_whitespace().next().unwrap_or_default();
+    let request_id = Uuid::new_v4().to_string();
     let Some(bot) = state
         .repository
         .find_bot_by_webhook_key(&entry.bot_id)
@@ -380,7 +433,42 @@ async fn handle_update(state: &AppState, entry: &QueueEntry) -> anyhow::Result<&
 
     let token = decrypt_token(&state.encryption_key, &bot.token_encrypted)?;
     match command {
-        "/create_game" => {
+        cmd if cmd == state.command_config.start_command => {
+            let user_id = message
+                .from
+                .as_ref()
+                .map(|from| from.id)
+                .unwrap_or_default();
+            let launch_url = build_webapp_launch_url(
+                &state.public_base_url,
+                &state.webapp,
+                &entry.bot_id,
+                user_id,
+                message.chat.id,
+                &request_id,
+            )?;
+            let keyboard = serde_json::json!({
+                "inline_keyboard": [[{
+                    "text": "🚀 Открыть квиз",
+                    "web_app": {"url": launch_url}
+                }]],
+                "keyboard": [[{
+                    "text": "🚀 Открыть квиз",
+                    "web_app": {"url": launch_url}
+                }]],
+                "resize_keyboard": true,
+            });
+            send_telegram_reply(
+                &state.telegram_http,
+                &token,
+                message.chat.id,
+                &state.command_config.start_greeting,
+                Some(keyboard),
+            )
+            .await?;
+            Ok("start")
+        }
+        cmd if cmd == state.command_config.create_game_command => {
             let mut client = state.game_client.clone();
             let response = client
                 .create_room(proto::richcrab::v1::CreateRoomRequest {
@@ -416,38 +504,40 @@ async fn handle_update(state: &AppState, entry: &QueueEntry) -> anyhow::Result<&
                 state.public_base_url.trim_end_matches('/'),
                 response.invite_path
             );
-            send_telegram_reply(&state.telegram_http, &token, message.chat.id, &text).await?;
+            send_telegram_reply(&state.telegram_http, &token, message.chat.id, &text, None).await?;
             Ok("create_game")
         }
-        "/invite" => {
+        cmd if cmd == state.command_config.invite_command => {
             if let Some(room) = get_last_room(&state.redis_pool, &entry.bot_id).await? {
                 let text = format!(
                     "🎟 Invite: {}{}",
                     state.public_base_url.trim_end_matches('/'),
                     room.invite_path
                 );
-                send_telegram_reply(&state.telegram_http, &token, message.chat.id, &text).await?;
+                send_telegram_reply(&state.telegram_http, &token, message.chat.id, &text, None).await?;
             } else {
                 send_telegram_reply(
                     &state.telegram_http,
                     &token,
                     message.chat.id,
-                    "Нет данных о комнате. Сначала выполните /create_game",
+                    &state.command_config.missing_room_text,
+                    None,
                 )
                 .await?;
             }
             Ok("invite")
         }
-        "/pin" => {
+        cmd if cmd == state.command_config.pin_command => {
             if let Some(room) = get_last_room(&state.redis_pool, &entry.bot_id).await? {
                 let text = format!("🔐 PIN: {}", room.pin);
-                send_telegram_reply(&state.telegram_http, &token, message.chat.id, &text).await?;
+                send_telegram_reply(&state.telegram_http, &token, message.chat.id, &text, None).await?;
             } else {
                 send_telegram_reply(
                     &state.telegram_http,
                     &token,
                     message.chat.id,
-                    "Нет данных о комнате. Сначала выполните /create_game",
+                    &state.command_config.missing_room_text,
+                    None,
                 )
                 .await?;
             }
@@ -512,13 +602,19 @@ async fn send_telegram_reply(
     token: &str,
     chat_id: i64,
     text: &str,
+    reply_markup: Option<serde_json::Value>,
 ) -> anyhow::Result<()> {
+    let mut body = serde_json::json!({
+        "chat_id": chat_id,
+        "text": text,
+    });
+    if let Some(markup) = reply_markup {
+        body["reply_markup"] = markup;
+    }
+
     let response = client
         .post(format!("https://api.telegram.org/bot{token}/sendMessage"))
-        .json(&serde_json::json!({
-            "chat_id": chat_id,
-            "text": text,
-        }))
+        .json(&body)
         .send()
         .await?;
     if !response.status().is_success() {
@@ -528,6 +624,38 @@ async fn send_telegram_reply(
         ));
     }
     Ok(())
+}
+
+fn build_webapp_launch_url(
+    public_base_url: &str,
+    webapp: &WebAppConfig,
+    bot_id: &str,
+    user_id: i64,
+    chat_id: i64,
+    request_id: &str,
+) -> anyhow::Result<String> {
+    let payload = serde_json::json!({
+        "bot_id": bot_id,
+        "user_id": user_id,
+        "chat_id": chat_id,
+        "request_id": request_id,
+        "exp": chrono::Utc::now().timestamp() + webapp.token_ttl_seconds,
+    });
+    let payload_json = serde_json::to_string(&payload)?;
+    let payload_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(payload_json);
+
+    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(webapp.signing_key.as_bytes())
+        .map_err(|e| anyhow!("invalid signing key: {e}"))?;
+    mac.update(payload_b64.as_bytes());
+    let sig = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+
+    Ok(format!(
+        "{}{}?payload={}&sig={}",
+        public_base_url.trim_end_matches('/'),
+        webapp.launch_endpoint,
+        payload_b64,
+        sig
+    ))
 }
 
 async fn retry_or_dead_letter(
