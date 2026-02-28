@@ -144,7 +144,7 @@ export const quizApi: QuizApi = {
       }
 
       if (currentJob.status === 'failed') {
-        throw new Error(currentJob.error || 'Генерация квиза завершилась с ошибкой.')
+        throw new Error((currentJob as { error?: string; errorMessage?: string }).error || (currentJob as { error?: string; errorMessage?: string }).errorMessage || 'Генерация квиза завершилась с ошибкой.')
       }
 
       await sleep(1500)

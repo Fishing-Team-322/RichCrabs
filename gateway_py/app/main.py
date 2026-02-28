@@ -578,7 +578,12 @@ def ai_get(jobId: str, req: Request):
     if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
     x = clients.quiz.GetAiQuizJob(quiz_pb2.GetAiQuizJobRequest(job_id=jobId, requested_by=common_pb2.UserId(value=uid)))
     out = {"jobId": x.job_id, "status": x.status.lower()}
-    if x.HasField("quiz"): out["quiz"] = {"quizId": x.quiz.quiz_id.value, "title": x.quiz.title}
+    if x.HasField("quiz"):
+        out["quiz"] = {"quizId": x.quiz.quiz_id.value, "title": x.quiz.title}
+    has_error = getattr(x, "HasField", lambda _: False)("error")
+    if has_error and getattr(x.error, "message", ""):
+        out["error"] = x.error.message
+        out["errorMessage"] = x.error.message
     return out
 
 @app.get("/api/v1/quizzes/ai-jobs/{jobId}/result")
