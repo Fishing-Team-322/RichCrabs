@@ -3,14 +3,14 @@
 .subsPills{display:flex;gap:8px;flex-wrap:wrap}
 .subsBadge{display:inline-flex;align-items:center;border-radius:999px;border:1px solid var(--border);padding:4px 10px;font-size:12px;font-weight:600}
 .status-ok{background:rgba(58,210,139,.18);color:#8df1bf}.status-pending{background:rgba(248,181,75,.2);color:#ffd489}.status-error{background:rgba(255,111,142,.2);color:#ffafc3}.status-neutral{background:rgba(157,174,255,.14);color:var(--text-secondary)}
-.subsActions button,.planCard button,.promoForm button{border:1px solid transparent;border-radius:999px;background:linear-gradient(90deg,var(--primary),var(--accent-pink),var(--accent-blue));color:#fff;padding:10px 14px;font-weight:600;transition:var(--transition)}
+.subsActions button,.planCard button,.promoForm button{border:1px solid transparent;border-radius:999px;background:linear-gradient(90deg,var(--primary),var(--accent-pink),var(--accent-blue));color:#fff;padding:10px 14px;font-weight:600;transition:var(--transition);min-height:40px}
 .subsActions button:hover,.planCard button:hover,.promoForm button:hover{filter:brightness(1.05)}
 .subsActions button:disabled,.planCard button:disabled,.promoForm button:disabled{background:var(--disabled)}
 .plansGrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-top:12px}
 .planCard.current{border-color:var(--border-strong);box-shadow:var(--shadow-glow)}
-.planHeader{display:flex;justify-content:space-between;gap:8px}.planPrice{font-size:24px;font-weight:700}
+.planHeader{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.planPrice{font-size:24px;font-weight:700}
 .limitsTableWrap{overflow:auto}.limitsTable{width:100%;border-collapse:collapse;min-width:620px}.limitsTable th,.limitsTable td{border:1px solid var(--border);padding:8px 10px;text-align:left}.limitsTable th{color:var(--text-secondary)}
-.promoForm{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px}.promoForm input{flex:1;min-width:220px;max-width:360px;height:40px;border:1px solid var(--border);border-radius:12px;padding:0 12px;background:var(--surface-strong);color:var(--text-primary)}
+.promoForm{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px}.promoForm input{flex:1;min-width:180px;max-width:360px;height:40px;border:1px solid var(--border);border-radius:12px;padding:0 12px;background:var(--surface-strong);color:var(--text-primary)}
 .subsNotice{margin-top:8px;color:#8df1bf}.subsError{margin-top:8px;color:#ffafc3}.historyList{margin-top:10px;display:grid;gap:8px}
-.historyItem{display:grid;gap:10px;grid-template-columns:minmax(180px,1fr) auto auto;align-items:center}
-@media (max-width:860px){.historyItem{grid-template-columns:1fr}}
+.historyItem{display:grid;gap:10px;grid-template-columns:minmax(160px,1fr) auto auto;align-items:center}
+@media (max-width:860px){.historyItem{grid-template-columns:1fr}.promoForm input,.promoForm button,.subsActions button,.planCard button{width:100%;max-width:none}}

@@ -45,6 +45,17 @@
 
 * { box-sizing: border-box; }
 
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   color: var(--text-primary);
@@ -111,10 +122,10 @@ a { color: inherit; }
 }
 
 .accountAction:hover { border-color: var(--border-strong); background: var(--surface-hover); }
-.accountMeta { display: grid; text-align: right; }
-.accountName { font-weight: 700; }
-.accountEmail { font-size: 12px; color: var(--text-secondary); }
-.accountBlock { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.accountMeta { display: grid; text-align: right; min-width: 0; }
+.accountName { font-weight: 700; overflow-wrap: anywhere; }
+.accountEmail { font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.accountBlock { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
 .languageSwitcher { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; }
 .languageSwitcher select {
   border: 1px solid var(--border);
@@ -132,6 +143,10 @@ a { color: inherit; }
 
 @media (max-width: 760px) {
   .authPage { padding: 12px; }
+  .authCard { padding: 14px; border-radius: 14px; }
+  .accountBlock { width: 100%; justify-content: flex-start; }
+  .accountMeta { text-align: left; }
+  .accountAction { min-height: 40px; display: inline-flex; align-items: center; }
 }
 
 

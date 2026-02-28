@@ -1,8 +1,8 @@
 .profilePage { display: grid; gap: 16px; }
 
-.profileGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.profileGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
 
-.profileBasic { display: flex; gap: 16px; align-items: center; }
+.profileBasic { display: flex; gap: 16px; align-items: center; min-width: 0; }
 
 .profileAvatar {
   width: 64px;
@@ -10,6 +10,7 @@
   border-radius: 50%;
   object-fit: cover;
   border: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .profileAvatar.fallback {
@@ -20,8 +21,8 @@
   font-weight: 700;
 }
 
-.profileTitle { margin: 0; font-size: 22px; font-weight: 700; }
-.profileMuted { color: var(--text-secondary); font-size: 14px; }
+.profileTitle { margin: 0; font-size: 22px; font-weight: 700; overflow-wrap: anywhere; }
+.profileMuted { color: var(--text-secondary); font-size: 14px; overflow-wrap: anywhere; }
 
 .statsGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .statsLabel { color: var(--text-secondary); font-size: 13px; }
@@ -48,7 +49,7 @@
 .profileForm label { display: grid; gap: 4px; font-size: 14px; color: var(--text-secondary); }
 
 .profileForm input {
-  height: 40px;
+  height: 42px;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 0 12px;
@@ -58,6 +59,7 @@
 
 .profileForm button {
   width: fit-content;
+  min-height: 40px;
   padding: 10px 16px;
   border-radius: 999px;
   border: 1px solid transparent;
@@ -68,3 +70,9 @@
 
 .sessionsList { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 8px; }
 .sessionsList li { display: grid; gap: 2px; }
+
+@media (max-width: 760px) {
+  .profileBasic { align-items: flex-start; }
+  .statsGrid { grid-template-columns: 1fr; }
+  .profileForm button { width: 100%; }
+}
