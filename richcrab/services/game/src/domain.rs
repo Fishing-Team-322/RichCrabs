@@ -3,6 +3,26 @@ use std::collections::{HashMap, HashSet};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoomVisibility {
+    Private,
+    Public,
+}
+
+#[derive(Debug, Clone)]
+pub struct RoomTimers {
+    pub lobby_timer_sec: u32,
+    pub question_timer_sec: u32,
+    pub answer_reveal_sec: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct RoomSettings {
+    pub player_limit: u32,
+    pub visibility: RoomVisibility,
+    pub timers: RoomTimers,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RoomLifecycleState {
     Lobby,
     InProgress,
@@ -78,6 +98,7 @@ pub struct GameResult {
 
 #[derive(Debug, Clone)]
 pub struct RoomState {
+    pub settings: RoomSettings,
     pub room_id: String,
     pub owner_user_id: String,
     pub quiz_id: String,

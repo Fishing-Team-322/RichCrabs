@@ -750,11 +750,20 @@ pub fn spawn_room_actor(
 mod tests {
     use super::*;
 
-    use crate::domain::{RoomLifecycleState, RoomState};
+    use crate::domain::{RoomLifecycleState, RoomSettings, RoomState, RoomTimers, RoomVisibility};
 
     #[tokio::test]
     async fn submit_answer_fails_when_round_timed_out() {
         let room_state = RoomState {
+            settings: RoomSettings {
+                player_limit: 20,
+                visibility: RoomVisibility::Private,
+                timers: RoomTimers {
+                    lobby_timer_sec: 45,
+                    question_timer_sec: 30,
+                    answer_reveal_sec: 10,
+                },
+            },
             room_id: "room-1".to_string(),
             owner_user_id: "owner-1".to_string(),
             quiz_id: "quiz-1".to_string(),

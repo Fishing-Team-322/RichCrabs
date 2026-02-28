@@ -9,10 +9,7 @@ class DummyRpcError(grpc.RpcError):
         return self._status
 
 
-def test_list_games_without_session_returns_public_games_only(client, fake_rdb):
-    fake_rdb.set("rooms:public", "[\"123456\"]")
-    fake_rdb.set("room:meta:123456", "{\"isPublic\": true, \"quizId\": \"q1\", \"title\": \"Public room\", \"invitePath\": \"/invite/inv1\"}")
-
+def test_list_games_without_session_returns_public_games_only(client):
     response = client.get("/api/v1/games")
     assert response.status_code == 200
     payload = response.json()
