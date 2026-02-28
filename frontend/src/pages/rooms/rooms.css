@@ -5,7 +5,22 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
+}
+
+.roomsHeader > div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.roomsHeader h1,
+.roomsHeader p {
+  margin: 0;
+}
+
+.roomsHeader .roomLink {
+  align-self: flex-start;
 }
 
 .roomsActions,
