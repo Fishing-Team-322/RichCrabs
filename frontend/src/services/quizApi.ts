@@ -57,7 +57,7 @@ const defaultQuestionPayload = () => ([
   {
     id: 'q1',
     text: 'Новый вопрос',
-    options: ['Вариант 1', 'Вариант 2'],
+    options: ['Вариант 1', 'Вариант 2', 'Вариант 3', 'Вариант 4'],
     correctIndex: 0,
   },
 ])
