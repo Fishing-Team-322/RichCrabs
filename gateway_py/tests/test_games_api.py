@@ -9,6 +9,20 @@ class DummyRpcError(grpc.RpcError):
         return self._status
 
 
+def test_list_games_without_session_returns_empty_list(client):
+    response = client.get("/api/v1/games")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_games_with_host_session_returns_active_room(client, host_session_cookie):
+    response = client.get("/api/v1/games", cookies=host_session_cookie)
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["pin"] == "123456"
+
+
 def test_create_game_requires_valid_session(client, csrf_headers):
     response = client.post(
         "/api/v1/games",
