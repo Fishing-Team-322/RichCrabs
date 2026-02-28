@@ -45,8 +45,8 @@ export interface BotRuntimeOperationDto {
 }
 
 export interface TelegramBotRuntimeStatusDto {
-  bindingId: string
-  botId?: string
+  bindingId?: string | null
+  botId?: string | null
   username?: string
   name?: string
   active: boolean

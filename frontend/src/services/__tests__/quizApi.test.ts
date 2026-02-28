@@ -34,7 +34,20 @@ describe('quizApi contract', () => {
       .mockResolvedValueOnce(jsonResponse({ jobId: 'j1', status: 'running' }))
     await quizApi.startGeneration({ topic: 'Topic', difficulty: 'easy', questionCount: 5, language: 'ru', format: 'single' })
     await quizApi.getGenerationStatus('j1')
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/quizzes/ai-generate', expect.objectContaining({ method: 'POST' }))
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/quizzes/ai-generate',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          prompt: 'Topic',
+          desiredQuestionCount: 5,
+          difficulty: 'easy',
+          language: 'ru',
+          format: 'single',
+        }),
+      }),
+    )
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/quizzes/ai-jobs/j1', expect.objectContaining({ method: 'GET' }))
   })
 
@@ -59,6 +72,23 @@ describe('quizApi contract', () => {
 
     const draft = await quizApi.generateDraft({ topic: 'Topic', difficulty: 'easy', questionCount: 5, language: 'ru', format: 'single' })
     expect(draft.id).toBe('q42')
+  })
+
+
+  it('keeps correct answer unselected when backend question has no correctIndex', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse({
+        quiz: {
+          quizId: 'q-ai',
+          title: 'AI quiz',
+          questions: [{ id: 'q1', text: 'Question', options: ['A', 'B'] }],
+        },
+      }),
+    )
+
+    const draft = await quizApi.getDraft('q-ai')
+    expect(draft.questions[0].correctOptionId).toBe('')
+    expect(draft.questions[0].requiresCorrectOptionSelection).toBe(true)
   })
 
   it('uses quiz CRUD endpoints', async () => {

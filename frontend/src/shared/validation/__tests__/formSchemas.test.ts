@@ -1,4 +1,5 @@
 import {
+  QUIZ_QUESTION_COUNT_MAX,
   validateBotToken,
   validateCreateRoom,
   validateJoinByPin,
@@ -39,7 +40,7 @@ describe('form validators', () => {
       }),
     ).toMatchObject({
       topic: 'Укажите тему минимум из 3 символов.',
-      questionCount: 'Количество вопросов: от 1 до 50.',
+      questionCount: `Количество вопросов: от 1 до ${QUIZ_QUESTION_COUNT_MAX}.`,
       language: 'Укажите язык квиза.',
     })
 
@@ -70,5 +71,20 @@ describe('form validators', () => {
     expect(validateBotToken({ token: 'invalid' })).toMatchObject({
       token: 'Токен должен быть в формате 123456789:AA...',
     })
+  })
+
+  it('validates quiz question count boundaries', () => {
+    const baseData = {
+      topic: 'История',
+      difficulty: 'easy' as const,
+      language: 'ru',
+      format: 'single' as const,
+    }
+
+    expect(validateQuizCreate({ ...baseData, questionCount: 1 }).questionCount).toBeUndefined()
+    expect(validateQuizCreate({ ...baseData, questionCount: QUIZ_QUESTION_COUNT_MAX }).questionCount).toBeUndefined()
+    expect(validateQuizCreate({ ...baseData, questionCount: QUIZ_QUESTION_COUNT_MAX + 1 }).questionCount).toBe(
+      `Слишком много вопросов. Максимум: ${QUIZ_QUESTION_COUNT_MAX}.`,
+    )
   })
 })

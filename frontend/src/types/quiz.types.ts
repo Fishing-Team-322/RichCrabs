@@ -37,6 +37,7 @@ export interface QuizEditorQuestionDto {
   text: string
   options: QuizEditorOptionDto[]
   correctOptionId: string
+  requiresCorrectOptionSelection?: boolean
   timeLimitSec: number
   difficulty: QuizDifficulty
 }

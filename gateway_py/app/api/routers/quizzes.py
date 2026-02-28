@@ -72,10 +72,7 @@ def ai_start(req: Request, body: StartAiQuizRequest):
     if (e := require_csrf(req)): return e
     uid = require_user(req)
     if not uid: return err(401,'unauthorized','session cookie is missing or invalid')
-    try:
-        x = clients.quiz.StartAiQuizJob(quiz_pb2.StartAiQuizJobRequest(requested_by=common_pb2.UserId(value=uid), prompt=body.prompt, desired_question_count=body.desiredQuestionCount))
-    except grpc.RpcError as ex:
-        c, b = map_grpc_err(ex, 'start_ai_quiz_job'); return JSONResponse(b, status_code=c)
+    x = clients.quiz.StartAiQuizJob(quiz_pb2.StartAiQuizJobRequest(requested_by=common_pb2.UserId(value=uid), prompt=body.prompt, desired_question_count=body.desiredQuestionCount, difficulty=body.difficulty, language=body.language, format=body.format))
     return {'jobId': x.job_id, 'status': x.status.lower()}
 
 @router.get('/api/v1/quizzes/ai-jobs/{jobId}')

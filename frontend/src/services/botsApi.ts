@@ -14,12 +14,30 @@ const TELEGRAM_CONNECT = '/api/v1/telegram/bots/connect'
 const TELEGRAM_STATUS = '/api/v1/telegram/bots/status'
 const TELEGRAM_UNBIND = '/api/v1/telegram/bots'
 
+type TelegramConnectResponse = {
+  bindingId?: string
+  botId?: string
+  active?: boolean
+  status?: string
+  lastSeenAt?: string
+  operations?: TelegramBotRuntimeStatusDto['operations']
+  name?: string
+  username?: string
+}
+
 const mapBot = (bot: { botId: string; name: string; status: string }): BotDto => ({
   id: bot.botId,
   name: bot.name,
   username: bot.name,
   enabled: bot.status !== 'disabled',
   createdAt: new Date(0).toISOString(),
+})
+
+const mapConnectToBinding = (res: TelegramConnectResponse): BindTelegramBotResponseDto => ({
+  bindingId: res.bindingId ?? res.botId ?? '',
+  botId: res.botId,
+  username: res.username,
+  name: res.name,
 })
 
 export const botsApi = {
@@ -33,18 +51,19 @@ export const botsApi = {
     apiFetch<void>(`${BOTS_BASE}/${encodeURIComponent(botId)}`, {
       method: 'DELETE',
     }),
-  validate: (payload: ValidateTelegramBotRequestDto) =>
-    apiFetch<{ botId: string; status: string; metadata?: { name?: string } }>(TELEGRAM_CONNECT, {
+  validate: async (payload: ValidateTelegramBotRequestDto) => {
+    const res = await apiFetch<TelegramConnectResponse>(TELEGRAM_CONNECT, {
       method: 'POST',
       body: JSON.stringify({ token: payload.token }),
-    }).then((res): ValidateTelegramBotResponseDto => ({ ok: res.status === 'connected', botId: res.botId, username: res.metadata?.name, name: res.metadata?.name })),
+    })
+    return { ok: Boolean((res.bindingId ?? res.botId) && (res.active ?? res.status === 'connected')), botId: res.botId, username: res.username, name: res.name } as ValidateTelegramBotResponseDto
+  },
   bind: (payload: BindTelegramBotRequestDto) =>
-    apiFetch<{ botId: string; status: string; metadata?: { name?: string } }>(TELEGRAM_CONNECT, {
+    apiFetch<TelegramConnectResponse>(TELEGRAM_CONNECT, {
       method: 'POST',
       body: JSON.stringify({ token: payload.token }),
-    }).then((res): BindTelegramBotResponseDto => ({ bindingId: res.botId, botId: res.botId, username: res.metadata?.name, name: res.metadata?.name })),
-  status: () =>
-    apiFetch<TelegramBotRuntimeStatusDto>(TELEGRAM_STATUS),
+    }).then(mapConnectToBinding),
+  status: () => apiFetch<TelegramBotRuntimeStatusDto>(TELEGRAM_STATUS),
   unbind: async () => {
     const status = await botsApi.status()
     if (!status.botId) return

@@ -75,14 +75,22 @@ const mapQuizToDraft = (quiz: {
     tags: [],
     coverUrl: '',
   },
-  questions: (quiz.questions || []).map((question) => ({
-    id: question.id,
-    text: question.text,
-    options: question.options.map((option, index) => ({ id: `${question.id}-${index}`, text: option })),
-    correctOptionId: `${question.id}-${question.correctIndex || 0}`,
-    timeLimitSec: 20,
-    difficulty: 'medium',
-  })),
+  questions: (quiz.questions || []).map((question) => {
+    const hasValidCorrectIndex =
+      typeof question.correctIndex === 'number' &&
+      question.correctIndex >= 0 &&
+      question.correctIndex < question.options.length
+
+    return {
+      id: question.id,
+      text: question.text,
+      options: question.options.map((option, index) => ({ id: `${question.id}-${index}`, text: option })),
+      correctOptionId: hasValidCorrectIndex ? `${question.id}-${question.correctIndex}` : '',
+      requiresCorrectOptionSelection: !hasValidCorrectIndex,
+      timeLimitSec: 20,
+      difficulty: 'medium',
+    }
+  }),
   status: 'draft',
   version: 1,
   updatedAt: new Date().toISOString(),
@@ -133,7 +141,13 @@ export const quizApi: QuizApi = {
   startGeneration: (payload: GenerateQuizDraftRequestDto) =>
     apiFetch<GenerateQuizJobDto>(`${QUIZZES_BASE}/ai-generate`, {
       method: 'POST',
-      body: JSON.stringify({ prompt: payload.topic, desiredQuestionCount: payload.questionCount }),
+      body: JSON.stringify({
+        prompt: payload.topic,
+        desiredQuestionCount: payload.questionCount,
+        difficulty: payload.difficulty,
+        language: payload.language,
+        format: payload.format,
+      }),
     }),
 
   getGenerationStatus: (jobId: string) => apiFetch<GenerateQuizJobDto>(`${QUIZZES_BASE}/ai-jobs/${encodeURIComponent(jobId)}`),
@@ -176,15 +190,16 @@ export const quizApi: QuizApi = {
         method: 'PATCH',
         body: JSON.stringify({
           title: payload.meta.title,
-          questions: payload.questions.map((question) => ({
-            id: question.id,
-            text: question.text,
-            options: question.options.map((option) => option.text),
-            correctIndex: Math.max(
-              0,
-              question.options.findIndex((option) => option.id === question.correctOptionId),
-            ),
-          })),
+          questions: payload.questions.map((question) => {
+            const correctIndex = question.options.findIndex((option) => option.id === question.correctOptionId)
+
+            return {
+              id: question.id,
+              text: question.text,
+              options: question.options.map((option) => option.text),
+              correctIndex: correctIndex >= 0 ? correctIndex : null,
+            }
+          }),
         }),
       },
     ).then((res) => mapQuizToDraft(res.quiz)),
