@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next'
 import type { SessionDto, UserDto } from '../../types/auth.types'
 import './profile.css'
 
+const DEFAULT_FISH_AVATAR_URL = 'https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f41f.svg'
+
 const planLabel = (plan?: string) => {
   if (!plan) return 'Не указан'
   if (plan === 'basic') return 'Базовый'
@@ -131,7 +133,14 @@ const Profile = () => {
         <article className="pageCard">
           <h1>{t('profile.title')}</h1>
           <div className="profileBasic">
-            {profile.avatarUrl ? <img src={profile.avatarUrl} alt={profile.displayName} className="profileAvatar" /> : <div className="profileAvatar fallback">{profile.displayName[0]}</div>}
+            <img
+              src={profile.avatarUrl?.trim() || DEFAULT_FISH_AVATAR_URL}
+              onError={(event) => {
+                event.currentTarget.src = DEFAULT_FISH_AVATAR_URL
+              }}
+              alt={`Аватар ${profile.displayName}`}
+              className="profileAvatar"
+            />
             <div>
               <div className="profileName">{profile.displayName}</div>
               <div>{profile.email}</div>

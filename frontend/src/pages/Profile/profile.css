@@ -31,15 +31,6 @@
   border: 1px solid var(--border);
   flex-shrink: 0;
 }
-
-.profileAvatar.fallback {
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--primary), var(--accent-pink));
-  color: #fff;
-  font-weight: 700;
-}
-
 .profileTitle { margin: 0; font-size: 22px; font-weight: 700; overflow-wrap: anywhere; }
 .profileMuted { color: var(--text-secondary); font-size: 14px; overflow-wrap: anywhere; }
 
