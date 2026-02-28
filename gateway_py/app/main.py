@@ -40,6 +40,52 @@ def _canonical_invite_path(invite_token: str) -> str:
     return f"/invite/{invite_token}"
 
 
+def _room_meta_key(pin: str) -> str:
+    return f"room:meta:{pin}"
+
+
+def _public_rooms_key() -> str:
+    return "rooms:public"
+
+
+def _save_room_meta(pin: str, meta: dict[str, Any]):
+    rdb.set(_room_meta_key(pin), json.dumps(meta))
+
+
+def _load_room_meta(pin: str) -> dict[str, Any]:
+    raw = rdb.get(_room_meta_key(pin))
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+
+def _store_public_room_pin(pin: str, is_public: bool):
+    raw = rdb.get(_public_rooms_key())
+    try:
+        pins = set(json.loads(raw) if raw else [])
+    except Exception:
+        pins = set()
+    if is_public:
+        pins.add(pin)
+    else:
+        pins.discard(pin)
+    rdb.set(_public_rooms_key(), json.dumps(sorted(pins)))
+
+
+def _list_public_room_pins() -> list[str]:
+    raw = rdb.get(_public_rooms_key())
+    if not raw:
+        return []
+    try:
+        pins = json.loads(raw)
+        return [str(pin) for pin in pins if pin]
+    except Exception:
+        return []
+
+
 def _room_event_to_dict(ev: Any) -> dict[str, Any]:
     try:
         return MessageToDict(ev, preserving_proto_field_name=True)
@@ -82,7 +128,7 @@ def _map_room_snapshot(room: Any) -> dict[str, Any]:
         }
         for p in room.players
     ]
-    return {
+    room_json = {
         "roomId": room.room_id.value,
         "pin": room.pin,
         "quizId": room.quiz_id.value if room.quiz_id else "",
@@ -94,11 +140,35 @@ def _map_room_snapshot(room: Any) -> dict[str, Any]:
         "updatedAt": _ts_to_iso8601(room.updated_at),
         "invitePath": room.invite_path or "",
     }
+    room_json.update(_load_room_meta(room.pin))
+    return room_json
 
 
 def _host_rooms(user_id: str):
     res = clients.game.ListRooms(game_pb2.ListRoomsRequest(owner_user_id=common_pb2.UserId(value=user_id), limit=50))
     return [_map_room_snapshot(room) for room in res.rooms]
+
+
+def _public_rooms() -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for pin in _list_public_room_pins():
+        meta = _load_room_meta(pin)
+        if not meta.get("isPublic"):
+            continue
+        out.append({
+            "roomId": meta.get("roomId", pin),
+            "pin": pin,
+            "quizId": meta.get("quizId", ""),
+            "title": meta.get("title", f"Public room {pin}"),
+            "state": meta.get("state", "lobby"),
+            "players": meta.get("players", []),
+            "playersCount": int(meta.get("playersCount", 0)),
+            "hostUserId": meta.get("hostUserId", ""),
+            "updatedAt": meta.get("updatedAt", datetime.now(timezone.utc).isoformat()),
+            "invitePath": meta.get("invitePath", ""),
+            **meta,
+        })
+    return out
 
 
 def _resolve_host_room(user_id: str, pin: str):
@@ -322,9 +392,13 @@ def me_sessions():
 def list_games(req: Request):
     uid = require_user(req)
     if not uid:
-        return []
+        return _public_rooms()
     try:
-        return _host_rooms(uid)
+        own_rooms = _host_rooms(uid)
+        merged: dict[str, dict[str, Any]] = {room["pin"]: room for room in own_rooms}
+        for room in _public_rooms():
+            merged.setdefault(room["pin"], room)
+        return list(merged.values())
     except grpc.RpcError as ex:
         c, b = map_grpc_err(ex, "list_games")
         return JSONResponse(b, status_code=c)
@@ -341,12 +415,32 @@ def create_game(req: Request, body: dict[str, Any]):
         c,b = map_grpc_err(ex, "create_room"); return JSONResponse(b,status_code=c)
     claims = SessionClaims(session_type="game", role="host", pin=x.pin, room_id=x.room_id.value, user_id=uid)
     invite_path = _canonical_invite_path(x.invite_token)
+    room_settings = body.get("settings") or {}
+    privacy = room_settings.get("privacy", "private")
+    metadata = {
+        "roomId": x.room_id.value,
+        "hostUserId": uid,
+        "quizId": body["quizId"],
+        "title": body.get("title") or f"Quiz {body['quizId']}",
+        "invitePath": invite_path,
+        "isPublic": privacy == "public",
+        "settings": {
+            "privacy": privacy,
+            "playerLimit": int(room_settings.get("playerLimit", 20)),
+            "timers": room_settings.get("timers") or {"lobbyTimerSec": 45, "questionTimerSec": 30, "answerRevealSec": 10},
+        },
+    }
+    _save_room_meta(x.pin, metadata)
+    _store_public_room_pin(x.pin, privacy == "public")
+
     out = JSONResponse({
         "pin": x.pin,
         "inviteToken": x.invite_token,
         "invitePath": invite_path,
         "inviteQrSvg": x.invite_qr_svg,
         "wsUrl": f"{settings.public_base_url}/ws",
+        "settings": metadata["settings"],
+        "isPublic": metadata["isPublic"],
     })
     set_auth(out, claims)
     return out
@@ -415,9 +509,12 @@ def state(pin: str, req: Request):
             return JSONResponse(b, status_code=c)
         if not room:
             return err(404, "not_found", "room not found")
+        room.update(_load_room_meta(pin))
         return room
     st = clients.game.GetRoomState(game_pb2.GetRoomStateRequest(room_id=common_pb2.RoomId(value=s.room_id)))
-    return {"pin": pin, "state": st.state, "players": [{"playerId": p.player_id.value, "name": p.display_name, "score": p.score} for p in st.players]}
+    room = {"pin": pin, "state": st.state, "players": [{"playerId": p.player_id.value, "name": p.display_name, "score": p.score} for p in st.players]}
+    room.update(_load_room_meta(pin))
+    return room
 
 
 def _host_action(req: Request, pin: str, action: str):

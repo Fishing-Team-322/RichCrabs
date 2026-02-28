@@ -9,10 +9,15 @@ class DummyRpcError(grpc.RpcError):
         return self._status
 
 
-def test_list_games_without_session_returns_empty_list(client):
+def test_list_games_without_session_returns_public_games_only(client, fake_rdb):
+    fake_rdb.set("rooms:public", "[\"123456\"]")
+    fake_rdb.set("room:meta:123456", "{\"isPublic\": true, \"quizId\": \"q1\", \"title\": \"Public room\", \"invitePath\": \"/invite/inv1\"}")
+
     response = client.get("/api/v1/games")
     assert response.status_code == 200
-    assert response.json() == []
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["pin"] == "123456"
 
 
 def test_list_games_with_host_session_returns_active_room(client, host_session_cookie):
@@ -27,7 +32,7 @@ def test_list_games_with_host_session_returns_active_room(client, host_session_c
 def test_create_game_requires_valid_session(client, csrf_headers):
     response = client.post(
         "/api/v1/games",
-        json={"ownerUserId": "u1", "quizId": "q1", "title": "T"},
+        json={"ownerUserId": "u1", "quizId": "q1", "title": "T", "settings": {"privacy": "public", "playerLimit": 24, "timers": {"lobbyTimerSec": 45, "questionTimerSec": 25, "answerRevealSec": 7}}},
         cookies=csrf_headers["cookies"],
         headers=csrf_headers["headers"],
     )
@@ -38,14 +43,17 @@ def test_create_game_happy_path(client, host_session_cookie, csrf_headers):
     cookies = {**host_session_cookie, **csrf_headers["cookies"]}
     response = client.post(
         "/api/v1/games",
-        json={"ownerUserId": "u1", "quizId": "q1", "title": "T"},
+        json={"ownerUserId": "u1", "quizId": "q1", "title": "T", "settings": {"privacy": "public", "playerLimit": 24, "timers": {"lobbyTimerSec": 45, "questionTimerSec": 25, "answerRevealSec": 7}}},
         cookies=cookies,
         headers=csrf_headers["headers"],
     )
     assert response.status_code == 200
     assert response.json()["pin"] == "123456"
     assert response.json()["invitePath"] == "/invite/inv1"
-    assert response.json()["inviteQrSvg"].startswith("<svg")
+    body = response.json()
+    assert body["inviteQrSvg"].startswith("<svg")
+    assert body["isPublic"] is True
+    assert body["settings"]["privacy"] == "public"
 
 
 

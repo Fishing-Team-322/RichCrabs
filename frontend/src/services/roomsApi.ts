@@ -20,6 +20,12 @@ type BackendRoomDto = {
   hostUserId: string
   updatedAt: string
   invitePath: string
+  isPublic?: boolean
+  settings?: {
+    playerLimit?: number
+    privacy?: 'public' | 'private'
+    timers?: { lobbyTimerSec?: number; questionTimerSec?: number; answerRevealSec?: number }
+  }
 }
 
 const toRoomStatus = (state: string): RoomDetailsDto['status'] => {
@@ -37,17 +43,17 @@ const mapBackendRoom = (payload: BackendRoomDto): RoomDetailsDto => ({
   inviteLink: payload.invitePath,
   status: toRoomStatus(payload.state),
   playersCount: payload.playersCount,
-  playerLimit: payload.playersCount,
+  playerLimit: payload.settings?.playerLimit ?? payload.playersCount,
   hostId: payload.hostUserId,
   updatedAt: payload.updatedAt,
   isHost: true,
   settings: {
-    playerLimit: payload.playersCount,
-    privacy: 'private',
+    playerLimit: payload.settings?.playerLimit ?? payload.playersCount,
+    privacy: payload.settings?.privacy ?? (payload.isPublic ? 'public' : 'private'),
     timers: {
-      lobbyTimerSec: 30,
-      questionTimerSec: 20,
-      answerRevealSec: 5,
+      lobbyTimerSec: payload.settings?.timers?.lobbyTimerSec ?? 30,
+      questionTimerSec: payload.settings?.timers?.questionTimerSec ?? 20,
+      answerRevealSec: payload.settings?.timers?.answerRevealSec ?? 5,
     },
   },
   players: payload.players.map((player, index) => ({
@@ -59,9 +65,9 @@ const mapBackendRoom = (payload: BackendRoomDto): RoomDetailsDto => ({
 
 export const roomsApi = {
   create: (payload: CreateRoomRequestDto) =>
-    apiFetch<{ pin: string; invitePath: string; wsUrl?: string }>(GAMES_BASE, {
+    apiFetch<{ pin: string; invitePath: string; wsUrl?: string; settings?: BackendRoomDto['settings']; isPublic?: boolean }>(GAMES_BASE, {
       method: 'POST',
-      body: JSON.stringify({ ownerUserId: payload.ownerUserId, quizId: payload.quizId, title: `Quiz ${payload.quizId}` }),
+      body: JSON.stringify({ ownerUserId: payload.ownerUserId, quizId: payload.quizId, title: `Quiz ${payload.quizId}`, settings: payload.settings }),
     }).then((res): RoomDetailsDto => ({
       ...mapBackendRoom({
         roomId: res.pin,
@@ -74,9 +80,21 @@ export const roomsApi = {
         hostUserId: payload.ownerUserId,
         updatedAt: new Date().toISOString(),
         invitePath: res.invitePath,
+        settings: res.settings ?? payload.settings,
+        isPublic: res.isPublic ?? payload.settings.privacy === 'public',
       }),
       wsUrl: res.wsUrl,
-      settings: payload.settings,
+      settings: res.settings
+        ? {
+            playerLimit: res.settings.playerLimit ?? payload.settings.playerLimit,
+            privacy: res.settings.privacy ?? payload.settings.privacy,
+            timers: {
+              lobbyTimerSec: res.settings.timers?.lobbyTimerSec ?? payload.settings.timers.lobbyTimerSec,
+              questionTimerSec: res.settings.timers?.questionTimerSec ?? payload.settings.timers.questionTimerSec,
+              answerRevealSec: res.settings.timers?.answerRevealSec ?? payload.settings.timers.answerRevealSec,
+            },
+          }
+        : payload.settings,
       playerLimit: payload.settings.playerLimit,
     })),
 
