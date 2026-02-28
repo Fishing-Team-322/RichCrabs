@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+proto = { path = "../proto" }
 chrono.workspace = true
 deadpool-redis = "0.18"
 sha2.workspace = true
@@ -18,3 +19,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 axum = "0.7"
 tonic = { version = "0.12" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
+tokio-stream = { version = "0.1", features = ["net"] }
