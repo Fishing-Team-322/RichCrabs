@@ -28,8 +28,7 @@ fn invite_path(invite_token: &str) -> String {
 }
 
 fn invite_qr_svg(path: &str) -> Result<String, String> {
-    let qr = QrCode::new(path)
-        .map_err(|e| format!("failed to generate invite QR code: {e}"))?;
+    let qr = QrCode::new(path).map_err(|e| format!("failed to generate invite QR code: {e}"))?;
 
     Ok(qr
         .render::<svg::Color>()
