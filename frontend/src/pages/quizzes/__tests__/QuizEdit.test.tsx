@@ -49,5 +49,6 @@ describe('QuizEdit', () => {
     expect(radios).toHaveLength(2)
     expect(radios.every((radio) => !(radio as HTMLInputElement).checked)).toBe(true)
     expect(screen.getByText('У вопроса не выбран правильный вариант. Выберите один из ответов.')).toBeInTheDocument()
+    expect(screen.getByText('У вопроса должно быть ровно 4 варианта ответа.')).toBeInTheDocument()
   })
 })

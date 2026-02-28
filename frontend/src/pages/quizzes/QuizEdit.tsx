@@ -11,6 +11,7 @@ import type {
 import './quizzes.css'
 
 const difficultyOptions: QuizDifficulty[] = ['easy', 'medium', 'hard']
+const QUIZ_OPTIONS_COUNT = 4
 
 const createOption = (): QuizEditorOptionDto => ({
   id: crypto.randomUUID(),
@@ -18,13 +19,13 @@ const createOption = (): QuizEditorOptionDto => ({
 })
 
 const createQuestion = (): QuizEditorQuestionDto => {
-  const firstOption = createOption()
-  const secondOption = createOption()
+  const options = Array.from({ length: QUIZ_OPTIONS_COUNT }, () => createOption())
+  const [firstOption] = options
 
   return {
     id: crypto.randomUUID(),
     text: '',
-    options: [firstOption, secondOption],
+    options,
     correctOptionId: firstOption.id,
     requiresCorrectOptionSelection: false,
     timeLimitSec: 30,
@@ -279,6 +280,9 @@ const QuizEdit = () => {
                 !question.options.some((option) => option.id === question.correctOptionId)) && (
                 <div className="quizError">У вопроса не выбран правильный вариант. Выберите один из ответов.</div>
               )}
+              {question.options.length !== QUIZ_OPTIONS_COUNT && (
+                <div className="quizError">У вопроса должно быть ровно {QUIZ_OPTIONS_COUNT} варианта ответа.</div>
+              )}
 
               {question.options.map((option) => (
                 <div className="quizOptionRow" key={option.id}>
@@ -323,7 +327,7 @@ const QuizEdit = () => {
                       patchDraft((previous) => ({
                         ...previous,
                         questions: previous.questions.map((item) => {
-                          if (item.id !== question.id || item.options.length <= 2) return item
+                          if (item.id !== question.id || item.options.length <= QUIZ_OPTIONS_COUNT) return item
 
                           const nextOptions = item.options.filter((entry) => entry.id !== option.id)
                           const removedSelectedOption = item.correctOptionId === option.id
@@ -345,11 +349,14 @@ const QuizEdit = () => {
 
               <button
                 className="quizButton"
+                disabled={question.options.length >= QUIZ_OPTIONS_COUNT}
                 onClick={() =>
                   patchDraft((previous) => ({
                     ...previous,
                     questions: previous.questions.map((item) =>
-                      item.id === question.id ? { ...item, options: [...item.options, createOption()] } : item,
+                      item.id === question.id && item.options.length < QUIZ_OPTIONS_COUNT
+                        ? { ...item, options: [...item.options, createOption()] }
+                        : item,
                     ),
                   }))
                 }
