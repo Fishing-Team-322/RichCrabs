@@ -123,6 +123,7 @@ message StartAiQuizJobResponse {
 
 message GetAiQuizJobRequest {
   string job_id = 1;
+  UserId requested_by = 2;
 }
 
 message GetAiQuizJobResponse {

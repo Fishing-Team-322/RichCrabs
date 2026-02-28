@@ -25,6 +25,7 @@ struct QuizCoreCreateRoomResult final {
   std::string room_id;
   std::string pin;
   std::string invite_token;
+  std::string invite_path;
 };
 
 struct QuizCoreJoinRoomResult final {
@@ -286,6 +287,7 @@ public:
                                                       const std::optional<uint32_t>& desiredQuestionCount,
                                                       const std::string& requestId = "") = 0;
   virtual QuizCoreGetAiQuizJobResult getAiQuizJob(const std::string& jobId,
+                                                  const std::string& requestedByUserId,
                                                   const std::string& requestId = "") = 0;
   virtual bool pingHealth(const std::string& requestId = "") = 0;
 };
@@ -392,6 +394,7 @@ public:
                                               const std::optional<uint32_t>& desiredQuestionCount,
                                               const std::string& requestId = "") override;
   QuizCoreGetAiQuizJobResult getAiQuizJob(const std::string& jobId,
+                                          const std::string& requestedByUserId,
                                           const std::string& requestId = "") override;
   bool pingHealth(const std::string& requestId = "") override;
 

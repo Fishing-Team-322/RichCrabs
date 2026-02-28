@@ -58,7 +58,7 @@ struct TelegramRoomSnapshot final {
   std::string room_id;
   std::string pin;
   std::string invite_token;
-  std::string invite_url;
+  std::string invite_path;
 };
 
 std::string quoteRedisArg(const std::string& arg) {
@@ -119,7 +119,7 @@ bool saveLastRoom(const Config& conf, const std::string& botId, const TelegramRo
       " room_id " + quoteRedisArg(room.room_id) +
       " pin " + quoteRedisArg(room.pin) +
       " invite_token " + quoteRedisArg(room.invite_token) +
-      " invite_url " + quoteRedisArg(room.invite_url);
+      " invite_path " + quoteRedisArg(room.invite_path);
   return RedisRunRaw(conf.redis_url, command).has_value();
 }
 
@@ -128,15 +128,15 @@ std::optional<TelegramRoomSnapshot> getLastRoom(const Config& conf, const std::s
   const auto roomId = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " room_id");
   const auto pin = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " pin");
   const auto inviteToken = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " invite_token");
-  const auto inviteUrl = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " invite_url");
-  if (!roomId || !pin || !inviteToken || !inviteUrl || roomId->empty() || pin->empty()) {
+  const auto invitePath = RedisRunRaw(conf.redis_url, "HGET " + quoteRedisArg(key) + " invite_path");
+  if (!roomId || !pin || !inviteToken || !invitePath || roomId->empty() || pin->empty()) {
     return std::nullopt;
   }
   return TelegramRoomSnapshot{
       .room_id = *roomId,
       .pin = *pin,
       .invite_token = *inviteToken,
-      .invite_url = *inviteUrl,
+      .invite_path = *invitePath,
   };
 }
 
@@ -195,11 +195,11 @@ std::optional<TelegramCommand> parseTelegramCommand(const std::string& text) {
   return out;
 }
 
-std::string buildCreateGameMessage(const TelegramRoomSnapshot& room) {
+std::string buildCreateGameMessage(const TelegramRoomSnapshot& room, const std::string& publicBaseUrl) {
   std::ostringstream out;
   out << "✅ Игра создана\n";
   out << "PIN: " << room.pin << "\n";
-  out << "Invite: " << room.invite_url;
+  out << "Invite: " << publicBaseUrl + room.invite_path;
   return out.str();
 }
 
@@ -207,8 +207,8 @@ std::string buildPinMessage(const TelegramRoomSnapshot& room) {
   return "PIN последней комнаты: " + room.pin;
 }
 
-std::string buildInviteMessage(const TelegramRoomSnapshot& room) {
-  return "Invite последней комнаты: " + room.invite_url;
+std::string buildInviteMessage(const TelegramRoomSnapshot& room, const std::string& publicBaseUrl) {
+  return "Invite последней комнаты: " + publicBaseUrl + room.invite_path;
 }
 
 void sendTelegramReply(const std::shared_ptr<controllers::TelegramWebhookClient>& webhookClient,
@@ -427,7 +427,7 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
                 .room_id = room->room_id,
                 .pin = room->pin,
                 .invite_token = room->invite_token,
-                .invite_url = conf.public_base_url + "/invite/" + room->invite_token,
+                .invite_path = room->invite_path,
             };
             if (!saveLastRoom(conf, botId, snapshot)) {
               spdlog::warn("telegram_room_snapshot_persist_failed request_id={} bot_id={}", requestId, botId);
@@ -435,13 +435,13 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
             commandResult["status"] = "ok";
             commandResult["message"] = "room_created";
             commandResult["pin"] = snapshot.pin;
-            commandResult["inviteUrl"] = snapshot.invite_url;
+            commandResult["inviteUrl"] = conf.public_base_url + snapshot.invite_path;  // invite_path domain-agnostic by design
 
             sendTelegramReply(webhookClient,
                               *binding,
                               chatId,
                               messageId,
-                              buildCreateGameMessage(snapshot),
+                              buildCreateGameMessage(snapshot, conf.public_base_url),
                               requestId,
                               botId);
             spdlog::info("telegram_create_game_ok request_id={} bot_id={} pin={}", requestId, botId, room->pin);
@@ -469,12 +469,12 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
           auto lastRoom = getLastRoom(conf, botId);
           if (lastRoom) {
             commandResult["status"] = "ok";
-            commandResult["inviteUrl"] = lastRoom->invite_url;
+            commandResult["inviteUrl"] = conf.public_base_url + lastRoom->invite_path;  // invite_path domain-agnostic by design
             sendTelegramReply(webhookClient,
                               *binding,
                               chatId,
                               messageId,
-                              buildInviteMessage(*lastRoom),
+                              buildInviteMessage(*lastRoom, conf.public_base_url),
                               requestId,
                               botId);
           } else {

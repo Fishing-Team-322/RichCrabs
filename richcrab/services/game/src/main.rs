@@ -6,7 +6,87 @@ use std::{env, net::SocketAddr, time::Duration};
 
 use service::{GameServiceImpl, HealthServiceImpl};
 use shared::redis_client::RedisClient;
+use tokio::time::sleep;
 use tonic::transport::Server;
+
+const UPSTREAM_CONNECT_ATTEMPTS: usize = 30;
+const UPSTREAM_CONNECT_DELAY: Duration = Duration::from_millis(500);
+
+async fn connect_entitlements_with_retry(
+    entitlements_addr: &str,
+) -> anyhow::Result<
+    proto::richcrab::v1::entitlements_service_client::EntitlementsServiceClient<
+        tonic::transport::Channel,
+    >,
+> {
+    let endpoint = format!("http://{entitlements_addr}");
+    let mut last_error = None;
+
+    for attempt in 1..=UPSTREAM_CONNECT_ATTEMPTS {
+        match proto::richcrab::v1::entitlements_service_client::EntitlementsServiceClient::connect(
+            endpoint.clone(),
+        )
+        .await
+        {
+            Ok(client) => return Ok(client),
+            Err(error) => {
+                last_error = Some(error);
+                tracing::warn!(
+                    attempt,
+                    max_attempts = UPSTREAM_CONNECT_ATTEMPTS,
+                    address = %entitlements_addr,
+                    "failed to connect to entitlements, retrying"
+                );
+                sleep(UPSTREAM_CONNECT_DELAY).await;
+            }
+        }
+    }
+
+    Err(anyhow::anyhow!(
+        "failed to connect to entitlements at {} after {} attempts: {}",
+        entitlements_addr,
+        UPSTREAM_CONNECT_ATTEMPTS,
+        last_error
+            .map(|e| e.to_string())
+            .unwrap_or_else(|| "unknown error".to_string())
+    ))
+}
+
+async fn connect_quiz_with_retry(
+    quiz_addr: &str,
+) -> anyhow::Result<
+    proto::richcrab::v1::quiz_service_client::QuizServiceClient<tonic::transport::Channel>,
+> {
+    let endpoint = format!("http://{quiz_addr}");
+    let mut last_error = None;
+
+    for attempt in 1..=UPSTREAM_CONNECT_ATTEMPTS {
+        match proto::richcrab::v1::quiz_service_client::QuizServiceClient::connect(endpoint.clone())
+            .await
+        {
+            Ok(client) => return Ok(client),
+            Err(error) => {
+                last_error = Some(error);
+                tracing::warn!(
+                    attempt,
+                    max_attempts = UPSTREAM_CONNECT_ATTEMPTS,
+                    address = %quiz_addr,
+                    "failed to connect to quiz, retrying"
+                );
+                sleep(UPSTREAM_CONNECT_DELAY).await;
+            }
+        }
+    }
+
+    Err(anyhow::anyhow!(
+        "failed to connect to quiz at {} after {} attempts: {}",
+        quiz_addr,
+        UPSTREAM_CONNECT_ATTEMPTS,
+        last_error
+            .map(|e| e.to_string())
+            .unwrap_or_else(|| "unknown error".to_string())
+    ))
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -25,15 +105,8 @@ async fn main() -> anyhow::Result<()> {
         2,
         Duration::from_millis(50),
     )?;
-    let entitlements =
-        proto::richcrab::v1::entitlements_service_client::EntitlementsServiceClient::connect(
-            format!("http://{entitlements_addr}"),
-        )
-        .await?;
-    let quiz = proto::richcrab::v1::quiz_service_client::QuizServiceClient::connect(format!(
-        "http://{quiz_addr}"
-    ))
-    .await?;
+    let entitlements = connect_entitlements_with_retry(&entitlements_addr).await?;
+    let quiz = connect_quiz_with_retry(&quiz_addr).await?;
     let game_service = GameServiceImpl::new(redis, entitlements, quiz);
     let health_ping_service = HealthServiceImpl;
 

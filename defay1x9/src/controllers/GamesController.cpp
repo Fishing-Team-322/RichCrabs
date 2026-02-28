@@ -121,6 +121,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         }
 
         security::SessionClaims claims;
+        claims.session_type = "game";
         claims.role = "host";
         claims.pin = out->pin;
         claims.room_id = out->room_id;
@@ -132,7 +133,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         Json::Value responseBody;
         responseBody["pin"] = out->pin;
         responseBody["inviteToken"] = out->invite_token;
-        responseBody["inviteUrl"] = conf.public_base_url + "/invite/" + out->invite_token;
+        responseBody["inviteUrl"] = conf.public_base_url + out->invite_path;  // invite_path domain-agnostic by design
         responseBody["wsUrl"] = conf.public_base_url + "/ws";
         spdlog::info("create_game_ok request_id={} pin={} room_id={} player_id=-", requestId, out->pin, out->room_id);
 
@@ -226,6 +227,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         }
 
         security::SessionClaims claims;
+        claims.session_type = "game";
         claims.role = "player";
         claims.pin = pin;
         claims.room_id = out->room_id;
@@ -298,6 +300,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         }
 
         security::SessionClaims claims;
+        claims.session_type = "game";
         claims.role = "player";
         claims.pin = out->room_id;
         claims.room_id = out->room_id;
@@ -347,13 +350,11 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
                         std::function<void(const drogon::HttpResponsePtr&)>&& cb,
                         std::string pin) {
         const auto requestId = requestIdFromRequest(req);
+        std::string hostUserId;
+        if (!RequireUserId(req, conf, cb, hostUserId)) return;
         auto session = security::VerifySessionFromRequest(req, conf.session);
         if (!session) {
           cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
-          return;
-        }
-        if (session->role != "host") {
-          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "only host can start game"));
           return;
         }
         if (!RequireCsrf(req, conf, cb)) return;
@@ -364,7 +365,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         if (!ValidateSessionPin(*session, pin, cb)) return;
 
         spdlog::info("start_game request_id={} pin={} room_id={} player_id=-", requestId, session->pin, session->room_id);
-        const auto result = quizCore.startGame(session->room_id, session->user_id, requestId);
+        const auto result = quizCore.startGame(session->room_id, hostUserId, requestId);
         if (result.status != QuizCoreRpcStatus::kOk) {
           cb(api::jsonErrorResponse(api::mapRpcError(result.status, "start_game", result.error_code, result.error_message)));
           return;
@@ -390,13 +391,11 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
       [&quizCore, conf](const drogon::HttpRequestPtr& req,
                         std::function<void(const drogon::HttpResponsePtr&)>&& cb,
                         std::string pin) {
+        std::string hostUserId;
+        if (!RequireUserId(req, conf, cb, hostUserId)) return;
         auto session = security::VerifySessionFromRequest(req, conf.session);
         if (!session) {
           cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
-          return;
-        }
-        if (session->role != "host") {
-          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "only host can pause game"));
           return;
         }
         if (session->room_id.empty()) {
@@ -407,7 +406,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         if (!RequireCsrf(req, conf, cb)) return;
 
         const auto requestId = requestIdFromRequest(req);
-        const auto result = quizCore.pauseGame(session->room_id, session->user_id, requestId);
+        const auto result = quizCore.pauseGame(session->room_id, hostUserId, requestId);
         if (result.status != QuizCoreRpcStatus::kOk || !result.paused) {
           cb(api::jsonErrorResponse(api::mapRpcError(result.status, "pause_game")));
           return;
@@ -424,13 +423,11 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
       [&quizCore, conf](const drogon::HttpRequestPtr& req,
                         std::function<void(const drogon::HttpResponsePtr&)>&& cb,
                         std::string pin) {
+        std::string hostUserId;
+        if (!RequireUserId(req, conf, cb, hostUserId)) return;
         auto session = security::VerifySessionFromRequest(req, conf.session);
         if (!session) {
           cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
-          return;
-        }
-        if (session->role != "host") {
-          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "only host can resume game"));
           return;
         }
         if (session->room_id.empty()) {
@@ -441,7 +438,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         if (!RequireCsrf(req, conf, cb)) return;
 
         const auto requestId = requestIdFromRequest(req);
-        const auto result = quizCore.resumeGame(session->room_id, session->user_id, requestId);
+        const auto result = quizCore.resumeGame(session->room_id, hostUserId, requestId);
         if (result.status != QuizCoreRpcStatus::kOk || !result.resumed) {
           cb(api::jsonErrorResponse(api::mapRpcError(result.status, "resume_game")));
           return;
@@ -458,13 +455,11 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
       [&quizCore, conf](const drogon::HttpRequestPtr& req,
                         std::function<void(const drogon::HttpResponsePtr&)>&& cb,
                         std::string pin) {
+        std::string hostUserId;
+        if (!RequireUserId(req, conf, cb, hostUserId)) return;
         auto session = security::VerifySessionFromRequest(req, conf.session);
         if (!session) {
           cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
-          return;
-        }
-        if (session->role != "host") {
-          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "only host can move to next question"));
           return;
         }
         if (session->room_id.empty()) {
@@ -475,7 +470,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         if (!RequireCsrf(req, conf, cb)) return;
 
         const auto requestId = requestIdFromRequest(req);
-        const auto result = quizCore.nextQuestion(session->room_id, session->user_id, requestId);
+        const auto result = quizCore.nextQuestion(session->room_id, hostUserId, requestId);
         if (result.status != QuizCoreRpcStatus::kOk || !result.advanced) {
           cb(api::jsonErrorResponse(api::mapRpcError(result.status, "next_question")));
           return;
@@ -569,17 +564,15 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
       [&quizCore, conf](const drogon::HttpRequestPtr& req,
                         std::function<void(const drogon::HttpResponsePtr&)>&& cb,
                         std::string pin) {
+        std::string hostUserId;
+        if (!RequireUserId(req, conf, cb, hostUserId)) return;
         auto session = security::VerifySessionFromRequest(req, conf.session);
         if (!session) {
           cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "session cookie is missing or invalid"));
           return;
         }
-        if (session->role != "host") {
-          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "only host can kick player"));
-          return;
-        }
-        if (session->room_id.empty() || session->user_id.empty()) {
-          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "room_id or user_id is not present in session"));
+        if (session->room_id.empty()) {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "room_id is not present in session"));
           return;
         }
         if (!ValidateSessionPin(*session, pin, cb)) return;
@@ -600,7 +593,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         }
 
         const auto requestId = requestIdFromRequest(req);
-        auto result = quizCore.kickPlayer(session->room_id, session->user_id, *playerId, requestId);
+        auto result = quizCore.kickPlayer(session->room_id, hostUserId, *playerId, requestId);
         if (result.status != QuizCoreRpcStatus::kOk) {
           cb(api::jsonErrorResponse(api::mapRpcError(result.status, "kick_player")));
           return;

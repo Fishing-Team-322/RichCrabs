@@ -81,7 +81,7 @@ const HomePage: React.FC = () => {
           <Badge tone="neutral">{t('home.badge')}</Badge>
           <h1 className="homeTitle">
             {isAuthenticated
-              ? t('home.titleAuth', { name: profile?.name ?? 'player' })
+              ? t('home.titleAuth', { name: profile?.displayName ?? 'player' })
               : t('home.titleGuest')}
           </h1>
           <p className="homeMuted heroSubtitle">{t('home.subtitle')}</p>

@@ -5,12 +5,14 @@ import { Skeleton } from '../../components/ui'
 import { useNotifications } from '../../app/providers/NotificationProvider'
 import { quizApi } from '../../services/quizApi'
 import { roomsApi } from '../../services/roomsApi'
+import useAuth from '../../hooks/useAuth'
 import { validateCreateRoom, type CreateRoomFormData } from '../../shared/validation/formSchemas'
 import type { QuizListItemDto } from '../../types/quiz.types'
 import type { CreateRoomRequestDto, RoomDetailsDto, RoomVisibility } from '../../types/room.types'
 import '../rooms/rooms.css'
 
 const CreateRoom = () => {
+  const { profile } = useAuth()
   const notifications = useNotifications()
   const [quizzes, setQuizzes] = useState<QuizListItemDto[]>([])
   const [loading, setLoading] = useState(false)
@@ -75,7 +77,12 @@ const CreateRoom = () => {
     setSaving(true)
     setError('')
     try {
+      if (!profile?.id) {
+        throw new Error('Сессия хоста не найдена. Войдите заново.')
+      }
+
       const payload: CreateRoomRequestDto = {
+        ownerUserId: profile.id,
         quizId: form.quizId,
         settings: {
           playerLimit: form.playerLimit,

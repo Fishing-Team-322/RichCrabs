@@ -38,9 +38,8 @@ Json::Value todoDetails(const std::string& todo, const std::string& sourceError)
 
 void setAuthSession(const StoredUser& user, const Config& conf, const drogon::HttpResponsePtr& response) {
   security::SessionClaims claims;
+  claims.session_type = "auth";
   claims.role = "host";
-  claims.pin = "AUTH";
-  claims.room_id = "AUTH";
   claims.user_id = user.id;
 
   const std::string sessionToken = security::IssueSessionToken(claims, conf.session.ttl_seconds);
@@ -185,6 +184,17 @@ void RegisterAuthRoutes(const Config& conf) {
       "/api/v1/auth/logout",
       [conf](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
         if (!RequireCsrf(req, conf, cb)) return;
+
+        std::string storageError;
+        const auto session = security::VerifySessionFromRequest(req, conf.session);
+        const std::string userId = session ? session->user_id : "";
+        if (!Logout(conf, userId, storageError)) {
+          cb(api::jsonErrorResponse(503,
+                                    api::ErrorCode::kGrpcUnavailable,
+                                    "auth storage unavailable",
+                                    todoDetails("logout in auth service", storageError)));
+          return;
+        }
 
         auto response = drogon::HttpResponse::newHttpResponse();
         response->setStatusCode(drogon::k204NoContent);

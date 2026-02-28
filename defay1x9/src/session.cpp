@@ -101,6 +101,7 @@ std::string IssueSessionToken(const SessionClaims& c, int ttl_seconds) {
   claims.exp = unixNow() + ttl_seconds;
 
   Json::Value payload;
+  if (!claims.session_type.empty()) payload["session_type"] = claims.session_type;
   payload["role"] = claims.role;
   payload["pin"] = claims.pin;
   payload["room_id"] = claims.room_id;
@@ -138,6 +139,7 @@ std::optional<SessionClaims> VerifySessionToken(const std::string& token) {
   if (!Json::parseFromStream(rb, iss, &payload, &errs)) return std::nullopt;
 
   SessionClaims claims;
+  claims.session_type = payload.get("session_type", "").asString();
   claims.role = payload.get("role", "").asString();
   claims.pin = payload.get("pin", "").asString();
   claims.room_id = payload.get("room_id", "").asString();
@@ -145,9 +147,43 @@ std::optional<SessionClaims> VerifySessionToken(const std::string& token) {
   claims.user_id = payload.get("user_id", "").asString();
   claims.exp = payload.get("exp", 0).asInt64();
 
-  if (claims.role.empty() || claims.pin.empty() || claims.room_id.empty() || claims.exp <= 0) {
+  if (claims.exp <= 0 || claims.role.empty()) {
     return std::nullopt;
   }
+
+  enum class SessionType { kAuth, kGame };
+  std::optional<SessionType> sessionType;
+  if (claims.session_type == "auth") {
+    sessionType = SessionType::kAuth;
+  } else if (claims.session_type == "game" || claims.session_type.empty()) {
+    sessionType = SessionType::kGame;
+  } else {
+    return std::nullopt;
+  }
+
+  if (!claims.session_type.empty()) {
+    if (*sessionType == SessionType::kAuth) {
+      if (claims.user_id.empty()) return std::nullopt;
+    } else {
+      if (claims.pin.empty() || claims.room_id.empty()) return std::nullopt;
+    }
+  } else {
+    const bool looksLikeAuthSession = !claims.user_id.empty() && claims.pin.empty() && claims.room_id.empty();
+    if (looksLikeAuthSession) {
+      sessionType = SessionType::kAuth;
+    } else {
+      if (claims.pin.empty() || claims.room_id.empty()) return std::nullopt;
+      sessionType = SessionType::kGame;
+    }
+  }
+
+  if (*sessionType == SessionType::kAuth && claims.user_id.empty()) {
+    return std::nullopt;
+  }
+  if (*sessionType == SessionType::kGame && (claims.pin.empty() || claims.room_id.empty())) {
+    return std::nullopt;
+  }
+
   if (unixNow() >= claims.exp) return std::nullopt;
 
   return claims;

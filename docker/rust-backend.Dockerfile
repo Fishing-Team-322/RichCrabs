@@ -17,7 +17,8 @@ RUN cargo build --release \
     -p join \
     -p quiz \
     -p bot \
-    -p bot_ingress
+    -p bot_ingress \
+    -p auth
 
 FROM debian:bookworm-slim AS runtime
 
@@ -35,3 +36,4 @@ COPY --from=builder /app/richcrab/target/release/join /usr/local/bin/join
 COPY --from=builder /app/richcrab/target/release/quiz /usr/local/bin/quiz
 COPY --from=builder /app/richcrab/target/release/bot /usr/local/bin/bot
 COPY --from=builder /app/richcrab/target/release/bot_ingress /usr/local/bin/bot_ingress
+COPY --from=builder /app/richcrab/target/release/auth /usr/local/bin/auth

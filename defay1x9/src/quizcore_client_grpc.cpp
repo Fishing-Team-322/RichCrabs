@@ -303,6 +303,7 @@ std::optional<QuizCoreCreateRoomResult> QuizCoreClientGrpc::createRoom(const std
   out.room_id = resp.room_id().value();
   out.pin = resp.pin();
   out.invite_token = resp.invite_token();
+  out.invite_path = resp.invite_path();
   return out;
 }
 
@@ -906,6 +907,7 @@ QuizCoreStartAiQuizJobResult QuizCoreClientGrpc::startAiQuizJob(
 }
 
 QuizCoreGetAiQuizJobResult QuizCoreClientGrpc::getAiQuizJob(const std::string& jobId,
+                                                            const std::string& requestedByUserId,
                                                             const std::string& requestId) {
   grpc::ClientContext ctx;
   attachRequestId(ctx, requestId);
@@ -914,6 +916,7 @@ QuizCoreGetAiQuizJobResult QuizCoreClientGrpc::getAiQuizJob(const std::string& j
 
   GetAiQuizJobRequest req;
   req.set_job_id(jobId);
+  req.mutable_requested_by()->set_value(requestedByUserId);
 
   GetAiQuizJobResponse resp;
   const auto status = impl_->quiz->GetAiQuizJob(&ctx, req, &resp);

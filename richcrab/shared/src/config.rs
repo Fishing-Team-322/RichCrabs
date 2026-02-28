@@ -10,6 +10,7 @@ pub const SERVICE_ADDR_QUIZ: &str = "SERVICE_ADDR_QUIZ";
 pub const SERVICE_ADDR_ENTITLEMENTS: &str = "SERVICE_ADDR_ENTITLEMENTS";
 pub const SERVICE_ADDR_BOT: &str = "SERVICE_ADDR_BOT";
 pub const SERVICE_ADDR_BOT_INGRESS: &str = "SERVICE_ADDR_BOT_INGRESS";
+pub const SERVICE_ADDR_AUTH: &str = "SERVICE_ADDR_AUTH";
 pub const LOG_LEVEL: &str = "LOG_LEVEL";
 
 #[derive(Debug, Clone)]
@@ -24,6 +25,7 @@ pub struct AppConfig {
     pub service_addr_entitlements: String,
     pub service_addr_bot: String,
     pub service_addr_bot_ingress: String,
+    pub service_addr_auth: String,
     pub log_level: String,
 }
 
@@ -40,6 +42,7 @@ impl AppConfig {
             service_addr_entitlements: env::var(SERVICE_ADDR_ENTITLEMENTS)?,
             service_addr_bot: env::var(SERVICE_ADDR_BOT)?,
             service_addr_bot_ingress: env::var(SERVICE_ADDR_BOT_INGRESS)?,
+            service_addr_auth: env::var(SERVICE_ADDR_AUTH)?,
             log_level: env::var(LOG_LEVEL)?,
         })
     }

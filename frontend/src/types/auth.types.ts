@@ -1,6 +1,6 @@
 export interface UserDto {
   id: string
-  name: string
+  displayName: string
   email: string
   avatarUrl?: string
   timezone?: string
@@ -14,7 +14,7 @@ export interface UserDto {
 }
 
 export interface UpdateProfileDto {
-  name?: string
+  displayName?: string
   avatarUrl?: string
   timezone?: string
   locale?: string
@@ -34,15 +34,8 @@ export interface SessionDto {
   current?: boolean
 }
 
-export interface AuthTokensDto {
-  accessToken: string
-  refreshToken?: string
-}
-
 export interface AuthResponseDto {
-  token?: string
-  accessToken?: string
-  refreshToken?: string
+  csrfToken?: string
   gameId?: string
   user: UserDto
 }
@@ -53,11 +46,5 @@ export interface LoginRequestDto {
 }
 
 export interface RegisterRequestDto extends LoginRequestDto {
-  name: string
-}
-
-export interface RefreshResponseDto {
-  token?: string
-  accessToken?: string
-  refreshToken?: string
+  displayName: string
 }

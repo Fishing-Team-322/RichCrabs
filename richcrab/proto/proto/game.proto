@@ -8,6 +8,7 @@ import "google/protobuf/timestamp.proto";
 
 service GameService {
   rpc CreateRoom(CreateRoomRequest) returns (CreateRoomResponse);
+  rpc RegenerateInvite(RegenerateInviteRequest) returns (RegenerateInviteResponse);
   rpc JoinRoom(JoinRoomRequest) returns (JoinRoomResponse);
   rpc LeaveRoom(LeaveRoomRequest) returns (LeaveRoomResponse);
   rpc KickPlayer(KickPlayerRequest) returns (KickPlayerResponse);
@@ -18,6 +19,18 @@ service GameService {
   rpc SubmitAnswer(SubmitAnswerRequest) returns (SubmitAnswerResponse);
   rpc SubscribeRoomEvents(SubscribeRoomEventsRequest) returns (stream RoomEvent);
   rpc GetRoomState(GetRoomStateRequest) returns (GetRoomStateResponse);
+}
+
+message RegenerateInviteRequest {
+  RoomId room_id = 1;
+  UserId requested_by = 2;
+}
+
+message RegenerateInviteResponse {
+  string invite_token = 1;
+  string invite_path = 2;
+  string invite_qr_svg = 3;
+  optional Error error = 4;
 }
 
 message CreateRoomRequest {
@@ -32,6 +45,8 @@ message CreateRoomResponse {
   string invite_token = 3;
   google.protobuf.Timestamp created_at = 4;
   optional Error error = 5;
+  string invite_path = 6;
+  string invite_qr_svg = 7;
 }
 
 message JoinRoomRequest {
