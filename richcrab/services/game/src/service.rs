@@ -27,9 +27,8 @@ fn invite_path(invite_token: &str) -> String {
     format!("/join?inviteToken={invite_token}")
 }
 
-fn invite_qr_svg(path: &str) -> Result<String, Status> {
-    let qr = QrCode::new(path)
-        .map_err(|e| Status::internal(format!("failed to generate invite QR code: {e}")))?;
+fn invite_qr_svg(path: &str) -> Result<String, String> {
+    let qr = QrCode::new(path).map_err(|e| format!("failed to generate invite QR code: {e}"))?;
 
     Ok(qr
         .render::<svg::Color>()
@@ -245,7 +244,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         self.report_usage(&owner_id, "CREATE_ROOM", 1).await?;
 
         let invite_path = invite_path(&invite_token);
-        let invite_qr_svg = invite_qr_svg(&invite_path)?;
+        let invite_qr_svg = invite_qr_svg(&invite_path).map_err(Status::internal)?;
 
         Ok(Response::new(proto::richcrab::v1::CreateRoomResponse {
             room_id: Some(proto::richcrab::v1::RoomId { value: room_id }),
@@ -324,7 +323,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         }
 
         let invite_path = invite_path(&invite_token);
-        let invite_qr_svg = invite_qr_svg(&invite_path)?;
+        let invite_qr_svg = invite_qr_svg(&invite_path).map_err(Status::internal)?;
 
         Ok(Response::new(
             proto::richcrab::v1::RegenerateInviteResponse {
