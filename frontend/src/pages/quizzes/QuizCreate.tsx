@@ -4,7 +4,7 @@ import { routes } from '../../app/router/routeMap'
 import { Progress } from '../../components/ui'
 import { useNotifications } from '../../app/providers/NotificationProvider'
 import { quizApi } from '../../services/quizApi'
-import { validateQuizCreate, type QuizCreateFormData } from '../../shared/validation/formSchemas'
+import { QUIZ_QUESTION_COUNT_MAX, validateQuizCreate, type QuizCreateFormData } from '../../shared/validation/formSchemas'
 import type { GenerateQuizDraftRequestDto, QuizDifficulty, QuizGenerationStatus, QuizQuestionFormat } from '../../types/quiz.types'
 import './quizzes.css'
 
@@ -121,7 +121,7 @@ const QuizCreate = () => {
               </select>
             </label>
             <label>Количество вопросов
-              <input className={`quizInput ${formErrors.questionCount ? 'error' : ''}`} type="number" value={form.questionCount} onChange={(event) => setForm((prev) => ({ ...prev, questionCount: Number(event.target.value) || 0 }))} />
+              <input className={`quizInput ${formErrors.questionCount ? 'error' : ''}`} type="number" min={1} max={QUIZ_QUESTION_COUNT_MAX} value={form.questionCount} onChange={(event) => setForm((prev) => ({ ...prev, questionCount: Number(event.target.value) || 0 }))} />
               {formErrors.questionCount && <span className="ui-help">{formErrors.questionCount}</span>}
             </label>
             <label>Язык

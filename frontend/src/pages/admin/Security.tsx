@@ -68,7 +68,7 @@ const Security = ({ onStatus }: SecurityProps) => {
         <div className="topbarLeft"><div className="pageTitle"><div className="h1">Admin Security</div><div className="h2">Abuse monitor & security events</div></div></div>
 
         <div className="topbarRight">
-          <div className="toggle"><input id="demoMode" type="checkbox" checked={demoMode} onChange={(event) => setDemoMode(event.target.checked)} /><label htmlFor="demoMode">Demo</label></div>
+          <div className="toggle"><input id="demoMode" type="checkbox" checked={demoMode} onChange={(event) => setDemoMode(event.target.checked)} /><label htmlFor="demoMode">Enable</label></div>
           <div className="toggle"><input id="autoRefreshSec" type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} /><label htmlFor="autoRefreshSec">Auto</label></div>
           <div className="select compact"><select value={pollMs} onChange={(event) => setPollMs(parseInt(event.target.value, 10))}><option value={1000}>1s</option><option value={2000}>2s</option><option value={5000}>5s</option></select><IconChevron /></div>
           <button className="btn" onClick={() => void refresh()}><IconRefresh /> Refresh</button>

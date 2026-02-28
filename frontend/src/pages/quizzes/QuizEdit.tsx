@@ -26,6 +26,7 @@ const createQuestion = (): QuizEditorQuestionDto => {
     text: '',
     options: [firstOption, secondOption],
     correctOptionId: firstOption.id,
+    requiresCorrectOptionSelection: false,
     timeLimitSec: 30,
     difficulty: 'easy',
   }
@@ -274,6 +275,11 @@ const QuizEdit = () => {
                 </label>
               </div>
 
+              {(question.requiresCorrectOptionSelection ||
+                !question.options.some((option) => option.id === question.correctOptionId)) && (
+                <div className="quizError">У вопроса не выбран правильный вариант. Выберите один из ответов.</div>
+              )}
+
               {question.options.map((option) => (
                 <div className="quizOptionRow" key={option.id}>
                   <input
@@ -284,7 +290,9 @@ const QuizEdit = () => {
                       patchDraft((previous) => ({
                         ...previous,
                         questions: previous.questions.map((item) =>
-                          item.id === question.id ? { ...item, correctOptionId: option.id } : item,
+                          item.id === question.id
+                            ? { ...item, correctOptionId: option.id, requiresCorrectOptionSelection: false }
+                            : item,
                         ),
                       }))
                     }
@@ -318,13 +326,13 @@ const QuizEdit = () => {
                           if (item.id !== question.id || item.options.length <= 2) return item
 
                           const nextOptions = item.options.filter((entry) => entry.id !== option.id)
-                          const fallbackCorrect =
-                            item.correctOptionId === option.id ? nextOptions[0]?.id || '' : item.correctOptionId
+                          const removedSelectedOption = item.correctOptionId === option.id
 
                           return {
                             ...item,
                             options: nextOptions,
-                            correctOptionId: fallbackCorrect,
+                            correctOptionId: removedSelectedOption ? '' : item.correctOptionId,
+                            requiresCorrectOptionSelection: removedSelectedOption,
                           }
                         }),
                       }))
