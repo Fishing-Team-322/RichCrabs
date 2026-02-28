@@ -31,7 +31,7 @@ describe('billingApi contract', () => {
   it('calls mutable billing endpoints', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse({ ok: true }))
+      .mockImplementation(async () => jsonResponse({ ok: true }))
 
     await billingApi.checkout({ planCode: 'free' })
     await billingApi.cancel()
