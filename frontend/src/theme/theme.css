@@ -66,6 +66,41 @@ body {
     linear-gradient(180deg, var(--bg-base) 0%, var(--bg-base-alt) 100%);
   font-family: Inter, 'Segoe UI', system-ui, sans-serif;
   min-height: 100vh;
+  position: relative;
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  top: 86px;
+  bottom: 24px;
+  width: clamp(76px, 11vw, 180px);
+  pointer-events: none;
+  opacity: 0.72;
+  z-index: -1;
+}
+
+body::before {
+  left: 0;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(236, 72, 153, 0.34), transparent 26%),
+    radial-gradient(circle at 70% 18%, rgba(96, 165, 250, 0.26), transparent 33%),
+    repeating-linear-gradient(145deg, rgba(160, 134, 237, 0.2) 0 2px, transparent 2px 16px),
+    linear-gradient(180deg, rgba(63, 41, 118, 0.32), transparent 80%);
+  border-right: 1px solid rgba(158, 129, 238, 0.2);
+  border-radius: 0 24px 24px 0;
+}
+
+body::after {
+  right: 0;
+  background:
+    radial-gradient(circle at 80% 14%, rgba(139, 92, 246, 0.38), transparent 24%),
+    radial-gradient(circle at 35% 26%, rgba(236, 72, 153, 0.24), transparent 34%),
+    repeating-linear-gradient(35deg, rgba(142, 210, 255, 0.2) 0 2px, transparent 2px 15px),
+    linear-gradient(180deg, rgba(38, 56, 122, 0.26), transparent 74%);
+  border-left: 1px solid rgba(160, 186, 255, 0.2);
+  border-radius: 24px 0 0 24px;
 }
 
 :root[data-theme='light'] body {
@@ -74,6 +109,27 @@ body {
     radial-gradient(circle at 88% 10%, rgba(96, 165, 250, 0.12), transparent 38%),
     radial-gradient(circle at 50% 100%, rgba(139, 92, 246, 0.08), transparent 44%),
     linear-gradient(180deg, var(--bg-base) 0%, var(--bg-base-alt) 100%);
+}
+
+:root[data-theme='light'] body::before,
+:root[data-theme='light'] body::after {
+  opacity: 0.54;
+}
+
+:root[data-theme='light'] body::before {
+  background:
+    radial-gradient(circle at 20% 12%, rgba(236, 72, 153, 0.26), transparent 24%),
+    radial-gradient(circle at 72% 16%, rgba(96, 165, 250, 0.2), transparent 32%),
+    repeating-linear-gradient(145deg, rgba(126, 96, 206, 0.16) 0 2px, transparent 2px 16px),
+    linear-gradient(180deg, rgba(157, 132, 234, 0.16), transparent 84%);
+}
+
+:root[data-theme='light'] body::after {
+  background:
+    radial-gradient(circle at 80% 14%, rgba(139, 92, 246, 0.24), transparent 24%),
+    radial-gradient(circle at 35% 26%, rgba(236, 72, 153, 0.18), transparent 34%),
+    repeating-linear-gradient(35deg, rgba(96, 165, 250, 0.16) 0 2px, transparent 2px 15px),
+    linear-gradient(180deg, rgba(127, 90, 240, 0.12), transparent 78%);
 }
 
 a { color: inherit; }
@@ -142,6 +198,11 @@ a { color: inherit; }
 }
 
 @media (max-width: 760px) {
+  body::before,
+  body::after {
+    display: none;
+  }
+
   .authPage { padding: 12px; }
   .authCard { padding: 14px; border-radius: 14px; }
   .accountBlock { width: 100%; justify-content: flex-start; }
@@ -157,7 +218,6 @@ a { color: inherit; }
   background: linear-gradient(165deg, rgba(255, 255, 255, 0.94), rgba(246, 243, 255, 0.94));
   border-color: rgba(126, 96, 206, 0.22);
 }
-
 
 
 
