@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use serde::Deserialize;
 use tokio::time::{timeout, Duration};
 use tonic::{metadata::MetadataValue, Request};
 use uuid::Uuid;
@@ -29,46 +28,22 @@ const USER_PROMPT_TEMPLATE: &str = r#"Сгенерируй квиз по пар�
 
 Важно: несмотря на формат question_format, в JSON каждого вопроса используй ровно один correct_option_index (индекс 0..3), потому что контракт ответа это single-choice."#;
 
-#[derive(Debug, Default, Deserialize)]
-struct PromptUiParams {
-    theme: Option<String>,
-    language: Option<String>,
-    difficulty: Option<String>,
-    question_format: Option<String>,
-}
-
-impl PromptUiParams {
-    fn from_prompt(prompt: &str) -> Self {
-        let parsed = serde_json::from_str::<PromptUiParams>(prompt).unwrap_or_default();
-        let fallback_theme = prompt.trim();
-
-        Self {
-            theme: parsed
-                .theme
-                .or_else(|| (!fallback_theme.is_empty()).then(|| fallback_theme.to_string())),
-            language: parsed.language,
-            difficulty: parsed.difficulty,
-            question_format: parsed.question_format,
-        }
-    }
-
-    fn user_prompt(&self, desired_question_count: usize) -> String {
-        USER_PROMPT_TEMPLATE
-            .replace("{theme}", self.theme.as_deref().unwrap_or("не указана"))
-            .replace("{language}", self.language.as_deref().unwrap_or("русский"))
-            .replace(
-                "{difficulty}",
-                self.difficulty.as_deref().unwrap_or("medium"),
-            )
-            .replace(
-                "{question_format}",
-                self.question_format.as_deref().unwrap_or("single"),
-            )
-            .replace(
-                "{desired_question_count}",
-                &desired_question_count.to_string(),
-            )
-    }
+fn build_user_prompt(
+    prompt: &str,
+    desired_question_count: usize,
+    difficulty: Option<&str>,
+    language: Option<&str>,
+    question_format: Option<&str>,
+) -> String {
+    USER_PROMPT_TEMPLATE
+        .replace("{theme}", prompt.trim())
+        .replace("{language}", language.unwrap_or("русский"))
+        .replace("{difficulty}", difficulty.unwrap_or("medium"))
+        .replace("{question_format}", question_format.unwrap_or("single"))
+        .replace(
+            "{desired_question_count}",
+            &desired_question_count.to_string(),
+        )
 }
 
 pub(crate) async fn generate_quiz_via_model(
@@ -76,6 +51,9 @@ pub(crate) async fn generate_quiz_via_model(
     owner_user_id: Uuid,
     prompt: &str,
     desired_question_count: usize,
+    difficulty: Option<&str>,
+    language: Option<&str>,
+    question_format: Option<&str>,
 ) -> Result<proto::richcrab::v1::Quiz> {
     let mut attempts = 0;
     let mut last_err = None;
@@ -88,8 +66,13 @@ pub(crate) async fn generate_quiz_via_model(
             )
             .await?;
 
-            let ui_params = PromptUiParams::from_prompt(prompt);
-            let user_prompt = ui_params.user_prompt(desired_question_count);
+            let user_prompt = build_user_prompt(
+                prompt,
+                desired_question_count,
+                difficulty,
+                language,
+                question_format,
+            );
 
             let req = proto::gigachat::v1::ChatRequest {
                 options: Some(proto::gigachat::v1::ChatOptions {
@@ -146,12 +129,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn prompt_ui_params_uses_json_values() {
-        let params = PromptUiParams::from_prompt(
-            r#"{"theme":"Rust","language":"en","difficulty":"hard","question_format":"multi"}"#,
-        );
+    fn build_user_prompt_uses_provided_values() {
+        let user_prompt = build_user_prompt("Rust", 7, Some("hard"), Some("en"), Some("multi"));
 
-        let user_prompt = params.user_prompt(7);
         assert!(user_prompt.contains("Тема: Rust"));
         assert!(user_prompt.contains("Язык: en"));
         assert!(user_prompt.contains("Сложность: hard"));
@@ -160,10 +140,9 @@ mod tests {
     }
 
     #[test]
-    fn prompt_ui_params_falls_back_to_plain_prompt_as_theme() {
-        let params = PromptUiParams::from_prompt("История средневековой Европы");
+    fn build_user_prompt_falls_back_to_defaults() {
+        let user_prompt = build_user_prompt("История средневековой Европы", 3, None, None, None);
 
-        let user_prompt = params.user_prompt(3);
         assert!(user_prompt.contains("Тема: История средневековой Европы"));
         assert!(user_prompt.contains("Язык: русский"));
         assert!(user_prompt.contains("Сложность: medium"));

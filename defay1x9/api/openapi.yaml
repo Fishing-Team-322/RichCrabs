@@ -703,9 +703,33 @@ components:
       properties:
         prompt:
           type: string
+          example: История Древнего Рима
         desiredQuestionCount:
           type: integer
           minimum: 1
+          example: 7
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+          example: medium
+        language:
+          type: string
+          example: ru
+        format:
+          type: string
+          enum: [single, multi]
+          example: single
+      examples:
+        minimal:
+          value:
+            prompt: История Древнего Рима
+        full:
+          value:
+            prompt: История Древнего Рима
+            desiredQuestionCount: 7
+            difficulty: medium
+            language: ru
+            format: single
 
     AiGenerateAcceptedResponse:
       type: object
@@ -1729,6 +1753,17 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AiGenerateRequest'
+            examples:
+              minimal:
+                value:
+                  prompt: История Древнего Рима
+              full:
+                value:
+                  prompt: История Древнего Рима
+                  desiredQuestionCount: 7
+                  difficulty: medium
+                  language: ru
+                  format: single
       responses:
         '200':
           description: Job accepted

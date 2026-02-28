@@ -18,6 +18,9 @@ pub(crate) async fn start_ai_quiz_job(
     requester_uuid: Uuid,
     prompt: String,
     desired_question_count: usize,
+    difficulty: Option<String>,
+    language: Option<String>,
+    question_format: Option<String>,
 ) -> Result<String, Status> {
     let now = Utc::now();
     let job = AiQuizJob {
@@ -45,6 +48,9 @@ pub(crate) async fn start_ai_quiz_job(
         requester_uuid,
         prompt,
         desired_question_count,
+        difficulty,
+        language,
+        question_format,
     );
 
     Ok(job.id.to_string())
@@ -94,6 +100,9 @@ pub(crate) fn spawn_ai_quiz_worker(
     owner_user_id: Uuid,
     prompt: String,
     desired_question_count: usize,
+    difficulty: Option<String>,
+    language: Option<String>,
+    question_format: Option<String>,
 ) {
     tokio::spawn(async move {
         if let Err(err) = repository.set_ai_quiz_job_status(job_id, "running").await {
@@ -105,8 +114,16 @@ pub(crate) fn spawn_ai_quiz_worker(
 
         let generated = match ai_generator {
             Some(cfg) => {
-                match generate_quiz_via_model(&cfg, owner_user_id, &prompt, desired_question_count)
-                    .await
+                match generate_quiz_via_model(
+                    &cfg,
+                    owner_user_id,
+                    &prompt,
+                    desired_question_count,
+                    difficulty.as_deref(),
+                    language.as_deref(),
+                    question_format.as_deref(),
+                )
+                .await
                 {
                     Ok(quiz) => quiz,
                     Err(err) => {

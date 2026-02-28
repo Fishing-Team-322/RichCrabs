@@ -133,7 +133,13 @@ export const quizApi: QuizApi = {
   startGeneration: (payload: GenerateQuizDraftRequestDto) =>
     apiFetch<GenerateQuizJobDto>(`${QUIZZES_BASE}/ai-generate`, {
       method: 'POST',
-      body: JSON.stringify({ prompt: payload.topic, desiredQuestionCount: payload.questionCount }),
+      body: JSON.stringify({
+        prompt: payload.topic,
+        desiredQuestionCount: payload.questionCount,
+        difficulty: payload.difficulty,
+        language: payload.language,
+        format: payload.format,
+      }),
     }),
 
   getGenerationStatus: (jobId: string) => apiFetch<GenerateQuizJobDto>(`${QUIZZES_BASE}/ai-jobs/${encodeURIComponent(jobId)}`),

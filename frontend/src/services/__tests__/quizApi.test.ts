@@ -34,7 +34,20 @@ describe('quizApi contract', () => {
       .mockResolvedValueOnce(jsonResponse({ jobId: 'j1', status: 'running' }))
     await quizApi.startGeneration({ topic: 'Topic', difficulty: 'easy', questionCount: 5, language: 'ru', format: 'single' })
     await quizApi.getGenerationStatus('j1')
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/quizzes/ai-generate', expect.objectContaining({ method: 'POST' }))
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/quizzes/ai-generate',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          prompt: 'Topic',
+          desiredQuestionCount: 5,
+          difficulty: 'easy',
+          language: 'ru',
+          format: 'single',
+        }),
+      }),
+    )
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/quizzes/ai-jobs/j1', expect.objectContaining({ method: 'GET' }))
   })
 

@@ -240,6 +240,18 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
         let requester_uuid = Uuid::parse_str(&requester)
             .map_err(|_| Status::invalid_argument("requested_by must be uuid"))?;
         let desired_question_count = req.desired_question_count.unwrap_or(5).clamp(1, 20) as usize;
+        let difficulty = req
+            .difficulty
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+        let language = req
+            .language
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+        let question_format = req
+            .format
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
         let prompt = req.prompt.trim().to_string();
         if prompt.is_empty() {
             return Err(Status::invalid_argument("prompt is required"));
@@ -252,6 +264,9 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
             requester_uuid,
             prompt,
             desired_question_count,
+            difficulty,
+            language,
+            question_format,
         )
         .await?;
 
@@ -414,6 +429,9 @@ mod tests {
             owner,
             "topic".to_string(),
             1,
+            None,
+            None,
+            None,
         );
 
         tokio::time::sleep(std::time::Duration::from_millis(700)).await;
