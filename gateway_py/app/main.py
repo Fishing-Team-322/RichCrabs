@@ -521,7 +521,7 @@ def tg_unbind(botId: str, req: Request):
 
 
 @app.post("/api/v1/telegram/webhook/{botId}/{secret}", tags=["bots"])
-def tg_webhook(botId: str, secret: str):
+def tg_webhook(botId: str, secret: str, req: Request):
     row = rdb.get(_binding_key(botId))
     if not row:
         return {"status": "ignored", "botId": botId}
@@ -529,7 +529,8 @@ def tg_webhook(botId: str, secret: str):
         parsed = json.loads(row)
     except Exception:
         return {"status": "ignored", "botId": botId}
-    if parsed.get("secret") != secret:
+    header_secret = req.headers.get("x-telegram-bot-api-secret-token", "")
+    if not header_secret or header_secret != secret:
         return {"status": "ignored", "botId": botId}
     return {"status": "processed", "botId": botId}
 
