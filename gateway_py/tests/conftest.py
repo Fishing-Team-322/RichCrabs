@@ -113,8 +113,8 @@ class FakeClients:
             SetUserBan=lambda req: _ns(),
         )
         self.game = _ns(
-            CreateRoom=lambda req: _ns(pin="123456", invite_token="inv1", invite_path="/join?inviteToken=inv1", invite_qr_svg="<svg></svg>", room_id=_ns(value="room-1")),
-            RegenerateInvite=lambda req: _ns(invite_token="inv2", invite_path="/join?inviteToken=inv2", invite_qr_svg="<svg></svg>"),
+            CreateRoom=lambda req: _ns(pin="123456", invite_token="inv1", invite_path="/invite/inv1", invite_qr_svg="<svg></svg>", room_id=_ns(value="room-1")),
+            RegenerateInvite=lambda req: _ns(invite_token="inv2", invite_path="/invite/inv2", invite_qr_svg="<svg></svg>"),
             GetRoomState=lambda req: _ns(room_id=_ns(value="room-1"), state="LOBBY", players=[_ns(player_id=_ns(value="p1"), display_name="P1", score=0)]),
             JoinRoom=lambda req: _ns(player_id=_ns(value="p1")),
             StartGame=lambda req: _ns(started=True),

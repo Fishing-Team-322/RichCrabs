@@ -30,7 +30,7 @@ struct JoinTicketPayload {
 }
 
 fn invite_path(invite_token: &str) -> String {
-    format!("/join?inviteToken={invite_token}")
+    format!("/invite/{invite_token}")
 }
 
 fn invite_qr_svg(path: &str) -> Result<String, String> {
@@ -985,13 +985,13 @@ mod tests {
         let path = invite_path(token);
 
         assert!(path.starts_with('/'));
-        assert!(path.contains("inviteToken=abc123"));
+        assert_eq!(path, "/invite/abc123");
         assert!(!path.contains("://"));
     }
 
     #[test]
     fn invite_qr_svg_is_valid_svg() {
-        let svg = invite_qr_svg("/join?inviteToken=abc123").expect("qr svg is generated");
+        let svg = invite_qr_svg("/invite/abc123").expect("qr svg is generated");
 
         assert!(svg.contains("<svg"));
         assert!(svg.contains("</svg>"));

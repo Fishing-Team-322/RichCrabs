@@ -43,7 +43,7 @@ def test_create_game_happy_path(client, host_session_cookie, csrf_headers):
     )
     assert response.status_code == 200
     assert response.json()["pin"] == "123456"
-    assert response.json()["invitePath"] == "/join?inviteToken=inv1"
+    assert response.json()["invitePath"] == "/invite/inv1"
     assert response.json()["inviteQrSvg"].startswith("<svg")
 
 
@@ -64,6 +64,7 @@ def test_regenerate_invite_happy_path(client, host_session_cookie, csrf_headers)
     response = client.post("/api/v1/games/123456/invite/regenerate", cookies=cookies, headers=csrf_headers["headers"])
     assert response.status_code == 200
     assert response.json()["inviteToken"] == "inv2"
+    assert response.json()["invitePath"] == "/invite/inv2"
 
 
 def test_create_game_grpc_mapped_error(client, host_session_cookie, fake_clients, csrf_headers):
