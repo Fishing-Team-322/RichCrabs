@@ -579,7 +579,12 @@ def upd_quiz(quizId: str, req: Request, body: dict[str,Any]):
     if "questions" in body:
         del cur.questions[:]
         for row in body["questions"]:
-            qq = cur.questions.add()
+            if hasattr(cur.questions, "add"):
+                qq = cur.questions.add()
+            else:
+                qq = type("QuizQuestion", (), {})()
+                qq.options = []
+                cur.questions.append(qq)
             qq.id = row.get("id", "")
             qq.text = row["text"]
             qq.options.extend(row["options"])
