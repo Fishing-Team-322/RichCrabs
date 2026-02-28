@@ -8,16 +8,18 @@ const mapJoinResponse = (payload: {
   joinTicket: string
   roomPin?: string
   playerId: string
+  wsUrl: string
 }): JoinRoomResponseDto => ({
   token: payload.joinTicket,
   gameId: payload.roomPin || '',
   playerId: payload.playerId,
+  wsUrl: payload.wsUrl,
 })
 
 export const joinApi = {
   joinRoom: (payload: JoinRoomRequestDto) => {
     if (payload.pin) {
-      return apiFetch<{ joinTicket: string; roomPin?: string; playerId: string }>(
+      return apiFetch<{ joinTicket: string; roomPin?: string; playerId: string; wsUrl: string }>(
         `${GAMES_BASE}/${encodeURIComponent(payload.pin)}/join`,
         {
           method: 'POST',
@@ -27,7 +29,7 @@ export const joinApi = {
     }
 
     if (payload.inviteToken) {
-      return apiFetch<{ joinTicket: string; roomPin?: string; playerId: string }>(
+      return apiFetch<{ joinTicket: string; roomPin?: string; playerId: string; wsUrl: string }>(
         `${INVITES_BASE}/${encodeURIComponent(payload.inviteToken)}/join`,
         {
           method: 'POST',

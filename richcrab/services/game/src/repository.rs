@@ -1,70 +1,77 @@
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
-pub struct UsageCounter {
+pub struct RoomChatMessage {
     pub id: Uuid,
-    pub user_id: Uuid,
-    pub period_start: NaiveDate,
-    pub quizzes_created: i32,
-    pub messages_sent: i32,
+    pub room_id: String,
+    pub author: String,
+    pub body: String,
     pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
 }
 
-pub struct UsageCounterRepository {
+#[derive(Clone)]
+pub struct RoomChatRepository {
     pool: PgPool,
 }
 
-impl UsageCounterRepository {
+impl RoomChatRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 
-    pub async fn increment_messages(
+    pub async fn create(
         &self,
-        user_id: Uuid,
-        period_start: NaiveDate,
-    ) -> sqlx::Result<()> {
-        sqlx::query(
-            "INSERT INTO usage_counters (id, user_id, period_start, quizzes_created, messages_sent, created_at, updated_at)
-             VALUES ($1, $2, $3, 0, 1, NOW(), NOW())
-             ON CONFLICT (user_id, period_start)
-             DO UPDATE SET messages_sent = usage_counters.messages_sent + 1, updated_at = NOW()",
+        room_id: &str,
+        author: &str,
+        body: &str,
+    ) -> sqlx::Result<RoomChatMessage> {
+        let id = Uuid::new_v4();
+        let row = sqlx::query(
+            "INSERT INTO room_chat_messages (id, room_id, author, body, created_at)
+             VALUES ($1, $2, $3, $4, NOW())
+             RETURNING id, room_id, author, body, created_at",
         )
-        .bind(Uuid::new_v4())
-        .bind(user_id)
-        .bind(period_start)
-        .execute(&self.pool)
+        .bind(id)
+        .bind(room_id)
+        .bind(author)
+        .bind(body)
+        .fetch_one(&self.pool)
         .await?;
 
-        Ok(())
+        Ok(Self::map(row))
     }
 
-    pub async fn find(
+    pub async fn list_recent(
         &self,
-        user_id: Uuid,
-        period_start: NaiveDate,
-    ) -> sqlx::Result<Option<UsageCounter>> {
-        let row = sqlx::query(
-            "SELECT id, user_id, period_start, quizzes_created, messages_sent, created_at, updated_at
-             FROM usage_counters
-             WHERE user_id = $1 AND period_start = $2",
+        room_id: &str,
+        limit: i64,
+    ) -> sqlx::Result<Vec<RoomChatMessage>> {
+        let rows = sqlx::query(
+            "SELECT id, room_id, author, body, created_at
+             FROM room_chat_messages
+             WHERE room_id = $1
+             ORDER BY created_at DESC
+             LIMIT $2",
         )
-        .bind(user_id)
-        .bind(period_start)
-        .fetch_optional(&self.pool)
+        .bind(room_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
         .await?;
 
-        Ok(row.map(|row| UsageCounter {
+        let mut messages: Vec<RoomChatMessage> = rows.into_iter().map(Self::map).collect();
+        messages.reverse();
+        Ok(messages)
+    }
+
+    fn map(row: sqlx::postgres::PgRow) -> RoomChatMessage {
+        RoomChatMessage {
             id: row.get("id"),
-            user_id: row.get("user_id"),
-            period_start: row.get("period_start"),
-            quizzes_created: row.get("quizzes_created"),
-            messages_sent: row.get("messages_sent"),
+            room_id: row.get("room_id"),
+            author: row.get("author"),
+            body: row.get("body"),
             created_at: row.get("created_at"),
-            updated_at: row.get("updated_at"),
-        }))
+        }
     }
 }

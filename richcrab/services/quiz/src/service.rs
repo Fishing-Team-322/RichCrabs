@@ -1,12 +1,12 @@
-use std::{fs, path::PathBuf};
+use std::{env, fs, path::PathBuf};
 
-use anyhow::Context;
+use anyhow::{Context, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use tokio::time::{sleep, Duration};
-use tonic::{Request, Response, Status};
+use tonic::{metadata::MetadataValue, transport::Channel, Request, Response, Status};
 use uuid::Uuid;
 
 use crate::repository::{AiQuizJob, Quiz, QuizRepository};
@@ -23,26 +23,60 @@ struct FallbackQuestion {
     correct_option_index: Option<u32>,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct AiGeneratorConfig {
+    addr: String,
+    model: String,
+    api_key: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeneratedQuizPayload {
+    title: String,
+    description: Option<String>,
+    questions: Vec<GeneratedQuestionPayload>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeneratedQuestionPayload {
+    text: String,
+    options: Vec<String>,
+    correct_option_index: u32,
+}
+
 pub struct QuizServiceImpl {
     repository: QuizRepository,
     fallback_questions: Vec<proto::richcrab::v1::QuizQuestion>,
-    entitlements: proto::richcrab::v1::entitlements_service_client::EntitlementsServiceClient<
-        tonic::transport::Channel,
-    >,
+    entitlements:
+        proto::richcrab::v1::entitlements_service_client::EntitlementsServiceClient<Channel>,
+    ai_generator: Option<AiGeneratorConfig>,
 }
 
 impl QuizServiceImpl {
     pub fn new(
         pool: PgPool,
         entitlements: proto::richcrab::v1::entitlements_service_client::EntitlementsServiceClient<
-            tonic::transport::Channel,
+            Channel,
         >,
     ) -> Self {
         Self {
             repository: QuizRepository::new(pool),
             fallback_questions: Self::load_fallback_question_bank().unwrap_or_default(),
             entitlements,
+            ai_generator: Self::load_ai_generator_config_from_env(),
         }
+    }
+
+    fn load_ai_generator_config_from_env() -> Option<AiGeneratorConfig> {
+        let addr = env::var(shared::config::GIGACHAT_API_ADDR).ok()?;
+        let api_key = env::var(shared::config::GIGACHAT_API_KEY).ok()?;
+        let model =
+            env::var(shared::config::GIGACHAT_MODEL).unwrap_or_else(|_| "GigaChat-Pro".to_string());
+        Some(AiGeneratorConfig {
+            addr,
+            model,
+            api_key,
+        })
     }
 
     fn load_fallback_question_bank() -> anyhow::Result<Vec<proto::richcrab::v1::QuizQuestion>> {
@@ -202,48 +236,6 @@ impl QuizServiceImpl {
         Ok(())
     }
 
-    fn build_generated_quiz(
-        owner_user_id: Uuid,
-        prompt: &str,
-        desired_question_count: usize,
-    ) -> proto::richcrab::v1::Quiz {
-        let normalized_prompt = prompt.trim();
-        let now = Utc::now();
-        let questions = (0..desired_question_count)
-            .map(|idx| proto::richcrab::v1::QuizQuestion {
-                id: format!("ai-{}", idx + 1),
-                text: format!("{} — вопрос {}", normalized_prompt, idx + 1),
-                options: vec![
-                    "Вариант A".to_string(),
-                    "Вариант B".to_string(),
-                    "Вариант C".to_string(),
-                    "Вариант D".to_string(),
-                ],
-                correct_option_index: Some((idx % 4) as u32),
-            })
-            .collect();
-
-        proto::richcrab::v1::Quiz {
-            quiz_id: Some(proto::richcrab::v1::QuizId {
-                value: Uuid::new_v4().to_string(),
-            }),
-            owner_user_id: Some(proto::richcrab::v1::UserId {
-                value: owner_user_id.to_string(),
-            }),
-            title: format!("AI Quiz: {}", normalized_prompt),
-            description: "Generated asynchronously by quiz worker".to_string(),
-            questions,
-            created_at: Some(prost_types::Timestamp {
-                seconds: now.timestamp(),
-                nanos: now.timestamp_subsec_nanos() as i32,
-            }),
-            updated_at: Some(prost_types::Timestamp {
-                seconds: now.timestamp(),
-                nanos: now.timestamp_subsec_nanos() as i32,
-            }),
-        }
-    }
-
     fn quiz_to_json(quiz: &proto::richcrab::v1::Quiz) -> Value {
         json!({
             "quiz_id": quiz.quiz_id.as_ref().map(|v| v.value.clone()).unwrap_or_default(),
@@ -274,8 +266,129 @@ impl QuizServiceImpl {
         })
     }
 
+    fn strip_markdown_code_fence(raw: &str) -> &str {
+        let trimmed = raw.trim();
+        if let Some(rest) = trimmed.strip_prefix("```") {
+            let without_lang = rest
+                .find('\n')
+                .and_then(|idx| rest.get(idx + 1..))
+                .unwrap_or(rest);
+            return without_lang.trim_end_matches("```").trim();
+        }
+        trimmed
+    }
+
+    fn build_quiz_from_generated_payload(
+        owner_user_id: Uuid,
+        parsed: GeneratedQuizPayload,
+    ) -> Result<proto::richcrab::v1::Quiz> {
+        let questions = parsed
+            .questions
+            .into_iter()
+            .enumerate()
+            .map(|(idx, q)| proto::richcrab::v1::QuizQuestion {
+                id: format!("ai-{}", idx + 1),
+                text: q.text,
+                options: q.options,
+                correct_option_index: Some(q.correct_option_index),
+            })
+            .collect::<Vec<_>>();
+
+        Self::validate_questions(&questions).map_err(anyhow::Error::msg)?;
+
+        let now = Utc::now();
+        Ok(proto::richcrab::v1::Quiz {
+            quiz_id: Some(proto::richcrab::v1::QuizId {
+                value: Uuid::new_v4().to_string(),
+            }),
+            owner_user_id: Some(proto::richcrab::v1::UserId {
+                value: owner_user_id.to_string(),
+            }),
+            title: parsed.title,
+            description: parsed
+                .description
+                .unwrap_or_else(|| "Generated by AI".to_string()),
+            questions,
+            created_at: Some(prost_types::Timestamp {
+                seconds: now.timestamp(),
+                nanos: now.timestamp_subsec_nanos() as i32,
+            }),
+            updated_at: Some(prost_types::Timestamp {
+                seconds: now.timestamp(),
+                nanos: now.timestamp_subsec_nanos() as i32,
+            }),
+        })
+    }
+
+    fn parse_generated_quiz_content(
+        owner_user_id: Uuid,
+        raw_content: &str,
+    ) -> Result<proto::richcrab::v1::Quiz> {
+        let parsed: GeneratedQuizPayload =
+            serde_json::from_str(Self::strip_markdown_code_fence(raw_content))?;
+        Self::build_quiz_from_generated_payload(owner_user_id, parsed)
+    }
+
+    async fn generate_quiz_via_model(
+        cfg: &AiGeneratorConfig,
+        owner_user_id: Uuid,
+        prompt: &str,
+        desired_question_count: usize,
+    ) -> Result<proto::richcrab::v1::Quiz> {
+        let mut client = proto::gigachat::v1::chat_service_client::ChatServiceClient::connect(
+            format!("http://{}", cfg.addr),
+        )
+        .await?;
+
+        let user_prompt = format!(
+            "Сгенерируй квиз на тему: {prompt}. Нужны {desired_question_count} вопросов. Верни только JSON в формате {{\"title\":string,\"description\":string,\"questions\":[{{\"text\":string,\"options\":[string,string,string,string],\"correct_option_index\":0..3}}]}}"
+        );
+
+        let req = proto::gigachat::v1::ChatRequest {
+            options: Some(proto::gigachat::v1::ChatOptions {
+                temperature: 0.6,
+                top_p: 0.9,
+                max_alternatives: 1,
+                max_tokens: 1200,
+                repetition_penalty: 1.0,
+                update_interval: 0.0,
+                flags: vec![],
+            }),
+            model: cfg.model.clone(),
+            messages: vec![
+                proto::gigachat::v1::Message {
+                    role: "system".to_string(),
+                    content: "Ты генерируешь валидные квизы с вариантами и правильным ответом."
+                        .to_string(),
+                    unprocessed_content: String::new(),
+                },
+                proto::gigachat::v1::Message {
+                    role: "user".to_string(),
+                    content: user_prompt,
+                    unprocessed_content: String::new(),
+                },
+            ],
+        };
+
+        let mut grpc_req = Request::new(req);
+        let auth = MetadataValue::try_from(format!("Bearer {}", cfg.api_key))?;
+        grpc_req.metadata_mut().insert("authorization", auth);
+
+        let response = client.chat(grpc_req).await?.into_inner();
+        let content = response
+            .alternatives
+            .first()
+            .and_then(|alt| alt.message.as_ref())
+            .map(|m| m.content.clone())
+            .ok_or_else(|| anyhow::anyhow!("model returned empty response"))?;
+
+        Self::parse_generated_quiz_content(owner_user_id, &content)
+    }
+
     fn spawn_ai_quiz_worker(
         repository: QuizRepository,
+        ai_generator: Option<AiGeneratorConfig>,
+        fallback_questions: Vec<proto::richcrab::v1::QuizQuestion>,
         job_id: Uuid,
         owner_user_id: Uuid,
         prompt: String,
@@ -289,8 +402,56 @@ impl QuizServiceImpl {
 
             sleep(Duration::from_millis(300)).await;
 
-            let generated =
-                Self::build_generated_quiz(owner_user_id, &prompt, desired_question_count);
+            let generated = match ai_generator {
+                Some(cfg) => match Self::generate_quiz_via_model(
+                    &cfg,
+                    owner_user_id,
+                    &prompt,
+                    desired_question_count,
+                )
+                .await
+                {
+                    Ok(quiz) => quiz,
+                    Err(err) => {
+                        let _ = repository
+                            .fail_ai_quiz_job(job_id, &format!("model generation failed: {err}"))
+                            .await;
+                        return;
+                    }
+                },
+                None => {
+                    let questions = if fallback_questions.is_empty() {
+                        vec![]
+                    } else {
+                        fallback_questions
+                            .into_iter()
+                            .take(desired_question_count)
+                            .collect()
+                    };
+                    let now = Utc::now();
+                    proto::richcrab::v1::Quiz {
+                        quiz_id: Some(proto::richcrab::v1::QuizId {
+                            value: Uuid::new_v4().to_string(),
+                        }),
+                        owner_user_id: Some(proto::richcrab::v1::UserId {
+                            value: owner_user_id.to_string(),
+                        }),
+                        title: format!("AI Quiz: {}", prompt.trim()),
+                        description: "AI model is not configured, fallback quiz generated"
+                            .to_string(),
+                        questions,
+                        created_at: Some(prost_types::Timestamp {
+                            seconds: now.timestamp(),
+                            nanos: now.timestamp_subsec_nanos() as i32,
+                        }),
+                        updated_at: Some(prost_types::Timestamp {
+                            seconds: now.timestamp(),
+                            nanos: now.timestamp_subsec_nanos() as i32,
+                        }),
+                    }
+                }
+            };
+
             if let Err(err) = Self::validate_questions(&generated.questions) {
                 let _ = repository
                     .fail_ai_quiz_job(job_id, &format!("generation failed validation: {err}"))
@@ -612,6 +773,8 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
 
         Self::spawn_ai_quiz_worker(
             self.repository.clone(),
+            self.ai_generator.clone(),
+            self.fallback_questions.clone(),
             job.id,
             requester_uuid,
             prompt,
@@ -672,7 +835,12 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
 
 #[cfg(test)]
 mod tests {
-    use super::QuizServiceImpl;
+    use super::{AiGeneratorConfig, QuizServiceImpl};
+    use std::sync::Arc;
+    use tokio::sync::oneshot;
+    use tokio_stream::wrappers::TcpListenerStream;
+    use tonic::transport::Server;
+    use uuid::Uuid;
 
     fn q(text: &str, options: &[&str], correct: Option<u32>) -> proto::richcrab::v1::QuizQuestion {
         proto::richcrab::v1::QuizQuestion {
@@ -680,6 +848,47 @@ mod tests {
             text: text.to_string(),
             options: options.iter().map(|s| s.to_string()).collect(),
             correct_option_index: correct,
+        }
+    }
+
+    #[derive(Clone)]
+    struct FakeChatService {
+        payload: Arc<String>,
+    }
+
+    #[tonic::async_trait]
+    impl proto::gigachat::v1::chat_service_server::ChatService for FakeChatService {
+        async fn chat(
+            &self,
+            _request: tonic::Request<proto::gigachat::v1::ChatRequest>,
+        ) -> Result<tonic::Response<proto::gigachat::v1::ChatResponse>, tonic::Status> {
+            Ok(tonic::Response::new(proto::gigachat::v1::ChatResponse {
+                alternatives: vec![proto::gigachat::v1::Alternative {
+                    message: Some(proto::gigachat::v1::Message {
+                        role: "assistant".to_string(),
+                        content: (*self.payload).clone(),
+                        unprocessed_content: String::new(),
+                    }),
+                    finish_reason: "stop".to_string(),
+                    index: 0,
+                }],
+                usage: None,
+                model_info: None,
+                timestamp: 0,
+            }))
+        }
+
+        type ChatStreamStream = tokio_stream::wrappers::ReceiverStream<
+            Result<proto::gigachat::v1::ChatResponse, tonic::Status>,
+        >;
+
+        async fn chat_stream(
+            &self,
+            _request: tonic::Request<proto::gigachat::v1::ChatRequest>,
+        ) -> Result<tonic::Response<Self::ChatStreamStream>, tonic::Status> {
+            Err(tonic::Status::unimplemented(
+                "streaming is not used in tests",
+            ))
         }
     }
 
@@ -705,5 +914,78 @@ mod tests {
     fn validate_questions_accepts_valid_payload() {
         let result = QuizServiceImpl::validate_questions(&[q("Q", &["a", "b"], Some(1))]);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn strip_markdown_code_fence_extracts_json() {
+        let raw = "```json\n{\"title\":\"T\"}\n```";
+        assert_eq!(
+            QuizServiceImpl::strip_markdown_code_fence(raw),
+            "{\"title\":\"T\"}"
+        );
+    }
+
+    #[test]
+    fn parse_generated_quiz_content_parses_and_validates_payload() {
+        let owner = Uuid::new_v4();
+        let raw = r#"{
+            "title":"Rust Quiz",
+            "description":"desc",
+            "questions":[{
+                "text":"Q1",
+                "options":["A","B","C","D"],
+                "correct_option_index":2
+            }]
+        }"#;
+
+        let quiz = QuizServiceImpl::parse_generated_quiz_content(owner, raw)
+            .expect("generated quiz must parse");
+
+        assert_eq!(quiz.title, "Rust Quiz");
+        assert_eq!(quiz.questions.len(), 1);
+        assert_eq!(quiz.questions[0].correct_option_index, Some(2));
+    }
+
+    #[tokio::test]
+    async fn generate_quiz_via_model_works_against_grpc_server() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind grpc port");
+        let addr = listener.local_addr().expect("local addr");
+        let payload = Arc::new(
+            "```json\n{\"title\":\"AI Test\",\"questions\":[{\"text\":\"Q\",\"options\":[\"A\",\"B\"],\"correct_option_index\":1}]}\n```"
+                .to_string(),
+        );
+
+        let svc = FakeChatService { payload };
+        let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+        let server = tokio::spawn(async move {
+            Server::builder()
+                .add_service(proto::gigachat::v1::chat_service_server::ChatServiceServer::new(svc))
+                .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async {
+                    let _ = shutdown_rx.await;
+                })
+                .await
+        });
+
+        let cfg = AiGeneratorConfig {
+            addr: addr.to_string(),
+            model: "GigaChat-Pro".to_string(),
+            api_key: "test-key".to_string(),
+        };
+
+        let quiz = QuizServiceImpl::generate_quiz_via_model(&cfg, Uuid::new_v4(), "topic", 1)
+            .await
+            .expect("quiz generated");
+
+        assert_eq!(quiz.title, "AI Test");
+        assert_eq!(quiz.questions.len(), 1);
+        assert_eq!(quiz.questions[0].correct_option_index, Some(1));
+
+        let _ = shutdown_tx.send(());
+        server
+            .await
+            .expect("server join")
+            .expect("server clean stop");
     }
 }

@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     middleware::{self, Next},
-    response::IntoResponse,
+    response::{IntoResponse, Redirect},
     routing::{get, post},
     Json, Router,
 };
@@ -18,6 +18,7 @@ use subtle::ConstantTimeEq;
 #[derive(Clone)]
 struct AppState {
     repository: BotIngressRepository,
+    gateway_base_url: String,
 }
 
 #[derive(serde::Serialize)]
@@ -45,6 +46,8 @@ async fn main() -> anyhow::Result<()> {
 
     let state = AppState {
         repository: BotIngressRepository::new(pool),
+        gateway_base_url: env::var("GW_PUBLIC_BASE_URL")
+            .unwrap_or_else(|_| "http://gateway:8080".to_string()),
     };
 
     let app = Router::new()
@@ -81,7 +84,8 @@ async fn handle_webhook(
                 ok: false,
                 message: "bot not found".to_string(),
             }),
-        );
+        )
+            .into_response();
     };
 
     if bot.webhook_secret != webhook_secret {
@@ -91,16 +95,15 @@ async fn handle_webhook(
                 ok: false,
                 message: "invalid webhook secret".to_string(),
             }),
-        );
+        )
+            .into_response();
     }
 
-    (
-        StatusCode::GONE,
-        Json(SimpleResponse {
-            ok: false,
-            message: "webhook processing moved to gateway".to_string(),
-        }),
-    )
+    let redirect_to = format!(
+        "{}/api/v1/telegram/webhook/{bot_id}/{webhook_secret}",
+        state.gateway_base_url.trim_end_matches('/')
+    );
+    Redirect::temporary(&redirect_to).into_response()
 }
 
 async fn telegram_secret_guard(request: Request, next: Next) -> impl IntoResponse {
