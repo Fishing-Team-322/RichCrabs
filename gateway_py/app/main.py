@@ -347,36 +347,66 @@ def reg_bot(req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)): return e
     uid = require_user(req)
     if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
-    b = clients.bot.RegisterBot(bot_pb2.RegisterBotRequest(name=body["name"], version=body["version"], endpoint=body["endpoint"]))
+    try:
+        b = clients.bot.RegisterBot(
+            bot_pb2.RegisterBotRequest(name=body["name"], version=body["version"], endpoint=body["endpoint"]),
+            metadata=(("x-user-id", uid),),
+        )
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "bot_register")
+        return JSONResponse(b, status_code=c)
     return {"bot": {"botId": b.bot.bot_id.value, "name": b.bot.name, "version": b.bot.version, "status": b.bot.status}}
 
 @app.get("/api/v1/bots", tags=["bots"])
 def list_bots(req: Request):
-    if not require_user(req): return err(401,"unauthorized","session cookie is missing or invalid")
-    x = clients.bot.ListBots(bot_pb2.ListBotsRequest())
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    try:
+        x = clients.bot.ListBots(bot_pb2.ListBotsRequest(), metadata=(("x-user-id", uid),))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "bot_list")
+        return JSONResponse(b, status_code=c)
     return {"bots": [{"botId": b.bot_id.value, "name": b.name, "version": b.version, "status": b.status} for b in x.bots]}
 
 @app.get("/api/v1/bots/{botId}", tags=["bots"])
 def get_bot(botId: str, req: Request):
-    if not require_user(req): return err(401,"unauthorized","session cookie is missing or invalid")
-    b = clients.bot.GetBotStatus(bot_pb2.GetBotStatusRequest(bot_id=common_pb2.BotId(value=botId))).bot
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    try:
+        b = clients.bot.GetBotStatus(
+            bot_pb2.GetBotStatusRequest(bot_id=common_pb2.BotId(value=botId)),
+            metadata=(("x-user-id", uid),),
+        ).bot
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "bot_get")
+        return JSONResponse(b, status_code=c)
     return {"bot": {"botId": b.bot_id.value, "name": b.name, "version": b.version, "status": b.status}}
 
 @app.patch("/api/v1/bots/{botId}", tags=["bots"])
 def patch_bot(botId: str, req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)): return e
-    if not require_user(req): return err(401,"unauthorized","session cookie is missing or invalid")
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
     q = bot_pb2.UpdateBotStatusRequest(bot_id=common_pb2.BotId(value=botId))
     if "enabled" in body: q.enabled = body["enabled"]
     if "reason" in body: q.reason = body["reason"]
-    b = clients.bot.UpdateBotStatus(q).bot
+    try:
+        b = clients.bot.UpdateBotStatus(q, metadata=(("x-user-id", uid),)).bot
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "bot_patch")
+        return JSONResponse(b, status_code=c)
     return {"bot": {"botId": b.bot_id.value, "name": b.name, "version": b.version, "status": b.status}}
 
 @app.delete("/api/v1/bots/{botId}", tags=["bots"])
 def del_bot(botId: str, req: Request):
     if (e := require_csrf(req)): return e
-    if not require_user(req): return err(401,"unauthorized","session cookie is missing or invalid")
-    clients.bot.RemoveBot(bot_pb2.RemoveBotRequest(bot_id=common_pb2.BotId(value=botId)))
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    try:
+        clients.bot.RemoveBot(bot_pb2.RemoveBotRequest(bot_id=common_pb2.BotId(value=botId)), metadata=(("x-user-id", uid),))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "bot_delete")
+        return JSONResponse(b, status_code=c)
     return Response(status_code=204)
 
 @app.post("/api/v1/telegram/bots/connect", tags=["bots"])
