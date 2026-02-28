@@ -74,6 +74,23 @@ describe('quizApi contract', () => {
     expect(draft.id).toBe('q42')
   })
 
+
+  it('keeps correct answer unselected when backend question has no correctIndex', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse({
+        quiz: {
+          quizId: 'q-ai',
+          title: 'AI quiz',
+          questions: [{ id: 'q1', text: 'Question', options: ['A', 'B'] }],
+        },
+      }),
+    )
+
+    const draft = await quizApi.getDraft('q-ai')
+    expect(draft.questions[0].correctOptionId).toBe('')
+    expect(draft.questions[0].requiresCorrectOptionSelection).toBe(true)
+  })
+
   it('uses quiz CRUD endpoints', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
