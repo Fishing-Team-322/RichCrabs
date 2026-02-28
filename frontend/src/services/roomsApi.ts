@@ -52,12 +52,13 @@ const mapStateToRoomDetails = (payload: {
 
 export const roomsApi = {
   create: (payload: CreateRoomRequestDto) =>
-    apiFetch<{ pin: string; invitePath: string }>(GAMES_BASE, {
+    apiFetch<{ pin: string; invitePath: string; wsUrl?: string }>(GAMES_BASE, {
       method: 'POST',
       body: JSON.stringify({ ownerUserId: payload.ownerUserId, quizId: payload.quizId, title: `Quiz ${payload.quizId}` }),
     }).then((res): RoomDetailsDto => ({
       ...mapStateToRoomDetails({ pin: res.pin, state: 'lobby', players: [] }),
       inviteLink: res.invitePath,
+      wsUrl: res.wsUrl,
       settings: payload.settings,
       playerLimit: payload.settings.playerLimit,
     })),

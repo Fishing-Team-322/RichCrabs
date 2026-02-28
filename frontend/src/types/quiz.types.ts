@@ -94,4 +94,5 @@ export interface GenerateQuizJobDto {
   status: QuizGenerationStatus
   draftId?: string
   error?: string
+  errorMessage?: string
 }

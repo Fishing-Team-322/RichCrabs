@@ -38,6 +38,29 @@ describe('quizApi contract', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/quizzes/ai-jobs/j1', expect.objectContaining({ method: 'GET' }))
   })
 
+
+
+  it('propagates ai errorMessage from job status', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ jobId: 'j1', status: 'running' }))
+      .mockResolvedValueOnce(jsonResponse({ jobId: 'j1', status: 'failed', errorMessage: 'bad prompt' }))
+
+    await expect(
+      quizApi.generateDraft({ topic: 'Topic', difficulty: 'easy', questionCount: 5, language: 'ru', format: 'single' }),
+    ).rejects.toThrow('bad prompt')
+  })
+
+
+
+  it('uses draftId from ai job status when generation is done', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ jobId: 'j1', status: 'done', draftId: 'q42' }))
+      .mockResolvedValueOnce(jsonResponse({ quiz: { quizId: 'q42', title: 'AI', questions: [] } }))
+
+    const draft = await quizApi.generateDraft({ topic: 'Topic', difficulty: 'easy', questionCount: 5, language: 'ru', format: 'single' })
+    expect(draft.id).toBe('q42')
+  })
+
   it('uses quiz CRUD endpoints', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')

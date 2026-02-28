@@ -20,6 +20,7 @@ export interface JoinRoomResponseDto {
   token: string
   gameId: string
   playerId: string
+  wsUrl: string
 }
 
 export interface RoomStateDto {
@@ -76,6 +77,7 @@ export interface RoomSummaryDto {
 export interface RoomDetailsDto extends RoomSummaryDto {
   settings: RoomSettingsDto
   players: PlayerDto[]
+  wsUrl?: string
 }
 
 export interface RoomsListResponseDto {
