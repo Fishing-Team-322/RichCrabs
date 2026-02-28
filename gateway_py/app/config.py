@@ -9,6 +9,11 @@ def _b(name: str, default: bool) -> bool:
     return v.lower() in {"1", "true", "yes"}
 
 
+def _csv(name: str) -> list[str]:
+    raw = os.getenv(name, "")
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 class Config(BaseModel):
     listen_host: str = os.getenv("GW_LISTEN_HOST", "0.0.0.0")
     listen_port: int = int(os.getenv("GW_LISTEN_PORT", "8080"))
@@ -22,6 +27,8 @@ class Config(BaseModel):
     grpc_auth_addr: str = os.getenv("GW_GRPC_AUTH_ADDR", "auth:50056")
     redis_url: str = os.getenv("GW_REDIS_URL", "redis://redis:6379")
     telegram_token_keyring: str = os.getenv("GW_TELEGRAM_TOKEN_KEYRING", "v1:dev-insecure-telegram-token-key")
+    telegram_webhook_ip_allowlist: list[str] = _csv("GW_TELEGRAM_WEBHOOK_IP_ALLOWLIST")
+    telegram_webhook_rate_limit_per_minute: int = int(os.getenv("GW_TELEGRAM_WEBHOOK_RATE_LIMIT_PER_MINUTE", "0"))
     session_signing_key: str = os.getenv("GW_SESSION_SIGNING_KEY", "dev-insecure-session-key")
     session_cookie_name: str = os.getenv("GW_SESSION_COOKIE_NAME", "QB-SESSION")
     session_cookie_secure: bool = _b("GW_SESSION_COOKIE_SECURE", False)
