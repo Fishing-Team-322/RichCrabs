@@ -202,6 +202,16 @@ class FakeClients:
 def fake_clients(monkeypatch):
     clients = FakeClients()
     monkeypatch.setattr("app.grpc_clients.core.clients", clients)
+    monkeypatch.setattr("app.api.routers.system.clients", clients)
+    monkeypatch.setattr("app.api.routers.auth.clients", clients)
+    monkeypatch.setattr("app.api.routers.profile.clients", clients)
+    monkeypatch.setattr("app.api.routers.games.clients", clients)
+    monkeypatch.setattr("app.api.routers.bots.clients", clients)
+    monkeypatch.setattr("app.api.routers.quizzes.clients", clients)
+    monkeypatch.setattr("app.api.routers.admin.clients", clients)
+    monkeypatch.setattr("app.api.routers.ws.clients", clients)
+    monkeypatch.setattr("app.services.game_service.clients", clients)
+    monkeypatch.setattr("app.services.quiz_service.clients", clients)
     monkeypatch.setattr(main, "clients", clients)
     return clients
 
@@ -210,6 +220,9 @@ def fake_clients(monkeypatch):
 def fake_rdb(monkeypatch):
     redis = FakeRedis()
     monkeypatch.setattr(main, "rdb", redis)
+    monkeypatch.setattr("app.api.routers.bots.rdb", redis)
+    monkeypatch.setattr("app.services.bot_service.rdb", redis)
+    monkeypatch.setattr("app.services.billing_service.rdb", redis)
     return redis
 
 
