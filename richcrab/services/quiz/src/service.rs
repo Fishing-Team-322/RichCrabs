@@ -270,7 +270,7 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
             &self.repository,
             self.ai_generator.clone(),
             self.fallback_questions.clone(),
-            ai_jobs::StartAiQuizJobParams {
+            ai_jobs::AiQuizJobRequest {
                 requester_uuid,
                 prompt,
                 desired_question_count,
@@ -317,7 +317,11 @@ mod tests {
     use tonic::transport::Server;
     use uuid::Uuid;
 
-    use crate::{application::ai_jobs, config::ai::AiGeneratorConfig, repository::QuizRepository};
+    use crate::{
+        application::ai_jobs,
+        config::ai::AiGeneratorConfig,
+        repository::{AiQuizJob, QuizRepository},
+    };
 
     #[derive(Clone)]
     struct FakeChatService {
@@ -422,17 +426,32 @@ mod tests {
         .await
         .expect("seed owner user");
 
-        let job_id = ai_jobs::start_ai_quiz_job(
-            &repo,
-            Some(AiGeneratorConfig {
+        let now = chrono::Utc::now();
+        let job = AiQuizJob {
+            id: Uuid::new_v4(),
+            owner_user_id: owner,
+            prompt: "topic".to_string(),
+            desired_question_count: Some(1),
+            status: "queued".to_string(),
+            result_quiz_json: None,
+            error_message: None,
+            created_at: now,
+            updated_at: now,
+        };
+        repo.create_ai_quiz_job(&job).await.expect("create job");
+
+        ai_jobs::spawn_ai_quiz_worker(ai_jobs::AiQuizWorkerInput {
+            repository: repo.clone(),
+            ai_generator: Some(AiGeneratorConfig {
                 addr: addr.to_string(),
                 model: "GigaChat-Pro".to_string(),
                 api_key: "test-key".to_string(),
                 request_timeout_ms: 3_000,
                 max_retries: 0,
             }),
-            vec![],
-            ai_jobs::StartAiQuizJobParams {
+            fallback_questions: vec![],
+            job_id: job.id,
+            request: ai_jobs::AiQuizJobRequest {
                 requester_uuid: owner,
                 prompt: "topic".to_string(),
                 desired_question_count: 1,
@@ -440,11 +459,9 @@ mod tests {
                 language: None,
                 question_format: None,
             },
-        )
-        .await
-        .expect("start ai job");
+        });
 
-        let job_uuid = Uuid::parse_str(&job_id).expect("job id is uuid");
+        let job_uuid = Uuid::parse_str(&job.id.to_string()).expect("job id is uuid");
         tokio::time::sleep(std::time::Duration::from_millis(700)).await;
         let job_after = repo
             .find_ai_quiz_job_by_id(job_uuid)

@@ -1,10 +1,71 @@
 .quizPage { display: grid; gap: 16px; }
 
+.quizPageCreate {
+  grid-template-columns: minmax(0, 980px);
+  align-content: start;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+
+.quizPageEditor {
+  grid-template-columns: minmax(0, 980px);
+  align-content: start;
+  justify-content: center;
+  gap: 20px;
+}
+
+.quizPageEditor .quizMetaGrid,
+.quizPageEditor .quizInlineFields {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+
+.quizPageEditor .quizQuestionHeader {
+  align-items: flex-start;
+}
+
+.quizQuestionsList {
+  display: grid;
+  gap: 12px;
+}
+
 .quizPanel {
   background: linear-gradient(165deg, rgba(24, 16, 40, 0.92), rgba(13, 9, 24, 0.92));
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 16px;
+  border-radius: 18px;
+  padding: 20px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  align-items: flex-start;
+  box-shadow: 0 16px 36px rgba(5, 2, 22, 0.36);
+}
+
+.quizPanel h1,
+.quizPanel h2,
+.quizPanel p {
+  margin: 0;
+}
+
+.quizPageEditor .quizPanel h1 {
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 1.08;
+  letter-spacing: 0.01em;
+}
+
+.quizPageEditor .quizPanel h2 {
+  font-size: clamp(24px, 2.8vw, 34px);
+  line-height: 1.12;
+}
+
+.quizPageEditor label {
+  display: grid;
+  gap: 8px;
+  font-size: 18px;
+  line-height: 1.32;
+  color: #f0e9ff;
 }
 
 .quizToolbar,
@@ -21,17 +82,37 @@
 .quizButton,
 .quizTextArea {
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 8px 10px;
+  border-radius: 13px;
+  padding: 11px 12px;
   font: inherit;
   background: var(--surface-strong);
   color: var(--text-primary);
   width: 100%;
 }
 
-.quizTextArea { min-height: 90px; width: 100%; }
+.quizInput,
+.quizSelect,
+.quizTextArea {
+  font-size: 18px;
+  line-height: 1.32;
+}
 
-.quizButton { cursor: pointer; transition: var(--transition); width: auto; min-height: 40px; }
+.quizInput::placeholder,
+.quizTextArea::placeholder {
+  color: rgba(189, 174, 224, 0.82);
+}
+
+.quizTextArea { min-height: 118px; width: 100%; resize: vertical; }
+
+.quizInput:focus,
+.quizSelect:focus,
+.quizTextArea:focus {
+  outline: none;
+  border-color: rgba(183, 155, 255, 0.85);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+}
+
+.quizButton { cursor: pointer; transition: var(--transition); width: auto; min-height: 42px; font-size: 18px; }
 .quizButton:hover { border-color: var(--border-strong); }
 .quizButton.primary { background: linear-gradient(90deg,var(--primary),var(--accent-pink)); border-color: transparent; color: #fff; }
 .quizButton.danger { border-color: rgba(255, 111, 142, 0.62); color: #ffb8ca; }
@@ -42,19 +123,19 @@
 .quizQuestionCard {
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 12px;
+  padding: 14px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
   background: rgba(11, 8, 23, 0.85);
 }
 
 .quizListItem { grid-template-columns: 1fr auto; align-items: center; }
-.quizOptionRow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.quizOptionRow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .quizMuted { color: var(--text-secondary); font-size: 14px; overflow-wrap: anywhere; }
 .quizError { background: rgba(185, 28, 28, 0.18); color: #ffd0da; border-radius: 10px; padding: 10px; border: 1px solid rgba(255,111,142,.32); }
 .quizSuccess { background: rgba(21, 128, 61, 0.18); color: #bfffd6; border-radius: 10px; padding: 10px; border: 1px solid rgba(134,239,172,.3); }
 
-.quizModeSwitch { display: flex; gap: 8px; flex-wrap: wrap; }
+.quizModeSwitch { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
 .quizInput.error,
 .quizSelect.error { border-color: #ff8eb1; }
 
@@ -67,6 +148,13 @@
 
 @media (max-width: 760px) {
   .quizPanel { padding: 14px; border-radius: 14px; }
+  .quizPageEditor .quizPanel h1 { font-size: clamp(28px, 8vw, 36px); }
+  .quizPageEditor .quizPanel h2 { font-size: clamp(22px, 6vw, 30px); }
+  .quizPageEditor label,
+  .quizInput,
+  .quizSelect,
+  .quizButton,
+  .quizTextArea { font-size: 16px; }
   .quizListItem { grid-template-columns: 1fr; }
   .quizButton,
   .quizModeSwitch .quizButton,

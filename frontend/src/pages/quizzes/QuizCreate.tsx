@@ -91,7 +91,7 @@ const QuizCreate = () => {
   }
 
   return (
-    <section className="quizPage">
+    <section className="quizPage quizPageCreate">
       <div className="quizPanel">
         <h1>Создание квиза</h1>
         <p className="quizMuted">Выберите режим: вручную или через AI, после чего откроется стандартный редактор.</p>

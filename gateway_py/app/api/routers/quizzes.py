@@ -79,7 +79,10 @@ def ai_start(req: Request, body: StartAiQuizRequest):
 def ai_get(jobId: str, req: Request):
     uid = require_user(req)
     if not uid: return err(401,'unauthorized','session cookie is missing or invalid')
-    x = clients.quiz.GetAiQuizJob(quiz_pb2.GetAiQuizJobRequest(job_id=jobId, requested_by=common_pb2.UserId(value=uid)))
+    try:
+        x = clients.quiz.GetAiQuizJob(quiz_pb2.GetAiQuizJobRequest(job_id=jobId, requested_by=common_pb2.UserId(value=uid)))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, 'get_ai_quiz_job'); return JSONResponse(b, status_code=c)
     out = {'jobId': x.job_id, 'status': x.status.lower()}
     if x.HasField('quiz'):
         out['quiz'] = quiz_to_json(x.quiz); out['draftId'] = x.quiz.quiz_id.value

@@ -304,8 +304,7 @@ async fn process_entry(state: AppState, entry: QueueEntry) -> anyhow::Result<()>
     let _bot_permit = bot_semaphore.acquire().await?;
 
     let metrics = shared::observability::init_metrics();
-    let lag_seconds =
-        ((chrono::Utc::now().timestamp_millis() - entry.enqueued_at_ms).max(0) / 1000) as i64;
+    let lag_seconds = (chrono::Utc::now().timestamp_millis() - entry.enqueued_at_ms).max(0) / 1000;
     metrics
         .queue_lag_seconds
         .with_label_values(&[&entry.stream])

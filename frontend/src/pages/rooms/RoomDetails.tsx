@@ -78,7 +78,7 @@ const RoomDetails = () => {
   }
 
   return (
-    <section className="roomsPage">
+    <section className="roomsPage roomsPageDetails">
       <div className="pageCard roomsHeader">
         <div>
           <h1>Карточка комнаты</h1>
@@ -107,15 +107,17 @@ const RoomDetails = () => {
             </button>
           </div>
 
-          <div className="roomInfoRow">
+          <div className="roomInfoRow roomInfoRowVertical">
             <strong>Invite-link:</strong>
-            <a href={inviteLink}>{inviteLink}</a>
-            <button className="roomButton" onClick={() => void copyText(inviteLink)}>
-              Копировать ссылку
-            </button>
-            <button className="roomButton" onClick={() => roomId && void roomsApi.regenerateInvite(roomId).then(setInvite).catch(() => setError('Не удалось обновить приглашение.'))}>
-              Обновить приглашение
-            </button>
+            <a className="roomInviteLink" href={inviteLink}>{inviteLink}</a>
+            <div className="roomsInline">
+              <button className="roomButton" onClick={() => void copyText(inviteLink)}>
+                Копировать ссылку
+              </button>
+              <button className="roomButton" onClick={() => roomId && void roomsApi.regenerateInvite(roomId).then(setInvite).catch(() => setError('Не удалось обновить приглашение.'))}>
+                Обновить приглашение
+              </button>
+            </div>
           </div>
 
           <div className="roomMeta">
