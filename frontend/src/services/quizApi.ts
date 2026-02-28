@@ -53,6 +53,15 @@ const sleep = async (ms: number): Promise<void> =>
     window.setTimeout(resolve, ms)
   })
 
+const defaultQuestionPayload = () => ([
+  {
+    id: 'q1',
+    text: 'Новый вопрос',
+    options: ['Вариант 1', 'Вариант 2'],
+    correctIndex: 0,
+  },
+])
+
 const mapQuizToDraft = (quiz: {
   quizId: string
   title?: string
@@ -83,7 +92,7 @@ export const quizApi: QuizApi = {
   create: (payload: CreateQuizRequestDto) =>
     apiFetch<{ quiz: { quizId: string } }>(QUIZZES_BASE, {
       method: 'POST',
-      body: JSON.stringify({ title: payload.topic, description: '', questions: [] }),
+      body: JSON.stringify({ title: payload.topic, description: '', questions: defaultQuestionPayload() }),
     }).then((res) => ({ creatorToken: '', gameId: res.quiz.quizId, pin: '' })),
 
   nextQuestion: (gameId: string) =>
@@ -115,7 +124,7 @@ export const quizApi: QuizApi = {
       QUIZZES_BASE,
       {
         method: 'POST',
-        body: JSON.stringify({ title: 'Новый квиз', questions: [] }),
+        body: JSON.stringify({ title: 'Новый квиз', questions: defaultQuestionPayload() }),
       },
     ).then((res) => mapQuizToDraft(res.quiz)),
 

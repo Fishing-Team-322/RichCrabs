@@ -20,6 +20,10 @@ impl AuthRepository {
         Self { pool }
     }
 
+    fn parse_user_id(user_id: &str) -> Result<Uuid, sqlx::Error> {
+        Uuid::parse_str(user_id).map_err(|err| sqlx::Error::Decode(Box::new(err)))
+    }
+
     pub async fn ensure_schema(&self) -> sqlx::Result<()> {
         sqlx::query("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
             .execute(&self.pool)
@@ -84,7 +88,7 @@ impl AuthRepository {
         let row = sqlx::query(
             "SELECT id, email, display_name, avatar_url, role, banned FROM gateway_users WHERE id=$1",
         )
-        .bind(user_id)
+        .bind(Self::parse_user_id(user_id)?)
         .fetch_optional(&self.pool)
         .await?;
         Ok(row.map(Self::map_user))
@@ -102,7 +106,7 @@ impl AuthRepository {
                     "UPDATE gateway_users SET display_name=$2, avatar_url=$3, updated_at=NOW()
                      WHERE id = $1 RETURNING id, email, display_name, avatar_url, role, banned",
                 )
-                .bind(user_id)
+                .bind(Self::parse_user_id(user_id)?)
                 .bind(dn)
                 .bind(au)
                 .fetch_optional(&self.pool)
@@ -113,7 +117,7 @@ impl AuthRepository {
                     "UPDATE gateway_users SET display_name=$2, updated_at=NOW()
                      WHERE id = $1 RETURNING id, email, display_name, avatar_url, role, banned",
                 )
-                .bind(user_id)
+                .bind(Self::parse_user_id(user_id)?)
                 .bind(dn)
                 .fetch_optional(&self.pool)
                 .await?
@@ -123,7 +127,7 @@ impl AuthRepository {
                     "UPDATE gateway_users SET avatar_url=$2, updated_at=NOW()
                      WHERE id = $1 RETURNING id, email, display_name, avatar_url, role, banned",
                 )
-                .bind(user_id)
+                .bind(Self::parse_user_id(user_id)?)
                 .bind(au)
                 .fetch_optional(&self.pool)
                 .await?
@@ -144,7 +148,7 @@ impl AuthRepository {
              SET password_hash = crypt($3, gen_salt('bf', 12)), updated_at = NOW()
              WHERE id = $1 AND password_hash = crypt($2, password_hash)",
         )
-        .bind(user_id)
+        .bind(Self::parse_user_id(user_id)?)
         .bind(current)
         .bind(new_password)
         .execute(&self.pool)
@@ -161,7 +165,7 @@ impl AuthRepository {
         let result = sqlx::query(
             "UPDATE gateway_users SET banned=$2, ban_reason=$3, updated_at=NOW() WHERE id=$1",
         )
-        .bind(user_id)
+        .bind(Self::parse_user_id(user_id)?)
         .bind(banned)
         .bind(reason)
         .execute(&self.pool)
