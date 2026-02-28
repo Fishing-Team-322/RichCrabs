@@ -27,6 +27,9 @@ type SocketEvent =
   | 'next_question_result'
   | 'pong'
   | 'error'
+  | 'chat_message'
+  | 'chat_history'
+  | 'chat_sent'
   | 'close'
 
 interface SocketEventPayloadMap {
@@ -40,6 +43,9 @@ interface SocketEventPayloadMap {
   next_question_result: { advanced: boolean }
   pong: { type: 'pong' }
   error: { error: string; message: string }
+  chat_message: { message_id: string; author: string; body: string; created_at?: { seconds?: string | number; nanos?: number } | null }
+  chat_history: { messages: Array<{ message_id: string; author: string; body: string; created_at?: { seconds?: string | number; nanos?: number } | null }> }
+  chat_sent: { message_id: string; author: string; body: string; created_at?: { seconds?: string | number; nanos?: number } | null }
   close: CloseEvent
 }
 
@@ -82,6 +88,9 @@ const eventListeners: { [K in SocketEvent]: Set<EventListener<K>> } = {
   next_question_result: new Set(),
   pong: new Set(),
   error: new Set(),
+  chat_message: new Set(),
+  chat_history: new Set(),
+  chat_sent: new Set(),
   close: new Set(),
 }
 
@@ -335,6 +344,14 @@ export const sendStartGame = () => {
 
 export const sendAnswer = (questionId: string, answer: string) => {
   send({ type: 'submit_answer', question_id: questionId, answer })
+}
+
+export const requestChatHistory = (limit = 50) => {
+  send({ type: 'get_chat_history', limit })
+}
+
+export const sendChatMessage = (body: string) => {
+  send({ type: 'chat_send', body })
 }
 
 export const disconnectSocket = () => {

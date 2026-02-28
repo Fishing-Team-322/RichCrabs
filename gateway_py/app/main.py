@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 import grpc
 import redis
+from google.protobuf.json_format import MessageToDict
 from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, PlainTextResponse
 
@@ -659,7 +660,17 @@ async def ws(ws: WebSocket):
                 ev = await asyncio.to_thread(_next_stream_event, stream)
                 if ev is None:
                     return
-                await ws.send_json({"type": "room_event", "event": json.loads(str(ev).replace("\n", " "))})
+                event_dict = MessageToDict(ev, preserving_proto_field_name=True)
+                await ws.send_json({"type": "room_event", "event": event_dict})
+                chat_event = event_dict.get("chat_message_posted")
+                if chat_event:
+                    await ws.send_json({
+                        "type": "chat_message",
+                        "message_id": chat_event.get("message_id", ""),
+                        "author": chat_event.get("author", ""),
+                        "body": chat_event.get("body", ""),
+                        "created_at": chat_event.get("created_at"),
+                    })
         except grpc.RpcError as ex:
             try:
                 c, b = map_grpc_err(ex, "subscribe_room_events")
@@ -678,6 +689,21 @@ async def ws(ws: WebSocket):
             elif t == "get_state":
                 g = clients.game.GetRoomState(game_pb2.GetRoomStateRequest(room_id=common_pb2.RoomId(value=s.room_id)))
                 await ws.send_json({"type": "room_state", "room_id": g.room_id.value, "state": g.state, "players": [{"player_id": p.player_id.value, "display_name": p.display_name, "score": p.score} for p in g.players]})
+            elif t == "get_chat_history":
+                limit = int(msg.get("limit") or 50)
+                history = clients.game.GetRoomChatMessages(game_pb2.GetRoomChatMessagesRequest(room_id=common_pb2.RoomId(value=s.room_id), limit=max(1, min(limit, 100))))
+                await ws.send_json({
+                    "type": "chat_history",
+                    "messages": [
+                        {
+                            "message_id": item.message_id,
+                            "author": item.author,
+                            "body": item.body,
+                            "created_at": MessageToDict(item.created_at, preserving_proto_field_name=True) if item.created_at else None,
+                        }
+                        for item in history.messages
+                    ],
+                })
             elif t == "start_game" and s.role == "host":
                 x = clients.game.StartGame(game_pb2.StartGameRequest(room_id=common_pb2.RoomId(value=s.room_id), requested_by=common_pb2.UserId(value=s.user_id)))
                 await ws.send_json({"type": "start_game_result", "started": x.started})
@@ -693,6 +719,32 @@ async def ws(ws: WebSocket):
             elif t == "submit_answer" and s.role == "player":
                 x = clients.game.SubmitAnswer(game_pb2.SubmitAnswerRequest(room_id=common_pb2.RoomId(value=s.room_id), player_id=common_pb2.PlayerId(value=s.player_id), question_id=msg.get("question_id",""), answer=msg.get("answer","")))
                 await ws.send_json({"type": "submit_answer_result", "accepted": x.accepted, "score_delta": x.score_delta})
+            elif t == "chat_send":
+                body = str(msg.get("body") or "").strip()
+                if not body:
+                    await ws.send_json({"type": "error", "error": "invalid_chat_body", "message": "chat body is required"})
+                    continue
+                chat_req = game_pb2.PostChatMessageRequest(
+                    room_id=common_pb2.RoomId(value=s.room_id),
+                    body=body,
+                )
+                if s.role == "player" and s.player_id:
+                    chat_req.player_id.value = s.player_id
+                elif s.role == "host" and s.user_id:
+                    chat_req.user_id.value = s.user_id
+                else:
+                    await ws.send_json({"type": "error", "error": "unauthorized", "message": "chat author is not available"})
+                    continue
+
+                posted = clients.game.PostChatMessage(chat_req)
+                if posted.message:
+                    await ws.send_json({
+                        "type": "chat_sent",
+                        "message_id": posted.message.message_id,
+                        "author": posted.message.author,
+                        "body": posted.message.body,
+                        "created_at": MessageToDict(posted.message.created_at, preserving_proto_field_name=True) if posted.message.created_at else None,
+                    })
             else:
                 await ws.send_json({"type": "error", "error": "unsupported_message_type", "message": "unsupported client message type"})
     except WebSocketDisconnect:
