@@ -113,6 +113,9 @@ message StartAiQuizJobRequest {
   UserId requested_by = 1;
   string prompt = 2;
   optional uint32 desired_question_count = 3;
+  optional string difficulty = 4;
+  optional string language = 5;
+  optional string format = 6;
 }
 
 message StartAiQuizJobResponse {

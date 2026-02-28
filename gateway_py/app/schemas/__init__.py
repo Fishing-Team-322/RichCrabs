@@ -72,6 +72,9 @@ class UpdateQuizRequest(BaseModel):
 class StartAiQuizRequest(BaseModel):
     prompt: str
     desiredQuestionCount: int = 0
+    difficulty: Optional[str] = None
+    language: Optional[str] = None
+    format: Optional[str] = None
 
 
 class RegisterBotRequest(BaseModel):
