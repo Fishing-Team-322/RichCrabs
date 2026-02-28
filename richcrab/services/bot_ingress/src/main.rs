@@ -32,6 +32,8 @@ async fn main() -> anyhow::Result<()> {
     shared::observability::init_metrics();
 
     let database_url = env::var(shared::config::DATABASE_URL)?;
+    let migrations_dir = env::var(shared::config::MIGRATIONS_DIR)
+        .unwrap_or_else(|_| "/app/richcrab/migrations".to_string());
     let ingress_addr = env::var(shared::config::SERVICE_ADDR_BOT_INGRESS)
         .unwrap_or_else(|_| "0.0.0.0:8090".to_string());
 
@@ -39,6 +41,7 @@ async fn main() -> anyhow::Result<()> {
         .max_connections(5)
         .connect(&database_url)
         .await?;
+    shared::db::run_migrations(&pool, &migrations_dir).await?;
 
     let state = AppState {
         repository: BotIngressRepository::new(pool),

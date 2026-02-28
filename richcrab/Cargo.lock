@@ -2300,11 +2300,13 @@ dependencies = [
 name = "shared"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "chrono",
  "deadpool-redis",
  "prometheus",
  "sha2",
+ "sqlx",
  "thiserror 1.0.69",
  "tokio",
  "tonic",
