@@ -96,6 +96,12 @@ class FakeRedis:
     def get(self, key):
         return self._data.get(key)
 
+    def set(self, key, value):
+        self._data[key] = value
+
+    def delete(self, key):
+        self._data.pop(key, None)
+
 
 class FakeClients:
     def __init__(self):
@@ -133,11 +139,11 @@ class FakeClients:
             GetAiQuizJob=lambda req: _ns(job_id=req.job_id, status="DONE", HasField=lambda f: False),
         )
         self.bot = _ns(
-            RegisterBot=lambda req: _ns(bot=_ns(bot_id=_ns(value="b1"), name=req.name, version=req.version, status="active")),
-            ListBots=lambda req: _ns(bots=[_ns(bot_id=_ns(value="b1"), name="Bot", version="1", status="active")]),
-            GetBotStatus=lambda req: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="active")),
-            UpdateBotStatus=lambda req: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="disabled")),
-            RemoveBot=lambda req: _ns(),
+            RegisterBot=lambda req, **kwargs: _ns(bot=_ns(bot_id=_ns(value="b1"), name=req.name, version=req.version, status="active")),
+            ListBots=lambda req, **kwargs: _ns(bots=[_ns(bot_id=_ns(value="b1"), name="Bot", version="1", status="active")]),
+            GetBotStatus=lambda req, **kwargs: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="webhook_set:http://localhost/api/v1/telegram/webhook/b1/secret pending:0")),
+            UpdateBotStatus=lambda req, **kwargs: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="disabled")),
+            RemoveBot=lambda req, **kwargs: _ns(),
         )
         self.health = _ns(Ping=lambda req: _ns())
 
