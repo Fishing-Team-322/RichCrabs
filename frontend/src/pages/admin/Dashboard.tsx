@@ -5,6 +5,7 @@ import { MetricCard } from '../../components/MetricCard'
 import { RoomsTable } from '../../components/RoomsTable'
 import { useInterval } from '../../hooks/useInterval'
 import { monitoringApi } from '../../features/monitoring/api/monitoringApi'
+import { mockOverview, mockRoomDetails, mockRoomsList } from '../../features/monitoring/mockDashboard'
 import type { Overview, RoomDetails, RoomsList, RoomRow } from '../../features/monitoring/types'
 
 type SortKey = 'players_desc' | 'players_asc' | 'ws_desc' | 'ws_asc' | 'room_asc' | 'room_desc'
@@ -25,6 +26,7 @@ const Dashboard = ({ onStatus, onTotals }: DashboardProps) => {
 
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [pollMs, setPollMs] = useState(2000)
+  const [demoMode, setDemoMode] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -81,6 +83,13 @@ const Dashboard = ({ onStatus, onTotals }: DashboardProps) => {
     try {
       setLoading(true)
       setError(null)
+
+      if (demoMode) {
+        setOverview(mockOverview())
+        setRooms(mockRoomsList())
+        return
+      }
+
       const [nextOverview, nextRooms] = await Promise.all([monitoringApi.overview(), monitoringApi.rooms()])
       setOverview(nextOverview)
       setRooms(nextRooms)
@@ -98,7 +107,7 @@ const Dashboard = ({ onStatus, onTotals }: DashboardProps) => {
 
   useEffect(() => {
     void refresh()
-  }, [])
+  }, [demoMode])
 
   useEffect(() => {
     if (!onTotals) return
@@ -117,6 +126,11 @@ const Dashboard = ({ onStatus, onTotals }: DashboardProps) => {
     setDrawerLoading(true)
     setDetails(null)
     try {
+      if (demoMode) {
+        setDetails(mockRoomDetails(roomId))
+        return
+      }
+
       const roomDetails = await monitoringApi.room(roomId)
       setDetails(roomDetails)
     } catch (apiError) {
@@ -134,6 +148,7 @@ const Dashboard = ({ onStatus, onTotals }: DashboardProps) => {
           <div className="field"><IconSearch /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search room id…" /></div>
           <div className="select"><select value={lifecycle} onChange={(event) => setLifecycle(event.target.value as LifecycleFilter)}><option value="all">All states</option><option value="lobby">Lobby</option><option value="in_game">In-game</option><option value="finished">Finished</option><option value="unknown">Unknown</option></select><IconChevron /></div>
           <div className="select"><select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}><option value="players_desc">Players ↓</option><option value="players_asc">Players ↑</option><option value="ws_desc">WS conns ↓</option><option value="ws_asc">WS conns ↑</option><option value="room_asc">RoomId A→Z</option><option value="room_desc">RoomId Z→A</option></select><IconChevron /></div>
+          <div className="toggle"><input id="demoModeDash" type="checkbox" checked={demoMode} onChange={(event) => setDemoMode(event.target.checked)} /><label htmlFor="demoModeDash">Demo</label></div>
           <div className="toggle"><input id="autoRefreshDash" type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} /><label htmlFor="autoRefreshDash">Auto</label></div>
           <div className="select compact"><select value={pollMs} onChange={(event) => setPollMs(parseInt(event.target.value, 10))}><option value={1000}>1s</option><option value={2000}>2s</option><option value={5000}>5s</option></select><IconChevron /></div>
           <button className="btn" onClick={() => void refresh()}><IconRefresh /> Refresh</button>

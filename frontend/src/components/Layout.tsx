@@ -1,4 +1,6 @@
 import { useMemo } from 'react'
+import { useAppSelector } from '../store/hooks'
+import { selectIsAdmin } from '../store/slices/authSlice'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Header from './Header/Header'
@@ -6,6 +8,7 @@ import { routes } from '../app/router/routeMap'
 
 const Layout = () => {
   const { t } = useTranslation()
+  const isAdmin = useAppSelector(selectIsAdmin)
 
   const internalNavigation = useMemo(
     () => [
@@ -14,9 +17,9 @@ const Layout = () => {
       { to: routes.profile, label: t('common.profile') },
       { to: routes.subscriptions, label: 'Подписки' },
       { to: routes.bots, label: 'Боты' },
-      { to: routes.adminDashboard, label: 'Админ' },
+      ...(isAdmin ? [{ to: routes.adminDashboard, label: 'Админ' }] : []),
     ],
-    [t],
+    [isAdmin, t],
   )
 
   return (

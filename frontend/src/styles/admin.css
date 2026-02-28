@@ -555,3 +555,56 @@
   .adminRoot .cards{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .adminRoot .drawer{ width: 92vw; }
 }
+
+/* Dark theme overrides for admin panel */
+.adminRoot{
+  --bg0:#090b16;
+  --bg1:#0f1324;
+  --panel:#131a2f;
+  --panel2:#0f1629;
+  --line: rgba(148,163,184,.2);
+  --line2: rgba(148,163,184,.32);
+  --text:#e6ecff;
+  --muted: rgba(214,223,255,.7);
+  --shadow: 0 10px 24px rgba(2,6,23,.55);
+  --shadow2: 0 16px 40px rgba(2,6,23,.65);
+}
+
+.adminRoot .sidebar,
+.adminRoot .miniStat,
+.adminRoot .statusPill,
+.adminRoot .field,
+.adminRoot .select,
+.adminRoot .toggle,
+.adminRoot .btn,
+.adminRoot .panelKpi,
+.adminRoot .drawer,
+.adminRoot .detailCard,
+.adminRoot .playerRow,
+.adminRoot .emptyCard,
+.adminRoot .modal,
+.adminRoot .input {
+  background: rgba(19,26,47,.9);
+}
+
+.adminRoot .navItem,
+.adminRoot .statusText,
+.adminRoot .btn,
+.adminRoot .toggle,
+.adminRoot .table thead th,
+.adminRoot .table tbody td,
+.adminRoot .iconBtn,
+.adminRoot .chip,
+.adminRoot .field svg,
+.adminRoot .select svg,
+.adminRoot .roomId,
+.adminRoot .badge {
+  color: var(--text);
+}
+
+.adminRoot .table tbody tr:hover,
+.adminRoot .navItem:hover,
+.adminRoot .iconBtn:hover,
+.adminRoot .btn:hover {
+  background: rgba(59,130,246,.14);
+}
