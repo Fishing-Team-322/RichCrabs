@@ -6,6 +6,46 @@ on:
   workflow_dispatch:
 
 jobs:
+
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: richcrab
+          POSTGRES_PASSWORD: richcrab
+          POSTGRES_DB: richcrab
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U richcrab"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgres://richcrab:richcrab@localhost:5432/richcrab
+      PGPASSWORD: richcrab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-rust-stable-${{ hashFiles('richcrab/Cargo.lock') }}
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --version 0.8.6 --locked --no-default-features --features rustls,postgres
+      - name: Apply migrations on clean DB
+        run: sqlx migrate run --source richcrab/migrations
+      - name: Re-run migrations (must be no-op)
+        run: sqlx migrate run --source richcrab/migrations
+      - name: Validate critical schema objects
+        run: |
+          set -euo pipefail
+          gateway_users_regclass=$(psql -h localhost -U richcrab -d richcrab -v ON_ERROR_STOP=1 -tA -c "SELECT to_regclass('public.gateway_users');")
+          users_regclass=$(psql -h localhost -U richcrab -d richcrab -v ON_ERROR_STOP=1 -tA -c "SELECT to_regclass('public.users');")
+
+          test "$gateway_users_regclass" = "gateway_users"
+          test "$users_regclass" = "users"
+
   gateway_py:
     runs-on: ubuntu-latest
     steps:
