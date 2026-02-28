@@ -28,6 +28,21 @@ static bool envBool(const char* k, bool d) {
   return d;
 }
 
+static std::unordered_set<std::string> envCsvSet(const char* k) {
+  std::unordered_set<std::string> out;
+  const char* raw = std::getenv(k);
+  if (!raw) return out;
+
+  std::stringstream ss(raw);
+  std::string item;
+  while (std::getline(ss, item, ',')) {
+    item.erase(item.begin(), std::find_if(item.begin(), item.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+    item.erase(std::find_if(item.rbegin(), item.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), item.end());
+    if (!item.empty()) out.insert(item);
+  }
+  return out;
+}
+
 Config Config::LoadFromEnv() {
   Config c;
 
@@ -70,6 +85,10 @@ Config Config::LoadFromEnv() {
   c.ws_mock_stream_auto_on_unavailable = envBool("GW_WS_MOCK_STREAM_AUTO_ON_UNAVAILABLE", c.ws_mock_stream_auto_on_unavailable);
   c.app_env = envStr("GW_ENV", c.app_env);
   c.auth_local_smoke_fallback_enabled = envBool("GW_AUTH_LOCAL_SMOKE_FALLBACK", c.auth_local_smoke_fallback_enabled);
+  c.telegram_webhook_ip_allowlist = envCsvSet("GW_TELEGRAM_WEBHOOK_IP_ALLOWLIST");
+  c.telegram_webhook_rate_limit_per_minute = static_cast<uint64_t>(envInt(
+      "GW_TELEGRAM_WEBHOOK_RATE_LIMIT_PER_MINUTE",
+      static_cast<int>(c.telegram_webhook_rate_limit_per_minute)));
   const auto adminEmails = envStr("ADMIN_EMAILS", "");
   if (!adminEmails.empty()) {
     std::stringstream ss(adminEmails);

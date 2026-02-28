@@ -1953,6 +1953,10 @@ paths:
           in: path
           required: true
           schema: { type: string }
+        - name: x-telegram-bot-api-secret-token
+          in: header
+          required: true
+          schema: { type: string }
       requestBody:
         required: true
         content:
@@ -1969,14 +1973,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '401':
+          description: Missing x-telegram-bot-api-secret-token header
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
         '403':
-          description: Invalid webhook secret (path or header)
+          description: Invalid webhook secret (path or header) or denied source IP
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/QuizTelegramErrorResponse'
         '404':
           description: Unknown bot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizTelegramErrorResponse'
+        '429':
+          description: Webhook rate limit exceeded
           content:
             application/json:
               schema:
