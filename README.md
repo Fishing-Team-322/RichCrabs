@@ -8,6 +8,8 @@
 docker compose up -d --build
 ```
 
+Rust-сервисы при старте автоматически применяют SQL-миграции из `/app/richcrab/migrations` (путь задается через `MIGRATIONS_DIR`), поэтому схема актуализируется даже при уже существующем `pg_data` volume.
+
 ## Python gateway (FastAPI)
 
 Gateway полностью переведен на Python (`gateway_py/`) и запускается как сервис `gateway` в `docker-compose.yml`.

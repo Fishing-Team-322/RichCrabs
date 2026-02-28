@@ -13,12 +13,16 @@ async fn main() -> anyhow::Result<()> {
     shared::observability::init_metrics();
 
     let database_url = env::var(shared::config::DATABASE_URL)?;
+    let migrations_dir = env::var(shared::config::MIGRATIONS_DIR)
+        .unwrap_or_else(|_| "/app/richcrab/migrations".to_string());
     let addr: SocketAddr = env::var(shared::config::SERVICE_ADDR_AUTH)?.parse()?;
 
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
         .await?;
+    shared::db::run_migrations(&pool, &migrations_dir).await?;
+
     let svc = AuthServiceImpl::new(pool);
 
     let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
