@@ -16,7 +16,21 @@ from app.security import SessionClaims, issue_csrf_token, issue_session_token, v
 from app.proto_gen import auth_pb2, bot_pb2, common_pb2, entitlements_pb2, game_pb2, join_pb2, quiz_pb2, richcrab_pb2
 
 rdb = redis.from_url(settings.redis_url, decode_responses=True)
-app = FastAPI(title="QuizBattle Gateway API", docs_url="/docs", openapi_url="/openapi.json")
+app = FastAPI(
+    title="QuizBattle Gateway API",
+    docs_url="/docs",
+    openapi_url="/openapi.json",
+    openapi_tags=[
+        {"name": "system", "description": "Gateway service and health endpoints"},
+        {"name": "auth", "description": "Authentication and session management"},
+        {"name": "profile", "description": "Host profile and account endpoints"},
+        {"name": "games", "description": "Game runtime lifecycle endpoints"},
+        {"name": "quizzes", "description": "Quiz management endpoints"},
+        {"name": "bots", "description": "Bot endpoints"},
+        {"name": "admin", "description": "Admin dashboard endpoints"},
+        {"name": "ws", "description": "WebSocket endpoint"},
+    ],
+)
 
 
 def err(code: int, error: str, message: str, details: Any = None):
@@ -39,15 +53,16 @@ def require_csrf(req: Request):
     return None
 
 
-def set_auth(resp: Response, claims: SessionClaims):
+def set_auth(resp: Response, claims: SessionClaims, csrf_token: Optional[str] = None):
     tok = issue_session_token(claims, settings.session_ttl_seconds)
-    csrf = issue_csrf_token()
+    csrf = csrf_token or issue_csrf_token()
     resp.set_cookie(settings.session_cookie_name, tok, path=settings.session_cookie_path, secure=settings.session_cookie_secure, httponly=settings.session_cookie_httponly, samesite="lax")
     resp.set_cookie(settings.csrf_cookie_name, csrf, path=settings.csrf_cookie_path, secure=settings.csrf_cookie_secure, httponly=settings.csrf_cookie_httponly, samesite="lax")
     return csrf
 
 
-@app.get("/health")
+@app.get("/health", tags=["system"])
+@app.get("/api/v1/healthz", tags=["system"])
 def health(grpc_check: bool = False):
     body = {"status": "ok", "gateway": "ok", "requestId": uuid.uuid4().hex}
     if grpc_check:
@@ -61,7 +76,7 @@ def health(grpc_check: bool = False):
     return body
 
 
-@app.get("/openapi.yaml")
+@app.get("/openapi.yaml", tags=["system"])
 def old_openapi():
     p = settings.openapi_path
     if not os.path.exists(p):
@@ -69,8 +84,8 @@ def old_openapi():
     return PlainTextResponse(open(p).read())
 
 
-@app.get("/csrf")
-@app.get("/api/v1/auth/csrf")
+@app.get("/csrf", tags=["auth"])
+@app.get("/api/v1/auth/csrf", tags=["auth"])
 def csrf():
     token = issue_csrf_token()
     r = JSONResponse({"token": token})
@@ -78,8 +93,8 @@ def csrf():
     return r
 
 
-@app.post("/logout")
-@app.post("/api/v1/auth/logout")
+@app.post("/logout", tags=["auth"])
+@app.post("/api/v1/auth/logout", tags=["auth"])
 def logout(req: Request):
     if (e := require_csrf(req)):
         return e
@@ -89,15 +104,15 @@ def logout(req: Request):
     return r
 
 
-@app.get("/api/v1/session")
+@app.get("/api/v1/session", tags=["auth"])
 def session(req: Request):
     s = session_from_req(req)
     if not s:
-        return err(401, "unauthorized", "session cookie is missing or invalid")
+        return {"authenticated": False, "role": "guest"}
     return {"authenticated": True, "role": s.role, "roomId": s.room_id, "pin": s.pin, "playerId": s.player_id, "userId": s.user_id, "exp": s.exp}
 
 
-@app.post("/api/v1/auth/register")
+@app.post("/api/v1/auth/register", tags=["auth"])
 def register(req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)):
         return e
@@ -109,13 +124,13 @@ def register(req: Request, body: dict[str, Any]):
     if res.email_taken:
         return err(409, "email_taken", "email already registered")
     u = res.user
-    out = JSONResponse({"user": {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}, "csrfToken": ""})
-    token = set_auth(out, SessionClaims(session_type="auth", role="host", user_id=u.id))
-    out.body = json.dumps({"user": {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}, "csrfToken": token}).encode()
+    csrf_token = issue_csrf_token()
+    out = JSONResponse({"user": {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}, "csrfToken": csrf_token})
+    set_auth(out, SessionClaims(session_type="auth", role="host", user_id=u.id), csrf_token=csrf_token)
     return out
 
 
-@app.post("/api/v1/auth/login")
+@app.post("/api/v1/auth/login", tags=["auth"])
 def login(req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)):
         return e
@@ -127,9 +142,9 @@ def login(req: Request, body: dict[str, Any]):
     if not res.authenticated:
         return err(401, "unauthorized", "invalid email or password")
     u = res.user
-    out = JSONResponse({"user": {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}, "csrfToken": ""})
-    token = set_auth(out, SessionClaims(session_type="auth", role="host", user_id=u.id))
-    out.body = json.dumps({"user": {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}, "csrfToken": token}).encode()
+    csrf_token = issue_csrf_token()
+    out = JSONResponse({"user": {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}, "csrfToken": csrf_token})
+    set_auth(out, SessionClaims(session_type="auth", role="host", user_id=u.id), csrf_token=csrf_token)
     return out
 
 
@@ -140,19 +155,23 @@ def require_user(req: Request) -> Optional[str]:
     return s.user_id
 
 
-@app.get("/api/v1/me")
+@app.get("/api/v1/me", tags=["profile"])
 def me(req: Request):
     uid = require_user(req)
     if not uid:
         return err(401, "unauthorized", "session cookie is missing or invalid")
-    res = clients.auth.GetMe(auth_pb2.GetMeRequest(user_id=common_pb2.UserId(value=uid)))
+    try:
+        res = clients.auth.GetMe(auth_pb2.GetMeRequest(user_id=common_pb2.UserId(value=uid)))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "auth_get_me")
+        return JSONResponse(b, status_code=c)
     if not res.found:
         return err(404, "not_found", "user not found")
     u = res.user
     return {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}
 
 
-@app.patch("/api/v1/me")
+@app.patch("/api/v1/me", tags=["profile"])
 def patch_me(req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)):
         return e
@@ -164,30 +183,38 @@ def patch_me(req: Request, body: dict[str, Any]):
         q.display_name = body["displayName"]
     if "avatarUrl" in body:
         q.avatar_url = body["avatarUrl"]
-    res = clients.auth.UpdateProfile(q)
+    try:
+        res = clients.auth.UpdateProfile(q)
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "auth_update_profile")
+        return JSONResponse(b, status_code=c)
     u = res.user
     return {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}
 
 
-@app.post("/api/v1/me/password")
+@app.post("/api/v1/me/password", tags=["profile"])
 def password(req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)):
         return e
     uid = require_user(req)
     if not uid:
         return err(401, "unauthorized", "session cookie is missing or invalid")
-    res = clients.auth.ChangePassword(auth_pb2.ChangePasswordRequest(user_id=common_pb2.UserId(value=uid), current_password=body["currentPassword"], new_password=body["newPassword"]))
+    try:
+        res = clients.auth.ChangePassword(auth_pb2.ChangePasswordRequest(user_id=common_pb2.UserId(value=uid), current_password=body["currentPassword"], new_password=body["newPassword"]))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "auth_change_password")
+        return JSONResponse(b, status_code=c)
     if res.mismatch:
         return err(401, "unauthorized", "current password mismatch")
     return Response(status_code=204)
 
 
-@app.get("/api/v1/me/sessions")
+@app.get("/api/v1/me/sessions", tags=["profile"])
 def me_sessions():
     return err(501, "not_implemented", "/api/v1/me/sessions is not implemented")
 
 
-@app.post("/api/v1/games")
+@app.post("/api/v1/games", tags=["games"])
 def create_game(req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)): return e
     uid = require_user(req)
@@ -210,7 +237,7 @@ def create_game(req: Request, body: dict[str, Any]):
     return out
 
 
-@app.post("/api/v1/games/{pin}/invite/regenerate")
+@app.post("/api/v1/games/{pin}/invite/regenerate", tags=["games"])
 def regenerate_invite(pin: str, req: Request):
     s = session_from_req(req)
     if not s or s.role != "host" or not s.room_id or not s.user_id:
@@ -243,7 +270,7 @@ def _join_response(pin: str, room_id: str, player_id: str):
     return out
 
 
-@app.post("/api/v1/games/{pin}/join")
+@app.post("/api/v1/games/{pin}/join", tags=["games"])
 def join_pin(pin: str, req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)): return e
     t = clients.join.IssueJoinTicketByPin(join_pb2.IssueJoinTicketByPinRequest(pin=pin, display_name=body.get("name") or body.get("displayName")))
@@ -251,7 +278,7 @@ def join_pin(pin: str, req: Request, body: dict[str, Any]):
     return _join_response(pin, t.ticket.room_id.value, j.player_id.value)
 
 
-@app.post("/api/v1/invites/{inviteToken}/join")
+@app.post("/api/v1/invites/{inviteToken}/join", tags=["games"])
 def join_inv(inviteToken: str, req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)): return e
     t = clients.join.IssueJoinTicketByInvite(join_pb2.IssueJoinTicketByInviteRequest(invite_token=inviteToken, display_name=body.get("name") or body.get("displayName")))
@@ -259,8 +286,8 @@ def join_inv(inviteToken: str, req: Request, body: dict[str, Any]):
     return _join_response("", t.ticket.room_id.value, j.player_id.value)
 
 
-@app.get("/api/v1/games/{pin}")
-@app.get("/api/v1/games/{pin}/state")
+@app.get("/api/v1/games/{pin}", tags=["games"])
+@app.get("/api/v1/games/{pin}/state", tags=["games"])
 def state(pin: str, req: Request):
     s = session_from_req(req)
     if not s: return err(401, "unauthorized", "session cookie is missing or invalid")
@@ -285,17 +312,17 @@ def _host_action(req: Request, pin: str, action: str):
     return Response(status_code=204)
 
 
-@app.post("/api/v1/games/{pin}/start")
+@app.post("/api/v1/games/{pin}/start", tags=["games"])
 def start(pin: str, req: Request): return _host_action(req, pin, "start")
-@app.post("/api/v1/games/{pin}/pause")
+@app.post("/api/v1/games/{pin}/pause", tags=["games"])
 def pause(pin: str, req: Request): return _host_action(req, pin, "pause")
-@app.post("/api/v1/games/{pin}/resume")
+@app.post("/api/v1/games/{pin}/resume", tags=["games"])
 def resume(pin: str, req: Request): return _host_action(req, pin, "resume")
-@app.post("/api/v1/games/{pin}/next")
+@app.post("/api/v1/games/{pin}/next", tags=["games"])
 def nextq(pin: str, req: Request): return _host_action(req, pin, "next")
 
 
-@app.post("/api/v1/games/{pin}/leave")
+@app.post("/api/v1/games/{pin}/leave", tags=["games"])
 def leave(pin: str, req: Request):
     s = session_from_req(req)
     if not s or s.role != "player": return err(403, "forbidden", "only player can leave game")
@@ -307,7 +334,7 @@ def leave(pin: str, req: Request):
     return r
 
 
-@app.post("/api/v1/games/{pin}/kick")
+@app.post("/api/v1/games/{pin}/kick", tags=["games"])
 def kick(pin: str, req: Request, body: dict[str, Any]):
     s = session_from_req(req)
     if not s or s.role != "host": return err(401, "unauthorized", "session cookie is missing or invalid")
@@ -315,7 +342,7 @@ def kick(pin: str, req: Request, body: dict[str, Any]):
     clients.game.KickPlayer(game_pb2.KickPlayerRequest(room_id=common_pb2.RoomId(value=s.room_id), requested_by=common_pb2.UserId(value=s.user_id), player_id=common_pb2.PlayerId(value=body["playerId"])))
     return Response(status_code=204)
 
-@app.post("/api/v1/bots")
+@app.post("/api/v1/bots", tags=["bots"])
 def reg_bot(req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)): return e
     uid = require_user(req)
@@ -323,19 +350,19 @@ def reg_bot(req: Request, body: dict[str, Any]):
     b = clients.bot.RegisterBot(bot_pb2.RegisterBotRequest(name=body["name"], version=body["version"], endpoint=body["endpoint"]))
     return {"bot": {"botId": b.bot.bot_id.value, "name": b.bot.name, "version": b.bot.version, "status": b.bot.status}}
 
-@app.get("/api/v1/bots")
+@app.get("/api/v1/bots", tags=["bots"])
 def list_bots(req: Request):
     if not require_user(req): return err(401,"unauthorized","session cookie is missing or invalid")
     x = clients.bot.ListBots(bot_pb2.ListBotsRequest())
     return {"bots": [{"botId": b.bot_id.value, "name": b.name, "version": b.version, "status": b.status} for b in x.bots]}
 
-@app.get("/api/v1/bots/{botId}")
+@app.get("/api/v1/bots/{botId}", tags=["bots"])
 def get_bot(botId: str, req: Request):
     if not require_user(req): return err(401,"unauthorized","session cookie is missing or invalid")
     b = clients.bot.GetBotStatus(bot_pb2.GetBotStatusRequest(bot_id=common_pb2.BotId(value=botId))).bot
     return {"bot": {"botId": b.bot_id.value, "name": b.name, "version": b.version, "status": b.status}}
 
-@app.patch("/api/v1/bots/{botId}")
+@app.patch("/api/v1/bots/{botId}", tags=["bots"])
 def patch_bot(botId: str, req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)): return e
     if not require_user(req): return err(401,"unauthorized","session cookie is missing or invalid")
@@ -345,30 +372,30 @@ def patch_bot(botId: str, req: Request, body: dict[str, Any]):
     b = clients.bot.UpdateBotStatus(q).bot
     return {"bot": {"botId": b.bot_id.value, "name": b.name, "version": b.version, "status": b.status}}
 
-@app.delete("/api/v1/bots/{botId}")
+@app.delete("/api/v1/bots/{botId}", tags=["bots"])
 def del_bot(botId: str, req: Request):
     if (e := require_csrf(req)): return e
     if not require_user(req): return err(401,"unauthorized","session cookie is missing or invalid")
     clients.bot.RemoveBot(bot_pb2.RemoveBotRequest(bot_id=common_pb2.BotId(value=botId)))
     return Response(status_code=204)
 
-@app.post("/api/v1/telegram/bots/connect")
+@app.post("/api/v1/telegram/bots/connect", tags=["bots"])
 def tg_connect(req: Request, body: dict[str,Any]):
     if (e := require_csrf(req)): return e
     return {"botId": f"bot_{uuid.uuid4().hex[:24]}", "webhookUrl": f"{settings.public_base_url}/api/v1/telegram/webhook/demo/secret", "status": "connected"}
 
-@app.post("/api/v1/telegram/webhook/{botId}/{secret}")
+@app.post("/api/v1/telegram/webhook/{botId}/{secret}", tags=["bots"])
 def tg_webhook(botId: str, secret: str):
     return {"ok": True, "botId": botId}
 
-@app.get("/api/v1/quizzes")
+@app.get("/api/v1/quizzes", tags=["quizzes"])
 def list_quizzes(limit: int = 20, pageToken: str = "", ownerUserId: str = ""):
     req = quiz_pb2.ListQuizzesRequest(page_size=limit, page_token=pageToken)
     if ownerUserId: req.owner_user_id.value = ownerUserId
     x = clients.quiz.ListQuizzes(req)
     return {"limit": limit, "nextPageToken": x.next_page_token, "items": [{"quizId": q.quiz_id.value, "ownerUserId": q.owner_user_id.value, "title": q.title, "description": q.description, "questions": [{"id":qq.id,"text":qq.text,"options":list(qq.options),"correctIndex":qq.correct_option_index if qq.HasField('correct_option_index') else None} for qq in q.questions]} for q in x.quizzes]}
 
-@app.post("/api/v1/quizzes")
+@app.post("/api/v1/quizzes", tags=["quizzes"])
 def create_quiz(req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)): return e
     uid = require_user(req)
@@ -380,12 +407,12 @@ def create_quiz(req: Request, body: dict[str, Any]):
     x = clients.quiz.CreateQuiz(q)
     return {"quiz": {"quizId": x.quiz.quiz_id.value, "ownerUserId": x.quiz.owner_user_id.value, "title": x.quiz.title, "description": x.quiz.description}, "status": "created"}
 
-@app.get("/api/v1/quizzes/{quizId}")
+@app.get("/api/v1/quizzes/{quizId}", tags=["quizzes"])
 def get_quiz(quizId: str):
     q = clients.quiz.GetQuiz(quiz_pb2.GetQuizRequest(quiz_id=common_pb2.QuizId(value=quizId))).quiz
     return {"quiz": {"quizId": q.quiz_id.value, "ownerUserId": q.owner_user_id.value, "title": q.title, "description": q.description, "questions": [{"id":qq.id,"text":qq.text,"options":list(qq.options)} for qq in q.questions]}}
 
-@app.patch("/api/v1/quizzes/{quizId}")
+@app.patch("/api/v1/quizzes/{quizId}", tags=["quizzes"])
 def upd_quiz(quizId: str, req: Request, body: dict[str,Any]):
     if (e := require_csrf(req)): return e
     cur = clients.quiz.GetQuiz(quiz_pb2.GetQuizRequest(quiz_id=common_pb2.QuizId(value=quizId))).quiz
@@ -394,7 +421,7 @@ def upd_quiz(quizId: str, req: Request, body: dict[str,Any]):
     x = clients.quiz.UpdateQuiz(quiz_pb2.UpdateQuizRequest(quiz=cur))
     return {"quiz": {"quizId": x.quiz.quiz_id.value, "ownerUserId": x.quiz.owner_user_id.value, "title": x.quiz.title, "description": x.quiz.description}, "status": "updated"}
 
-@app.post("/api/v1/quizzes/{quizId}/publish")
+@app.post("/api/v1/quizzes/{quizId}/publish", tags=["quizzes"])
 def pub_quiz(quizId: str, req: Request):
     if (e := require_csrf(req)): return e
     uid = require_user(req)
@@ -402,7 +429,7 @@ def pub_quiz(quizId: str, req: Request):
     x = clients.quiz.PublishQuiz(quiz_pb2.PublishQuizRequest(quiz_id=common_pb2.QuizId(value=quizId), requested_by=common_pb2.UserId(value=uid)))
     return {"quiz": {"quizId": x.quiz.quiz_id.value}, "publishedVersion": x.published_version, "status": "published"}
 
-@app.post("/api/v1/quizzes/ai-generate")
+@app.post("/api/v1/quizzes/ai-generate", tags=["quizzes"])
 def ai_start(req: Request, body: dict[str,Any]):
     if (e := require_csrf(req)): return e
     uid = require_user(req)
@@ -410,7 +437,7 @@ def ai_start(req: Request, body: dict[str,Any]):
     x = clients.quiz.StartAiQuizJob(quiz_pb2.StartAiQuizJobRequest(requested_by=common_pb2.UserId(value=uid), prompt=body["prompt"], desired_question_count=body.get("desiredQuestionCount",0)))
     return {"jobId": x.job_id, "status": x.status.lower()}
 
-@app.get("/api/v1/quizzes/ai-jobs/{jobId}")
+@app.get("/api/v1/quizzes/ai-jobs/{jobId}", tags=["quizzes"])
 def ai_get(jobId: str, req: Request):
     uid = require_user(req)
     if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
@@ -419,14 +446,14 @@ def ai_get(jobId: str, req: Request):
     if x.HasField("quiz"): out["quiz"] = {"quizId": x.quiz.quiz_id.value, "title": x.quiz.title}
     return out
 
-@app.get("/api/v1/quizzes/ai-jobs/{jobId}/result")
+@app.get("/api/v1/quizzes/ai-jobs/{jobId}/result", tags=["quizzes"])
 def ai_result(jobId: str, req: Request):
     x = ai_get(jobId, req)
     if x["status"] != "done":
         return err(409, "not_implemented", "ai job is not done", {"error":"job_not_done","status": x["status"]})
     return x
 
-@app.get("/api/v1/entitlements")
+@app.get("/api/v1/entitlements", tags=["profile"])
 def ents(req: Request):
     uid = require_user(req)
     if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
@@ -437,33 +464,33 @@ def ents(req: Request):
 def usage_impl(uid: str):
     return {"usage": {"rooms": int(rdb.get(f"usage:{uid}:rooms") or 0), "bots": int(rdb.get(f"usage:{uid}:bots") or 0), "ai": int(rdb.get(f"usage:{uid}:ai") or 0)}}
 
-@app.get("/api/v1/usage")
+@app.get("/api/v1/usage", tags=["profile"])
 def usage(req: Request):
     uid = require_user(req)
     if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
     return usage_impl(uid)
 
-@app.get("/admin/api/stats")
+@app.get("/admin/api/stats", tags=["admin"])
 def stats(req: Request):
     if not require_user(req): return err(403, "forbidden", "admin access required")
     x = clients.auth.GetAdminStats(auth_pb2.GetAdminStatsRequest())
     return {"usersCount": x.users_count, "gamesCount": x.games_count, "activeRooms": x.active_rooms}
 
-@app.post("/admin/api/users/{userId}/ban")
+@app.post("/admin/api/users/{userId}/ban", tags=["admin"])
 def ban(userId: str, req: Request, body: dict[str,Any]):
     if (e := require_csrf(req)): return e
     if not require_user(req): return err(403, "forbidden", "admin access required")
     clients.auth.SetUserBan(auth_pb2.SetUserBanRequest(user_id=common_pb2.UserId(value=userId), banned=True, reason=body.get("reason","")))
     return Response(status_code=204)
 
-@app.post("/admin/api/users/{userId}/unban")
+@app.post("/admin/api/users/{userId}/unban", tags=["admin"])
 def unban(userId: str, req: Request, body: dict[str,Any]):
     if (e := require_csrf(req)): return e
     if not require_user(req): return err(403, "forbidden", "admin access required")
     clients.auth.SetUserBan(auth_pb2.SetUserBanRequest(user_id=common_pb2.UserId(value=userId), banned=False, reason=body.get("reason","")))
     return Response(status_code=204)
 
-@app.post("/admin/api/bots/{botId}/disable")
+@app.post("/admin/api/bots/{botId}/disable", tags=["admin"])
 def admin_disable(botId: str, req: Request, body: dict[str,Any]):
     if (e := require_csrf(req)): return e
     if not require_user(req): return err(403, "forbidden", "admin access required")
