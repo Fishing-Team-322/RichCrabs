@@ -30,6 +30,7 @@ RUN apt-get update \
 
 WORKDIR /app/richcrab
 
+COPY richcrab/migrations /app/richcrab/migrations
 COPY --from=builder /app/richcrab/target/release/entitlements /usr/local/bin/entitlements
 COPY --from=builder /app/richcrab/target/release/game /usr/local/bin/game
 COPY --from=builder /app/richcrab/target/release/join /usr/local/bin/join

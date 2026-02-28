@@ -8,7 +8,7 @@
 docker compose up -d --build
 ```
 
-`docker compose` теперь поднимает одноразовый сервис `db-migrate`, который применяет SQL-миграции даже при уже существующем `pg_data` volume (когда `initdb`-скрипты Postgres не запускаются повторно).
+Rust-сервисы при старте автоматически применяют SQL-миграции из `/app/richcrab/migrations` (путь задается через `MIGRATIONS_DIR`), поэтому схема актуализируется даже при уже существующем `pg_data` volume.
 
 ## Python gateway (FastAPI)
 

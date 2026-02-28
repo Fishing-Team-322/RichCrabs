@@ -17,25 +17,6 @@ services:
       timeout: 3s
       retries: 20
 
-
-
-  db-migrate:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-richcrab}
-      POSTGRES_USER: ${POSTGRES_USER:-richcrab}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-richcrab}
-      PGHOST: postgres
-      PGPORT: 5432
-    volumes:
-      - ./richcrab/migrations:/migrations:ro
-      - ./docker/postgres-init/run-migrations.sh:/usr/local/bin/run-migrations.sh:ro
-    command: ["/bin/sh", "/usr/local/bin/run-migrations.sh"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: "no"
-
   redis:
     image: redis:7-alpine
     ports:
@@ -102,9 +83,8 @@ services:
       SERVICE_ADDR_BOT: ${SERVICE_ADDR_BOT:-0.0.0.0:50055}
       SERVICE_ADDR_BOT_INGRESS: ${SERVICE_ADDR_BOT_INGRESS:-0.0.0.0:8090}
       SERVICE_ADDR_AUTH: ${SERVICE_ADDR_AUTH:-0.0.0.0:50056}
+      MIGRATIONS_DIR: ${MIGRATIONS_DIR:-/app/richcrab/migrations}
     depends_on:
-      db-migrate:
-        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -119,8 +99,6 @@ services:
     command: ["/usr/local/bin/auth"]
     environment: *service_env
     depends_on:
-      db-migrate:
-        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     restart: unless-stopped
@@ -152,8 +130,6 @@ services:
     command: ["/usr/local/bin/join"]
     environment: *service_env
     depends_on:
-      db-migrate:
-        condition: service_completed_successfully
       redis:
         condition: service_healthy
       postgres:
@@ -170,8 +146,6 @@ services:
       <<: *service_env
       SERVICE_ADDR_ENTITLEMENTS: "entitlements:50054"
     depends_on:
-      db-migrate:
-        condition: service_completed_successfully
       entitlements:
         condition: service_started
       auth:
@@ -190,8 +164,6 @@ services:
       <<: *service_env
       SERVICE_ADDR_ENTITLEMENTS: "entitlements:50054"
     depends_on:
-      db-migrate:
-        condition: service_completed_successfully
       entitlements:
         condition: service_started
       auth:
@@ -208,8 +180,6 @@ services:
     command: ["/usr/local/bin/bot_ingress"]
     environment: *service_env
     depends_on:
-      db-migrate:
-        condition: service_completed_successfully
       game:
         condition: service_started
       postgres:

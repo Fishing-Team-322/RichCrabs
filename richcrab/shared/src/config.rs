@@ -12,6 +12,7 @@ pub const SERVICE_ADDR_BOT: &str = "SERVICE_ADDR_BOT";
 pub const SERVICE_ADDR_BOT_INGRESS: &str = "SERVICE_ADDR_BOT_INGRESS";
 pub const SERVICE_ADDR_AUTH: &str = "SERVICE_ADDR_AUTH";
 pub const LOG_LEVEL: &str = "LOG_LEVEL";
+pub const MIGRATIONS_DIR: &str = "MIGRATIONS_DIR";
 
 #[derive(Debug, Clone)]
 pub struct AppConfig {
