@@ -64,9 +64,32 @@ pub struct UserRepository {
     pool: PgPool,
 }
 
+fn synthetic_telegram_user_id(user_id: Uuid) -> i64 {
+    let raw = (user_id.as_u128() & 0x7fff_ffff_ffff_ffff) as i64;
+    if raw == 0 {
+        1
+    } else {
+        raw
+    }
+}
+
 impl UserRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    pub async fn ensure_exists(&self, user_id: Uuid) -> sqlx::Result<()> {
+        sqlx::query(
+            "INSERT INTO users (id, telegram_user_id, display_name, plan_code)
+             VALUES ($1, $2, $3, 'free')
+             ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind(synthetic_telegram_user_id(user_id))
+        .bind("Gateway user")
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     pub async fn find_plan_code(&self, user_id: Uuid) -> sqlx::Result<Option<String>> {

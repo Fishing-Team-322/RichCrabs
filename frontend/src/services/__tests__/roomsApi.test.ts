@@ -13,7 +13,7 @@ describe('roomsApi contract', () => {
   it('uses /api/v1/games for create/list/getOpenRooms', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(jsonResponse({ pin: 'ABC123', invitePath: '/join?inviteToken=t' }))
+      .mockResolvedValueOnce(jsonResponse({ pin: 'ABC123', invitePath: '/invite/t' }))
       .mockResolvedValueOnce(jsonResponse([{ pin: 'ABC123', state: 'lobby', players: [] }]))
       .mockResolvedValueOnce(jsonResponse([{ id: '1', pin: 'ABC123', players: [], status: 'waiting' }]))
     await roomsApi.create({ ownerUserId: 'u1', quizId: 'q1', settings: { playerLimit: 10, privacy: 'private', timers: { lobbyTimerSec: 1, questionTimerSec: 1, answerRevealSec: 1 } } })
@@ -34,7 +34,7 @@ describe('roomsApi contract', () => {
       .mockResolvedValueOnce(jsonResponse({ pin: 'ABC123', state: 'paused', players: [] }))
       .mockResolvedValueOnce(jsonResponse(null, 204))
       .mockResolvedValueOnce(jsonResponse({ id: 'state' }))
-      .mockResolvedValueOnce(jsonResponse({ inviteToken: 't2', invitePath: '/join?inviteToken=t2', inviteQrSvg: '<svg/>' }))
+      .mockResolvedValueOnce(jsonResponse({ inviteToken: 't2', invitePath: '/invite/t2', inviteQrSvg: '<svg/>' }))
     await roomsApi.details('ABC123')
     await roomsApi.open('ABC123')
     await roomsApi.pause('ABC123')

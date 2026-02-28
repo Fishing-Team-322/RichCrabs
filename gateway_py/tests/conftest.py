@@ -42,7 +42,7 @@ def _install_proto_stubs():
         "bot_pb2": ["RegisterBotRequest", "ListBotsRequest", "GetBotStatusRequest", "UpdateBotStatusRequest", "RemoveBotRequest"],
         "common_pb2": ["UserId", "QuizId", "RoomId", "PlayerId", "BotId"],
         "entitlements_pb2": [],
-        "game_pb2": ["CreateRoomRequest", "RegenerateInviteRequest", "GetRoomStateRequest", "JoinRoomRequest", "StartGameRequest", "PauseGameRequest", "ResumeGameRequest", "NextQuestionRequest", "LeaveRoomRequest", "KickPlayerRequest", "SubscribeRoomEventsRequest", "SubmitAnswerRequest", "PingRequest"],
+        "game_pb2": ["CreateRoomRequest", "RegenerateInviteRequest", "GetRoomStateRequest", "ListRoomsRequest", "JoinRoomRequest", "StartGameRequest", "PauseGameRequest", "ResumeGameRequest", "NextQuestionRequest", "LeaveRoomRequest", "KickPlayerRequest", "SubscribeRoomEventsRequest", "SubmitAnswerRequest", "PingRequest"],
         "join_pb2": ["IssueJoinTicketByPinRequest", "IssueJoinTicketByInviteRequest"],
         "quiz_pb2": ["ListQuizzesRequest", "CreateQuizRequest", "GetQuizRequest", "UpdateQuizRequest", "PublishQuizRequest", "StartAiQuizJobRequest", "GetAiQuizJobRequest"],
         "richcrab_pb2": ["PingRequest"],
@@ -99,6 +99,22 @@ class FakeRedis:
 
     def set(self, key, value):
         self._data[key] = value
+        return True
+
+    def lpush(self, key, value):
+        self._lists.setdefault(key, []).insert(0, value)
+        return len(self._lists[key])
+
+    def ltrim(self, key, start, end):
+        items = self._lists.get(key, [])
+        self._lists[key] = items[start:end + 1]
+        return True
+
+    def lrange(self, key, start, end):
+        items = self._lists.get(key, [])
+        if end == -1:
+            end = len(items) - 1
+        return items[start:end + 1]
 
     def delete(self, key):
         self._data.pop(key, None)
@@ -131,8 +147,9 @@ class FakeClients:
             SetUserBan=lambda req: _ns(),
         )
         self.game = _ns(
-            CreateRoom=lambda req: _ns(pin="123456", invite_token="inv1", invite_path="/join?inviteToken=inv1", invite_qr_svg="<svg></svg>", room_id=_ns(value="room-1")),
-            RegenerateInvite=lambda req: _ns(invite_token="inv2", invite_path="/join?inviteToken=inv2", invite_qr_svg="<svg></svg>"),
+            CreateRoom=lambda req: _ns(pin="123456", invite_token="inv1", invite_path="/invite/inv1", invite_qr_svg="<svg></svg>", room_id=_ns(value="room-1")),
+            RegenerateInvite=lambda req: _ns(invite_token="inv2", invite_path="/invite/inv2", invite_qr_svg="<svg></svg>"),
+            ListRooms=lambda req: _ns(rooms=[_ns(room_id=_ns(value="room-1"), pin="123456", owner_user_id=_ns(value="u1"), quiz_id=_ns(value="q1"), title="Room 1", state="LOBBY", updated_at=_ns(seconds=1, nanos=0), invite_path="/invite/inv1", players=[_ns(player_id=_ns(value="p1"), display_name="P1", score=0, team_id="A")])]),
             GetRoomState=lambda req: _ns(room_id=_ns(value="room-1"), state="LOBBY", players=[_ns(player_id=_ns(value="p1"), display_name="P1", score=0)]),
             JoinRoom=lambda req: _ns(player_id=_ns(value="p1")),
             StartGame=lambda req: _ns(started=True),
@@ -158,11 +175,11 @@ class FakeClients:
             GetAiQuizJob=lambda req: _ns(job_id=req.job_id, status="DONE", HasField=lambda f: False),
         )
         self.bot = _ns(
-            RegisterBot=lambda req, **kwargs: _ns(bot=_ns(bot_id=_ns(value="b1"), name=req.name, version=req.version, status="active")),
-            ListBots=lambda req, **kwargs: _ns(bots=[_ns(bot_id=_ns(value="b1"), name="Bot", version="1", status="active")]),
-            GetBotStatus=lambda req, **kwargs: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="webhook_set:http://localhost/api/v1/telegram/webhook/b1/secret pending:0")),
-            UpdateBotStatus=lambda req, **kwargs: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="disabled")),
-            RemoveBot=lambda req, **kwargs: _ns(),
+            RegisterBot=lambda req, metadata=None: _ns(bot=_ns(bot_id=_ns(value="b1"), name=req.name, version=req.version, status="active")),
+            ListBots=lambda req, metadata=None: _ns(bots=[_ns(bot_id=_ns(value="b1"), name="Bot", version="1", status="active")]),
+            GetBotStatus=lambda req, metadata=None: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="active")),
+            UpdateBotStatus=lambda req, metadata=None: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="disabled")),
+            RemoveBot=lambda req, metadata=None: _ns(),
         )
         self.health = _ns(Ping=lambda req: _ns())
 

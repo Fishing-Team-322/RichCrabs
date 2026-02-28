@@ -1,41 +1,48 @@
 import { apiFetch } from './api'
 import type {
   CreateRoomRequestDto,
-  GameDto,
   ListRoomsParams,
   RoomDetailsDto,
-  RoomStateDto,
   RoomInviteDto,
   RoomsListResponseDto,
 } from '../types/room.types'
 
 const GAMES_BASE = '/api/v1/games'
 
+type BackendRoomDto = {
+  roomId: string
+  pin: string
+  quizId: string
+  title: string
+  state: string
+  players: Array<{ playerId: string; name: string; score: number; teamId?: string | null }>
+  playersCount: number
+  hostUserId: string
+  updatedAt: string
+  invitePath: string
+}
+
 const toRoomStatus = (state: string): RoomDetailsDto['status'] => {
   if (state === 'playing') return 'active'
   if (state === 'paused') return 'paused'
-  if (state === 'finished') return 'finished'
+  if (state === 'finished' || state === 'closed') return 'finished'
   return 'waiting'
 }
 
-const mapStateToRoomDetails = (payload: {
-  pin: string
-  state: string
-  players: Array<{ playerId: string; name: string }>
-}): RoomDetailsDto => ({
+const mapBackendRoom = (payload: BackendRoomDto): RoomDetailsDto => ({
   id: payload.pin,
-  quizId: '',
-  quizTitle: payload.pin,
+  quizId: payload.quizId,
+  quizTitle: payload.title,
   pin: payload.pin,
-  inviteLink: `/invite/${payload.pin}`,
+  inviteLink: payload.invitePath,
   status: toRoomStatus(payload.state),
-  playersCount: payload.players.length,
-  playerLimit: 100,
-  hostId: '',
-  updatedAt: new Date().toISOString(),
+  playersCount: payload.playersCount,
+  playerLimit: payload.playersCount,
+  hostId: payload.hostUserId,
+  updatedAt: payload.updatedAt,
   isHost: true,
   settings: {
-    playerLimit: 100,
+    playerLimit: payload.playersCount,
     privacy: 'private',
     timers: {
       lobbyTimerSec: 30,
@@ -46,7 +53,7 @@ const mapStateToRoomDetails = (payload: {
   players: payload.players.map((player, index) => ({
     id: player.playerId,
     name: player.name,
-    team: index % 2 === 0 ? 'A' : 'B',
+    team: (player.teamId as 'A' | 'B' | undefined) ?? (index % 2 === 0 ? 'A' : 'B'),
   })),
 })
 
@@ -56,17 +63,25 @@ export const roomsApi = {
       method: 'POST',
       body: JSON.stringify({ ownerUserId: payload.ownerUserId, quizId: payload.quizId, title: `Quiz ${payload.quizId}` }),
     }).then((res): RoomDetailsDto => ({
-      ...mapStateToRoomDetails({ pin: res.pin, state: 'lobby', players: [] }),
-      inviteLink: res.invitePath,
+      ...mapBackendRoom({
+        roomId: res.pin,
+        pin: res.pin,
+        quizId: payload.quizId,
+        title: `Quiz ${payload.quizId}`,
+        state: 'lobby',
+        players: [],
+        playersCount: 0,
+        hostUserId: payload.ownerUserId,
+        updatedAt: new Date().toISOString(),
+        invitePath: res.invitePath,
+      }),
       wsUrl: res.wsUrl,
       settings: payload.settings,
       playerLimit: payload.settings.playerLimit,
     })),
 
   list: (_params: ListRoomsParams = {}) =>
-    apiFetch<Array<{ pin: string; state: string; players: Array<{ playerId: string; name: string }> }>>(GAMES_BASE).then(
-      (rooms): RoomsListResponseDto => ({ rooms: rooms.map(mapStateToRoomDetails) }),
-    ),
+    apiFetch<BackendRoomDto[]>(GAMES_BASE).then((rooms): RoomsListResponseDto => ({ rooms: rooms.map(mapBackendRoom) })),
 
   open: async (roomId: string) => {
     await apiFetch<void>(`${GAMES_BASE}/${encodeURIComponent(roomId)}/start`, {
@@ -82,16 +97,12 @@ export const roomsApi = {
     return roomsApi.details(roomId)
   },
 
-  details: (roomId: string) =>
-    apiFetch<{ pin: string; state: string; players: Array<{ playerId: string; name: string }> }>(
-      `${GAMES_BASE}/${encodeURIComponent(roomId)}`,
-    ).then(mapStateToRoomDetails),
+  details: (roomId: string) => apiFetch<BackendRoomDto>(`${GAMES_BASE}/${encodeURIComponent(roomId)}`).then(mapBackendRoom),
 
   close: (roomId: string) =>
     apiFetch<void>(`${GAMES_BASE}/${encodeURIComponent(roomId)}/leave`, {
       method: 'POST',
     }),
-
 
   regenerateInvite: (roomId: string) =>
     apiFetch<RoomInviteDto>(`${GAMES_BASE}/${encodeURIComponent(roomId)}/invite/regenerate`, {
@@ -123,6 +134,6 @@ export const roomsApi = {
     }
   },
 
-  getOpenRooms: () => apiFetch<GameDto[]>(GAMES_BASE),
-  getRoomState: (roomId: string) => apiFetch<RoomStateDto>(`${GAMES_BASE}/${encodeURIComponent(roomId)}/state`),
+  getOpenRooms: () => apiFetch<BackendRoomDto[]>(GAMES_BASE),
+  getRoomState: (roomId: string) => apiFetch<BackendRoomDto>(`${GAMES_BASE}/${encodeURIComponent(roomId)}/state`),
 }
