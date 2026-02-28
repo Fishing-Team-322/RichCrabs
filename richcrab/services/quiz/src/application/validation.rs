@@ -16,6 +16,7 @@ pub(crate) struct GeneratedQuestionPayload {
     pub(crate) text: String,
     pub(crate) options: Vec<String>,
     pub(crate) correct_option_index: Option<u32>,
+    pub(crate) correct_option: Option<String>,
 }
 
 pub(crate) fn validate_questions(
@@ -97,13 +98,45 @@ pub(crate) fn build_quiz_from_generated_payload(
         .questions
         .into_iter()
         .enumerate()
-        .map(|(idx, q)| proto::richcrab::v1::QuizQuestion {
-            id: format!("ai-{}", idx + 1),
-            text: q.text,
-            options: q.options,
-            correct_option_index: q.correct_option_index,
+        .map(|(idx, q)| {
+            let normalized_correct_option = q.correct_option.as_deref().map(str::trim);
+            let correct_option_index_from_text = normalized_correct_option
+                .map(|correct_option| {
+                    q.options
+                        .iter()
+                        .position(|option| option.trim() == correct_option)
+                        .map(|position| position as u32)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "question[{idx}] correct_option does not match any option"
+                            )
+                        })
+                })
+                .transpose()?;
+
+            let correct_option_index =
+                match (q.correct_option_index, correct_option_index_from_text) {
+                    (Some(index_from_payload), Some(index_from_text)) => {
+                        if index_from_payload != index_from_text {
+                            return Err(anyhow::anyhow!(
+                                "question[{idx}] correct_option conflicts with correct_option_index"
+                            ));
+                        }
+                        Some(index_from_payload)
+                    }
+                    (Some(index), None) => Some(index),
+                    (None, Some(index)) => Some(index),
+                    (None, None) => None,
+                };
+
+            Ok(proto::richcrab::v1::QuizQuestion {
+                id: format!("ai-{}", idx + 1),
+                text: q.text,
+                options: q.options,
+                correct_option_index,
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
 
     validate_questions(&questions).map_err(anyhow::Error::msg)?;
 
@@ -223,5 +256,68 @@ mod tests {
     fn parse_generated_quiz_content_fails_on_invalid_json() {
         let owner = Uuid::new_v4();
         assert!(parse_generated_quiz_content(owner, "```json\nnot-json\n```").is_err());
+    }
+
+    #[test]
+    fn parse_generated_quiz_content_prefers_correct_option_index() {
+        let owner = Uuid::new_v4();
+        let raw = r#"{
+            "title":"Rust Quiz",
+            "questions":[{
+                "text":"Q1",
+                "options":["A","B","C","D"],
+                "correct_option_index":2
+            }]
+        }"#;
+
+        let quiz = parse_generated_quiz_content(owner, raw).expect("generated quiz must parse");
+        assert_eq!(quiz.questions[0].correct_option_index, Some(2));
+    }
+
+    #[test]
+    fn parse_generated_quiz_content_supports_only_correct_option_text() {
+        let owner = Uuid::new_v4();
+        let raw = r#"{
+            "title":"Rust Quiz",
+            "questions":[{
+                "text":"Q1",
+                "options":["A","B","C","D"],
+                "correct_option":"  C "
+            }]
+        }"#;
+
+        let quiz = parse_generated_quiz_content(owner, raw).expect("generated quiz must parse");
+        assert_eq!(quiz.questions[0].correct_option_index, Some(2));
+    }
+
+    #[test]
+    fn parse_generated_quiz_content_rejects_conflicting_index_and_text() {
+        let owner = Uuid::new_v4();
+        let raw = r#"{
+            "title":"Rust Quiz",
+            "questions":[{
+                "text":"Q1",
+                "options":["A","B","C","D"],
+                "correct_option_index":0,
+                "correct_option":"C"
+            }]
+        }"#;
+
+        assert!(parse_generated_quiz_content(owner, raw).is_err());
+    }
+
+    #[test]
+    fn parse_generated_quiz_content_rejects_unknown_correct_option_text() {
+        let owner = Uuid::new_v4();
+        let raw = r#"{
+            "title":"Rust Quiz",
+            "questions":[{
+                "text":"Q1",
+                "options":["A","B","C","D"],
+                "correct_option":"Z"
+            }]
+        }"#;
+
+        assert!(parse_generated_quiz_content(owner, raw).is_err());
     }
 }
