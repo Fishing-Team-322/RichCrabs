@@ -1,11 +1,51 @@
 .roomsPage { display: grid; gap: 16px; }
 
+.roomsPageDetails {
+  grid-template-columns: minmax(0, 980px);
+  align-content: start;
+}
+
+.roomsPageDetails .roomsHeader {
+  display: grid;
+  justify-items: flex-start;
+}
+
+.roomsPageDetails .pageCard {
+  width: 100%;
+}
+
+.roomInfoRowVertical {
+  display: grid;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.roomInviteLink {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .roomsHeader {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
+}
+
+.roomsHeader > div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.roomsHeader h1,
+.roomsHeader p {
+  margin: 0;
+}
+
+.roomsHeader .roomLink {
+  align-self: flex-start;
 }
 
 .roomsActions,
