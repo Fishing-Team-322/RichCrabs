@@ -1,6 +1,8 @@
 use chrono::Utc;
 use game::{
-    domain::{GameQuestion, RoomLifecycleState, RoomSettings, RoomState, RoomTimers, RoomVisibility},
+    domain::{
+        GameQuestion, RoomLifecycleState, RoomSettings, RoomState, RoomTimers, RoomVisibility,
+    },
     room_actor::{spawn_room_actor, RoomCommand},
 };
 use tokio::sync::oneshot;
