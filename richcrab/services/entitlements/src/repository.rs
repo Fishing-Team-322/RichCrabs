@@ -80,8 +80,8 @@ impl UserRepository {
 
     pub async fn ensure_exists(&self, user_id: Uuid) -> sqlx::Result<()> {
         sqlx::query(
-            "INSERT INTO users (id, telegram_user_id, display_name, plan_code)
-             VALUES ($1, $2, $3, 'free')
+            "INSERT INTO users (id, telegram_user_id, display_name)
+             VALUES ($1, $2, $3)
              ON CONFLICT (id) DO NOTHING",
         )
         .bind(user_id)
