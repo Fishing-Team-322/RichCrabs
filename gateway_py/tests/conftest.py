@@ -133,11 +133,11 @@ class FakeClients:
             GetAiQuizJob=lambda req: _ns(job_id=req.job_id, status="DONE", HasField=lambda f: False),
         )
         self.bot = _ns(
-            RegisterBot=lambda req: _ns(bot=_ns(bot_id=_ns(value="b1"), name=req.name, version=req.version, status="active")),
-            ListBots=lambda req: _ns(bots=[_ns(bot_id=_ns(value="b1"), name="Bot", version="1", status="active")]),
-            GetBotStatus=lambda req: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="active")),
-            UpdateBotStatus=lambda req: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="disabled")),
-            RemoveBot=lambda req: _ns(),
+            RegisterBot=lambda req, metadata=None: _ns(bot=_ns(bot_id=_ns(value="b1"), name=req.name, version=req.version, status="active")),
+            ListBots=lambda req, metadata=None: _ns(bots=[_ns(bot_id=_ns(value="b1"), name="Bot", version="1", status="active")]),
+            GetBotStatus=lambda req, metadata=None: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="active")),
+            UpdateBotStatus=lambda req, metadata=None: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="disabled")),
+            RemoveBot=lambda req, metadata=None: _ns(),
         )
         self.health = _ns(Ping=lambda req: _ns())
 
