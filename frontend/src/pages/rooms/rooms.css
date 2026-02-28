@@ -1,5 +1,30 @@
 .roomsPage { display: grid; gap: 16px; }
 
+.roomsPageDetails {
+  grid-template-columns: minmax(0, 980px);
+  align-content: start;
+}
+
+.roomsPageDetails .roomsHeader {
+  display: grid;
+  justify-items: flex-start;
+}
+
+.roomsPageDetails .pageCard {
+  width: 100%;
+}
+
+.roomInfoRowVertical {
+  display: grid;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.roomInviteLink {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .roomsHeader {
   display: flex;
   justify-content: space-between;
