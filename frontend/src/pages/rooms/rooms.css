@@ -168,3 +168,27 @@
     align-items: stretch;
   }
 }
+
+.createRoomPage {
+  align-content: start;
+}
+
+.createRoomHeader {
+  align-items: center;
+}
+
+.createRoomTimers {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1024px) {
+  .createRoomTimers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .createRoomTimers {
+    grid-template-columns: 1fr;
+  }
+}

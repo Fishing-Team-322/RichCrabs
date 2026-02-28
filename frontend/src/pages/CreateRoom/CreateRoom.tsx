@@ -140,8 +140,8 @@ const CreateRoom = () => {
   }
 
   return (
-    <section className="roomsPage">
-      <div className="pageCard roomsHeader"><div><h1>Создание комнаты</h1><p>Создайте/опубликуйте квиз, затем настройте игру и приглашения.</p></div><Link className="roomLink" to={routes.rooms}>К списку комнат</Link></div>
+    <section className="roomsPage roomsPageCompact createRoomPage">
+      <div className="pageCard roomsHeader createRoomHeader"><div><h1>Создание комнаты</h1><p>Создайте/опубликуйте квиз, затем настройте игру и приглашения.</p></div><Link className="roomLink" to={routes.rooms}>К списку комнат</Link></div>
       {error && <div className="roomError">{error}</div>}
       <form className="pageCard roomForm" onSubmit={(event) => void onSubmit(event)}>
         {loading ? <><Skeleton height={42} /><Skeleton height={42} /><Skeleton height={42} /></> : <>
@@ -161,7 +161,7 @@ const CreateRoom = () => {
               <option value="private">Приватная (по PIN/invite)</option><option value="public">Публичная (видна в open games)</option>
             </select>
           </label>
-          <div className="roomsGrid">
+          <div className="roomsGrid createRoomTimers">
             <label>Таймер лобби (сек)
               <input type="number" value={form.lobbyTimerSec} className={fieldErrors.lobbyTimerSec ? 'error' : ''} onChange={(event) => setForm((prev) => ({ ...prev, lobbyTimerSec: Number(event.target.value) || 0 }))} />
               {fieldErrors.lobbyTimerSec && <span className="ui-help">{fieldErrors.lobbyTimerSec}</span>}
@@ -181,7 +181,7 @@ const CreateRoom = () => {
       {createdRoom && (
         <article className="pageCard roomForm"><h2>Комната создана</h2>
           <div className="roomInfoRow"><strong>PIN:</strong> <code>{createdRoom.pin}</code><button className="roomButton" type="button" onClick={() => void copyText(createdRoom.pin)}>Копировать PIN</button></div>
-          <div className="roomInfoRow"><strong>Invite-link:</strong><a href={inviteLink}>{inviteLink}</a><button className="roomButton" type="button" onClick={() => void copyText(inviteLink)}>Копировать ссылку</button></div>
+          <div className="roomInfoRow"><strong>Ссылка-приглашение:</strong><a href={inviteLink}>{inviteLink}</a><button className="roomButton" type="button" onClick={() => void copyText(inviteLink)}>Копировать ссылку</button></div>
 
           {showBotOffer && (
             <div className="roomMeta">
