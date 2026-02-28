@@ -521,7 +521,7 @@ def tg_unbind(botId: str, req: Request):
 
 
 @app.post("/api/v1/telegram/webhook/{botId}/{secret}", tags=["bots"])
-def tg_webhook(botId: str, secret: str):
+def tg_webhook(botId: str, secret: str, req: Request):
     row = rdb.get(_binding_key(botId))
     if not row:
         return {"status": "ignored", "botId": botId}
@@ -529,7 +529,8 @@ def tg_webhook(botId: str, secret: str):
         parsed = json.loads(row)
     except Exception:
         return {"status": "ignored", "botId": botId}
-    if parsed.get("secret") != secret:
+    header_secret = req.headers.get("x-telegram-bot-api-secret-token", "")
+    if not header_secret or header_secret != secret:
         return {"status": "ignored", "botId": botId}
     return {"status": "processed", "botId": botId}
 
@@ -558,13 +559,21 @@ def create_quiz(req: Request, body: dict[str, Any]):
 
 @app.get("/api/v1/quizzes/{quizId}", tags=["quizzes"])
 def get_quiz(quizId: str):
-    q = clients.quiz.GetQuiz(quiz_pb2.GetQuizRequest(quiz_id=common_pb2.QuizId(value=quizId))).quiz
+    try:
+        q = clients.quiz.GetQuiz(quiz_pb2.GetQuizRequest(quiz_id=common_pb2.QuizId(value=quizId))).quiz
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "get_quiz")
+        return JSONResponse(b, status_code=c)
     return {"quiz": _quiz_to_json(q)}
 
 @app.patch("/api/v1/quizzes/{quizId}", tags=["quizzes"])
 def upd_quiz(quizId: str, req: Request, body: dict[str,Any]):
     if (e := require_csrf(req)): return e
-    cur = clients.quiz.GetQuiz(quiz_pb2.GetQuizRequest(quiz_id=common_pb2.QuizId(value=quizId))).quiz
+    try:
+        cur = clients.quiz.GetQuiz(quiz_pb2.GetQuizRequest(quiz_id=common_pb2.QuizId(value=quizId))).quiz
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "get_quiz")
+        return JSONResponse(b, status_code=c)
     if "title" in body: cur.title = body["title"]
     if "description" in body: cur.description = body["description"]
     if "questions" in body:
@@ -576,7 +585,11 @@ def upd_quiz(quizId: str, req: Request, body: dict[str,Any]):
             qq.options.extend(row["options"])
             if "correctIndex" in row and row["correctIndex"] is not None:
                 qq.correct_option_index = row["correctIndex"]
-    x = clients.quiz.UpdateQuiz(quiz_pb2.UpdateQuizRequest(quiz=cur))
+    try:
+        x = clients.quiz.UpdateQuiz(quiz_pb2.UpdateQuizRequest(quiz=cur))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "update_quiz")
+        return JSONResponse(b, status_code=c)
     return {"quiz": _quiz_to_json(x.quiz), "status": "updated"}
 
 @app.post("/api/v1/quizzes/{quizId}/publish", tags=["quizzes"])
@@ -584,7 +597,11 @@ def pub_quiz(quizId: str, req: Request):
     if (e := require_csrf(req)): return e
     uid = require_user(req)
     if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
-    x = clients.quiz.PublishQuiz(quiz_pb2.PublishQuizRequest(quiz_id=common_pb2.QuizId(value=quizId), requested_by=common_pb2.UserId(value=uid)))
+    try:
+        x = clients.quiz.PublishQuiz(quiz_pb2.PublishQuizRequest(quiz_id=common_pb2.QuizId(value=quizId), requested_by=common_pb2.UserId(value=uid)))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "publish_quiz")
+        return JSONResponse(b, status_code=c)
     return {"quiz": {"quizId": x.quiz.quiz_id.value}, "publishedVersion": x.published_version, "status": "published"}
 
 @app.post("/api/v1/quizzes/ai-generate", tags=["quizzes"])
@@ -592,14 +609,22 @@ def ai_start(req: Request, body: dict[str,Any]):
     if (e := require_csrf(req)): return e
     uid = require_user(req)
     if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
-    x = clients.quiz.StartAiQuizJob(quiz_pb2.StartAiQuizJobRequest(requested_by=common_pb2.UserId(value=uid), prompt=body["prompt"], desired_question_count=body.get("desiredQuestionCount",0)))
+    try:
+        x = clients.quiz.StartAiQuizJob(quiz_pb2.StartAiQuizJobRequest(requested_by=common_pb2.UserId(value=uid), prompt=body["prompt"], desired_question_count=body.get("desiredQuestionCount",0)))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "start_ai_quiz")
+        return JSONResponse(b, status_code=c)
     return {"jobId": x.job_id, "status": x.status.lower()}
 
 @app.get("/api/v1/quizzes/ai-jobs/{jobId}", tags=["quizzes"])
 def ai_get(jobId: str, req: Request):
     uid = require_user(req)
     if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
-    x = clients.quiz.GetAiQuizJob(quiz_pb2.GetAiQuizJobRequest(job_id=jobId, requested_by=common_pb2.UserId(value=uid)))
+    try:
+        x = clients.quiz.GetAiQuizJob(quiz_pb2.GetAiQuizJobRequest(job_id=jobId, requested_by=common_pb2.UserId(value=uid)))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "get_ai_quiz")
+        return JSONResponse(b, status_code=c)
     out = {"jobId": x.job_id, "status": x.status.lower()}
     if x.HasField("quiz"):
         out["quiz"] = _quiz_to_json(x.quiz)

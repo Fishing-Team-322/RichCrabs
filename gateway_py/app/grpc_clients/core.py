@@ -25,18 +25,20 @@ class Clients:
 
 def map_grpc_err(e: grpc.RpcError, op: str) -> tuple[int, dict[str, Any]]:
     code = e.code()
+    details_fn = getattr(e, "details", None)
+    details = details_fn() if callable(details_fn) else ""
     m = f"grpc unavailable: {op}"
     if code == grpc.StatusCode.DEADLINE_EXCEEDED:
         return 504, {"error": "grpc_timeout", "message": f"grpc timeout: {op}"}
     if code == grpc.StatusCode.NOT_FOUND:
-        return 404, {"error": "not_found", "message": f"rpc not found: {op}"}
+        return 404, {"error": "not_found", "message": details or f"rpc not found: {op}"}
     if code == grpc.StatusCode.INVALID_ARGUMENT:
-        return 400, {"error": "validation_error", "message": f"rpc invalid argument: {op}"}
+        return 400, {"error": "validation_error", "message": details or f"rpc invalid argument: {op}"}
     if code == grpc.StatusCode.PERMISSION_DENIED:
-        return 403, {"error": "forbidden", "message": f"rpc permission denied: {op}"}
+        return 403, {"error": "forbidden", "message": details or f"rpc permission denied: {op}"}
     if code == grpc.StatusCode.FAILED_PRECONDITION:
-        return 409, {"error": "validation_error", "message": f"rpc precondition failed: {op}"}
-    return 503, {"error": "grpc_unavailable", "message": m}
+        return 409, {"error": "validation_error", "message": details or f"rpc precondition failed: {op}"}
+    return 503, {"error": "grpc_unavailable", "message": details or m}
 
 
 clients = Clients()
