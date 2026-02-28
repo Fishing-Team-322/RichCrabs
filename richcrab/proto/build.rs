@@ -7,6 +7,7 @@ fn main() {
         protoc_bin_vendored::include_path().expect("failed to find protoc include");
 
     let protos = [
+        "proto/gigachat.proto",
         "proto/common.proto",
         "proto/events.proto",
         "proto/game.proto",

@@ -2,12 +2,14 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import grpc
 import redis
+from google.protobuf.json_format import MessageToDict
 from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, PlainTextResponse
 
@@ -32,6 +34,17 @@ app = FastAPI(
         {"name": "ws", "description": "WebSocket endpoint"},
     ],
 )
+
+
+def _room_event_to_dict(ev: Any) -> dict[str, Any]:
+    try:
+        return MessageToDict(ev, preserving_proto_field_name=True)
+    except Exception:
+        raw = str(ev).replace("\n", " ")
+        try:
+            return json.loads(raw)
+        except Exception:
+            return {"raw": raw}
 
 
 def err(code: int, error: str, message: str, details: Any = None):
@@ -156,7 +169,35 @@ def require_user(req: Request) -> Optional[str]:
     return s.user_id
 
 
-@app.get("/api/v1/me", tags=["profile"])
+def _bot_metadata(user_id: str):
+    return (("x-user-id", user_id), ("x-user-role", "host"))
+
+
+def _extract_webhook_url(status: str) -> str:
+    m = re.match(r"webhook_set:([^\s]+)", status or "")
+    return m.group(1) if m else ""
+
+
+def _binding_key(bot_id: str) -> str:
+    return f"tg:binding:{bot_id}"
+
+
+def _operations_key(bot_id: str) -> str:
+    return f"tg:ops:{bot_id}"
+
+
+def _append_runtime_op(bot_id: str, op: dict[str, Any]):
+    ops = json.loads(rdb.get(_operations_key(bot_id)) or "[]")
+    ops.append(op)
+    rdb.set(_operations_key(bot_id), json.dumps(ops[-50:]))
+
+
+def _load_binding(bot_id: str) -> Optional[dict[str, Any]]:
+    raw = rdb.get(_binding_key(bot_id))
+    return json.loads(raw) if raw else None
+
+
+@app.get("/api/v1/me")
 def me(req: Request):
     uid = require_user(req)
     if not uid:
@@ -502,7 +543,7 @@ def list_quizzes(limit: int = 20, pageToken: str = "", ownerUserId: str = ""):
     req = quiz_pb2.ListQuizzesRequest(page_size=limit, page_token=pageToken)
     if ownerUserId: req.owner_user_id.value = ownerUserId
     x = clients.quiz.ListQuizzes(req)
-    return {"limit": limit, "nextPageToken": x.next_page_token, "items": [{"quizId": q.quiz_id.value, "ownerUserId": q.owner_user_id.value, "title": q.title, "description": q.description, "questions": [{"id":qq.id,"text":qq.text,"options":list(qq.options),"correctIndex":qq.correct_option_index if qq.HasField('correct_option_index') else None} for qq in q.questions]} for q in x.quizzes]}
+    return {"limit": limit, "nextPageToken": x.next_page_token, "items": [_quiz_to_json(q) for q in x.quizzes]}
 
 @app.post("/api/v1/quizzes", tags=["quizzes"])
 def create_quiz(req: Request, body: dict[str, Any]):
@@ -523,7 +564,7 @@ def create_quiz(req: Request, body: dict[str, Any]):
 @app.get("/api/v1/quizzes/{quizId}", tags=["quizzes"])
 def get_quiz(quizId: str):
     q = clients.quiz.GetQuiz(quiz_pb2.GetQuizRequest(quiz_id=common_pb2.QuizId(value=quizId))).quiz
-    return {"quiz": {"quizId": q.quiz_id.value, "ownerUserId": q.owner_user_id.value, "title": q.title, "description": q.description, "questions": [{"id":qq.id,"text":qq.text,"options":list(qq.options)} for qq in q.questions]}}
+    return {"quiz": _quiz_to_json(q)}
 
 @app.patch("/api/v1/quizzes/{quizId}", tags=["quizzes"])
 def upd_quiz(quizId: str, req: Request, body: dict[str,Any]):
@@ -531,8 +572,17 @@ def upd_quiz(quizId: str, req: Request, body: dict[str,Any]):
     cur = clients.quiz.GetQuiz(quiz_pb2.GetQuizRequest(quiz_id=common_pb2.QuizId(value=quizId))).quiz
     if "title" in body: cur.title = body["title"]
     if "description" in body: cur.description = body["description"]
+    if "questions" in body:
+        del cur.questions[:]
+        for row in body["questions"]:
+            qq = cur.questions.add()
+            qq.id = row.get("id", "")
+            qq.text = row["text"]
+            qq.options.extend(row["options"])
+            if "correctIndex" in row and row["correctIndex"] is not None:
+                qq.correct_option_index = row["correctIndex"]
     x = clients.quiz.UpdateQuiz(quiz_pb2.UpdateQuizRequest(quiz=cur))
-    return {"quiz": {"quizId": x.quiz.quiz_id.value, "ownerUserId": x.quiz.owner_user_id.value, "title": x.quiz.title, "description": x.quiz.description}, "status": "updated"}
+    return {"quiz": _quiz_to_json(x.quiz), "status": "updated"}
 
 @app.post("/api/v1/quizzes/{quizId}/publish", tags=["quizzes"])
 def pub_quiz(quizId: str, req: Request):
@@ -556,7 +606,13 @@ def ai_get(jobId: str, req: Request):
     if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
     x = clients.quiz.GetAiQuizJob(quiz_pb2.GetAiQuizJobRequest(job_id=jobId, requested_by=common_pb2.UserId(value=uid)))
     out = {"jobId": x.job_id, "status": x.status.lower()}
-    if x.HasField("quiz"): out["quiz"] = {"quizId": x.quiz.quiz_id.value, "title": x.quiz.title}
+    if x.HasField("quiz"):
+        out["quiz"] = _quiz_to_json(x.quiz)
+        out["draftId"] = x.quiz.quiz_id.value
+    has_error = getattr(x, "HasField", lambda _: False)("error")
+    if has_error and getattr(x.error, "message", ""):
+        out["error"] = x.error.message
+        out["errorMessage"] = x.error.message
     return out
 
 @app.get("/api/v1/quizzes/ai-jobs/{jobId}/result", tags=["quizzes"])
@@ -809,7 +865,17 @@ async def ws(ws: WebSocket):
                 ev = await asyncio.to_thread(_next_stream_event, stream)
                 if ev is None:
                     return
-                await ws.send_json({"type": "room_event", "event": json.loads(str(ev).replace("\n", " "))})
+                event_dict = _room_event_to_dict(ev)
+                await ws.send_json({"type": "room_event", "event": event_dict})
+                chat_event = event_dict.get("chat_message_posted")
+                if chat_event:
+                    await ws.send_json({
+                        "type": "chat_message",
+                        "message_id": chat_event.get("message_id", ""),
+                        "author": chat_event.get("author", ""),
+                        "body": chat_event.get("body", ""),
+                        "created_at": chat_event.get("created_at"),
+                    })
         except grpc.RpcError as ex:
             try:
                 c, b = map_grpc_err(ex, "subscribe_room_events")
@@ -828,6 +894,21 @@ async def ws(ws: WebSocket):
             elif t == "get_state":
                 g = clients.game.GetRoomState(game_pb2.GetRoomStateRequest(room_id=common_pb2.RoomId(value=s.room_id)))
                 await ws.send_json({"type": "room_state", "room_id": g.room_id.value, "state": g.state, "players": [{"player_id": p.player_id.value, "display_name": p.display_name, "score": p.score} for p in g.players]})
+            elif t == "get_chat_history":
+                limit = int(msg.get("limit") or 50)
+                history = clients.game.GetRoomChatMessages(game_pb2.GetRoomChatMessagesRequest(room_id=common_pb2.RoomId(value=s.room_id), limit=max(1, min(limit, 100))))
+                await ws.send_json({
+                    "type": "chat_history",
+                    "messages": [
+                        {
+                            "message_id": item.message_id,
+                            "author": item.author,
+                            "body": item.body,
+                            "created_at": MessageToDict(item.created_at, preserving_proto_field_name=True) if item.created_at else None,
+                        }
+                        for item in history.messages
+                    ],
+                })
             elif t == "start_game" and s.role == "host":
                 x = clients.game.StartGame(game_pb2.StartGameRequest(room_id=common_pb2.RoomId(value=s.room_id), requested_by=common_pb2.UserId(value=s.user_id)))
                 await ws.send_json({"type": "start_game_result", "started": x.started})
@@ -843,6 +924,32 @@ async def ws(ws: WebSocket):
             elif t == "submit_answer" and s.role == "player":
                 x = clients.game.SubmitAnswer(game_pb2.SubmitAnswerRequest(room_id=common_pb2.RoomId(value=s.room_id), player_id=common_pb2.PlayerId(value=s.player_id), question_id=msg.get("question_id",""), answer=msg.get("answer","")))
                 await ws.send_json({"type": "submit_answer_result", "accepted": x.accepted, "score_delta": x.score_delta})
+            elif t == "chat_send":
+                body = str(msg.get("body") or "").strip()
+                if not body:
+                    await ws.send_json({"type": "error", "error": "invalid_chat_body", "message": "chat body is required"})
+                    continue
+                chat_req = game_pb2.PostChatMessageRequest(
+                    room_id=common_pb2.RoomId(value=s.room_id),
+                    body=body,
+                )
+                if s.role == "player" and s.player_id:
+                    chat_req.player_id.value = s.player_id
+                elif s.role == "host" and s.user_id:
+                    chat_req.user_id.value = s.user_id
+                else:
+                    await ws.send_json({"type": "error", "error": "unauthorized", "message": "chat author is not available"})
+                    continue
+
+                posted = clients.game.PostChatMessage(chat_req)
+                if posted.message:
+                    await ws.send_json({
+                        "type": "chat_sent",
+                        "message_id": posted.message.message_id,
+                        "author": posted.message.author,
+                        "body": posted.message.body,
+                        "created_at": MessageToDict(posted.message.created_at, preserving_proto_field_name=True) if posted.message.created_at else None,
+                    })
             else:
                 await ws.send_json({"type": "error", "error": "unsupported_message_type", "message": "unsupported client message type"})
     except WebSocketDisconnect:

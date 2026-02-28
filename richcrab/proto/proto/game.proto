@@ -17,8 +17,42 @@ service GameService {
   rpc ResumeGame(ResumeGameRequest) returns (ResumeGameResponse);
   rpc NextQuestion(NextQuestionRequest) returns (NextQuestionResponse);
   rpc SubmitAnswer(SubmitAnswerRequest) returns (SubmitAnswerResponse);
+  rpc PostChatMessage(PostChatMessageRequest) returns (PostChatMessageResponse);
+  rpc GetRoomChatMessages(GetRoomChatMessagesRequest) returns (GetRoomChatMessagesResponse);
   rpc SubscribeRoomEvents(SubscribeRoomEventsRequest) returns (stream RoomEvent);
   rpc GetRoomState(GetRoomStateRequest) returns (GetRoomStateResponse);
+}
+
+message ChatMessage {
+  string message_id = 1;
+  RoomId room_id = 2;
+  string author = 3;
+  string body = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message PostChatMessageRequest {
+  RoomId room_id = 1;
+  oneof author {
+    PlayerId player_id = 2;
+    UserId user_id = 3;
+  }
+  string body = 4;
+}
+
+message PostChatMessageResponse {
+  ChatMessage message = 1;
+  optional Error error = 2;
+}
+
+message GetRoomChatMessagesRequest {
+  RoomId room_id = 1;
+  uint32 limit = 2;
+}
+
+message GetRoomChatMessagesResponse {
+  repeated ChatMessage messages = 1;
+  optional Error error = 2;
 }
 
 message RegenerateInviteRequest {

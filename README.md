@@ -51,3 +51,13 @@ docker compose down -v --remove-orphans
 - Python job (`gateway_py`) использует `actions/setup-python@v5` с `cache: pip` и `cache-dependency-path: gateway_py/requirements*.txt`.
 - Frontend job (`frontend`) использует `actions/setup-node@v4` с `cache: npm` и `cache-dependency-path: frontend/package-lock.json`.
 - `sqlx-cli` в `test` job кешируется как `~/.cargo/bin/sqlx` вместе с cargo registry/git cache; установка выполняется только если бинарь отсутствует (например, при смене ключа кеша).
+
+## AI генерация квизов (GigaChat gRPC)
+
+Для генерации квизов через `/api/v1/quizzes/ai-generate` настройте переменные окружения у сервиса `quiz`:
+
+- `GIGACHAT_API_ADDR` — адрес gRPC сервиса (например `host.docker.internal:9000`)
+- `GIGACHAT_API_KEY` — API ключ
+- `GIGACHAT_MODEL` — модель (по умолчанию `GigaChat-Pro`)
+
+Если `GIGACHAT_API_ADDR`/`GIGACHAT_API_KEY` не заданы, сервис использует fallback-банк вопросов.
