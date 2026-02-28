@@ -21,6 +21,12 @@ struct TelegramSendMessageResult final {
   Json::Value details;
 };
 
+struct TelegramDeleteWebhookResult final {
+  bool removed{false};
+  std::string status;
+  Json::Value details;
+};
+
 class TelegramWebhookClient final {
 public:
   explicit TelegramWebhookClient(double timeoutSeconds = 4.0);
@@ -37,6 +43,10 @@ public:
                    const std::optional<int64_t>& replyToMessageId,
                    const std::string& requestId,
                    std::function<void(TelegramSendMessageResult)> cb) const;
+
+  void deleteWebhook(const std::string& botToken,
+                     const std::string& requestId,
+                     std::function<void(TelegramDeleteWebhookResult)> cb) const;
 
 private:
   double timeoutSeconds_;

@@ -26,6 +26,16 @@ def test_list_bots_happy_path(client, host_session_cookie):
     assert len(response.json()["bots"]) == 1
 
 
+def test_tg_connect_requires_auth(client, csrf_headers):
+    response = client.post(
+        "/api/v1/telegram/bots/connect",
+        json={"token": "123:abc"},
+        cookies=csrf_headers["cookies"],
+        headers=csrf_headers["headers"],
+    )
+    assert response.status_code == 401
+
+
 def test_tg_connect_validates_payload(client, host_session_cookie, csrf_headers):
     cookies = {**host_session_cookie, **csrf_headers["cookies"]}
     response = client.post(
@@ -37,7 +47,7 @@ def test_tg_connect_validates_payload(client, host_session_cookie, csrf_headers)
     assert response.status_code == 422
 
 
-def test_tg_connect_and_webhook_flow(client, host_session_cookie, csrf_headers):
+def test_tg_connect_status_unbind_happy_path(client, host_session_cookie, csrf_headers):
     cookies = {**host_session_cookie, **csrf_headers["cookies"]}
     connect = client.post(
         "/api/v1/telegram/bots/connect",
@@ -50,27 +60,13 @@ def test_tg_connect_and_webhook_flow(client, host_session_cookie, csrf_headers):
     assert body["botId"] == "b1"
     assert body["status"] == "connected"
 
-    webhook = client.post(
-        "/api/v1/telegram/webhook/b1/secret",
-        json={"message": {"text": "/pin", "chat": {"id": 1}}},
-        headers={"x-telegram-bot-api-secret-token": "secret"},
-    )
-    assert webhook.status_code == 200
-    assert webhook.json()["status"] == "processed"
-
-
-def test_tg_status_and_unbind(client, host_session_cookie, csrf_headers):
-    cookies = {**host_session_cookie, **csrf_headers["cookies"]}
-    client.post(
-        "/api/v1/telegram/bots/connect",
-        json={"token": "123:abc"},
-        cookies=cookies,
-        headers=csrf_headers["headers"],
-    )
-
     status = client.get("/api/v1/telegram/bots/status", cookies=host_session_cookie)
     assert status.status_code == 200
-    assert status.json()["active"] is True
+    status_body = status.json()
+    assert status_body.get("bindingId", status_body.get("botId")) == "b1"
+    assert status_body["botId"] == "b1"
+    assert status_body["active"] is True
+    assert isinstance(status_body.get("operations", []), list)
 
     unbind = client.delete(
         "/api/v1/telegram/bots/b1",
@@ -78,3 +74,36 @@ def test_tg_status_and_unbind(client, host_session_cookie, csrf_headers):
         headers=csrf_headers["headers"],
     )
     assert unbind.status_code == 204
+
+
+def test_tg_status_requires_auth(client):
+    status = client.get("/api/v1/telegram/bots/status")
+    assert status.status_code == 401
+
+
+def test_tg_unbind_requires_auth(client, csrf_headers):
+    response = client.delete(
+        "/api/v1/telegram/bots/b1",
+        cookies=csrf_headers["cookies"],
+        headers=csrf_headers["headers"],
+    )
+    assert response.status_code == 401
+
+
+def test_tg_connect_and_webhook_flow(client, host_session_cookie, csrf_headers):
+    cookies = {**host_session_cookie, **csrf_headers["cookies"]}
+    connect = client.post(
+        "/api/v1/telegram/bots/connect",
+        json={"token": "123:abc"},
+        cookies=cookies,
+        headers=csrf_headers["headers"],
+    )
+    assert connect.status_code == 200
+
+    webhook = client.post(
+        "/api/v1/telegram/webhook/b1/secret",
+        json={"message": {"text": "/pin", "chat": {"id": 1}}},
+        headers={"x-telegram-bot-api-secret-token": "secret"},
+    )
+    assert webhook.status_code == 200
+    assert webhook.json()["status"] == "processed"

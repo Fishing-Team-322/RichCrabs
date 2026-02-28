@@ -167,4 +167,54 @@ void TelegramWebhookClient::sendMessage(const std::string& botToken,
       timeoutSeconds_);
 }
 
+void TelegramWebhookClient::deleteWebhook(const std::string& botToken,
+                                          const std::string& requestId,
+                                          std::function<void(TelegramDeleteWebhookResult)> cb) const {
+  auto client = drogon::HttpClient::newHttpClient("https://api.telegram.org");
+  Json::Value payload;
+  payload["drop_pending_updates"] = true;
+
+  auto req = drogon::HttpRequest::newHttpJsonRequest(payload);
+  req->setMethod(drogon::Post);
+  req->setPath("/bot" + botToken + "/deleteWebhook");
+
+  spdlog::info("telegram_delete_webhook_start request_id={} token_masked={}", requestId, maskToken(botToken));
+
+  client->sendRequest(
+      req,
+      [cb = std::move(cb), requestId, maskedToken = maskToken(botToken)](drogon::ReqResult result,
+                                                                          const drogon::HttpResponsePtr& resp) mutable {
+        TelegramDeleteWebhookResult out;
+        out.details["requestId"] = requestId;
+
+        if (result != drogon::ReqResult::Ok || !resp) {
+          out.removed = false;
+          out.status = "telegram_unreachable";
+          out.details["transportResult"] = static_cast<int>(result);
+          spdlog::warn("telegram_delete_webhook_transport_error request_id={} token_masked={} result={}",
+                       requestId,
+                       maskedToken,
+                       static_cast<int>(result));
+          cb(std::move(out));
+          return;
+        }
+
+        out.details["httpStatus"] = static_cast<int>(resp->statusCode());
+        auto body = resp->getJsonObject();
+        if (body) {
+          out.details["telegramOk"] = (*body).get("ok", false).asBool();
+          if ((*body).isMember("description")) {
+            out.details["telegramDescription"] = (*body)["description"].asString();
+          }
+        }
+
+        const bool httpOk = resp->statusCode() == drogon::k200OK;
+        const bool telegramOk = body && (*body).get("ok", false).asBool();
+        out.removed = httpOk && telegramOk;
+        out.status = out.removed ? "deleted" : "delete_rejected";
+        cb(std::move(out));
+      },
+      timeoutSeconds_);
+}
+
 }  // namespace controllers
