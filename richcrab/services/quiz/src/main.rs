@@ -1,3 +1,16 @@
+mod application {
+    pub mod ai_jobs;
+    pub mod crud;
+    pub mod validation;
+}
+mod config {
+    pub mod ai;
+}
+mod infrastructure {
+    pub mod ai_provider;
+    pub mod fallback_bank;
+}
+mod mappers;
 mod repository;
 mod service;
 
