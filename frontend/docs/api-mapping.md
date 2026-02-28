@@ -58,7 +58,7 @@
 
 | Метод сервиса | Endpoint | Статус |
 |---|---|---|
-| `plans` | `/api/v1/entitlements` | Поддерживается (адаптер в billingApi) |
-| `current` | `/api/v1/usage` | Поддерживается (адаптер в billingApi) |
-| `history` | n/a | Возвращается пустой список в frontend |
-| `checkout` / `cancel` / `applyPromo` / `paymentCallbackStatus` | n/a | Не реализовано в Python gateway (явная ошибка в сервисе) |
+| `plans` | `/api/v1/billing/plans` | Поддерживается |
+| `current` | `/api/v1/billing/current` | Поддерживается |
+| `history` | `/api/v1/billing/history` | Поддерживается |
+| `checkout` / `cancel` / `applyPromo` / `paymentCallbackStatus` | `/api/v1/billing/*` | Поддерживается |

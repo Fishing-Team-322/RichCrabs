@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import grpc
@@ -214,6 +215,19 @@ def me_sessions():
     return err(501, "not_implemented", "/api/v1/me/sessions is not implemented")
 
 
+@app.get("/api/v1/games", tags=["games"])
+def list_games(req: Request):
+    s = session_from_req(req)
+    if not s or not s.room_id or not s.pin:
+        return []
+    try:
+        x = clients.game.GetRoomState(game_pb2.GetRoomStateRequest(room_id=common_pb2.RoomId(value=s.room_id)))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "list_games")
+        return JSONResponse(b, status_code=c)
+    players = [{"playerId": p.player_id.value, "name": p.display_name} for p in x.players]
+    return [{"pin": s.pin, "state": x.state, "players": players}]
+
 @app.post("/api/v1/games", tags=["games"])
 def create_game(req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)): return e
@@ -347,36 +361,66 @@ def reg_bot(req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)): return e
     uid = require_user(req)
     if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
-    b = clients.bot.RegisterBot(bot_pb2.RegisterBotRequest(name=body["name"], version=body["version"], endpoint=body["endpoint"]))
+    try:
+        b = clients.bot.RegisterBot(
+            bot_pb2.RegisterBotRequest(name=body["name"], version=body["version"], endpoint=body["endpoint"]),
+            metadata=(("x-user-id", uid),),
+        )
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "bot_register")
+        return JSONResponse(b, status_code=c)
     return {"bot": {"botId": b.bot.bot_id.value, "name": b.bot.name, "version": b.bot.version, "status": b.bot.status}}
 
 @app.get("/api/v1/bots", tags=["bots"])
 def list_bots(req: Request):
-    if not require_user(req): return err(401,"unauthorized","session cookie is missing or invalid")
-    x = clients.bot.ListBots(bot_pb2.ListBotsRequest())
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    try:
+        x = clients.bot.ListBots(bot_pb2.ListBotsRequest(), metadata=(("x-user-id", uid),))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "bot_list")
+        return JSONResponse(b, status_code=c)
     return {"bots": [{"botId": b.bot_id.value, "name": b.name, "version": b.version, "status": b.status} for b in x.bots]}
 
 @app.get("/api/v1/bots/{botId}", tags=["bots"])
 def get_bot(botId: str, req: Request):
-    if not require_user(req): return err(401,"unauthorized","session cookie is missing or invalid")
-    b = clients.bot.GetBotStatus(bot_pb2.GetBotStatusRequest(bot_id=common_pb2.BotId(value=botId))).bot
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    try:
+        b = clients.bot.GetBotStatus(
+            bot_pb2.GetBotStatusRequest(bot_id=common_pb2.BotId(value=botId)),
+            metadata=(("x-user-id", uid),),
+        ).bot
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "bot_get")
+        return JSONResponse(b, status_code=c)
     return {"bot": {"botId": b.bot_id.value, "name": b.name, "version": b.version, "status": b.status}}
 
 @app.patch("/api/v1/bots/{botId}", tags=["bots"])
 def patch_bot(botId: str, req: Request, body: dict[str, Any]):
     if (e := require_csrf(req)): return e
-    if not require_user(req): return err(401,"unauthorized","session cookie is missing or invalid")
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
     q = bot_pb2.UpdateBotStatusRequest(bot_id=common_pb2.BotId(value=botId))
     if "enabled" in body: q.enabled = body["enabled"]
     if "reason" in body: q.reason = body["reason"]
-    b = clients.bot.UpdateBotStatus(q).bot
+    try:
+        b = clients.bot.UpdateBotStatus(q, metadata=(("x-user-id", uid),)).bot
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "bot_patch")
+        return JSONResponse(b, status_code=c)
     return {"bot": {"botId": b.bot_id.value, "name": b.name, "version": b.version, "status": b.status}}
 
 @app.delete("/api/v1/bots/{botId}", tags=["bots"])
 def del_bot(botId: str, req: Request):
     if (e := require_csrf(req)): return e
-    if not require_user(req): return err(401,"unauthorized","session cookie is missing or invalid")
-    clients.bot.RemoveBot(bot_pb2.RemoveBotRequest(bot_id=common_pb2.BotId(value=botId)))
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    try:
+        clients.bot.RemoveBot(bot_pb2.RemoveBotRequest(bot_id=common_pb2.BotId(value=botId)), metadata=(("x-user-id", uid),))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "bot_delete")
+        return JSONResponse(b, status_code=c)
     return Response(status_code=204)
 
 @app.post("/api/v1/telegram/bots/connect", tags=["bots"])
@@ -461,6 +505,72 @@ def ents(req: Request):
     return {"limits": [{"limit": "rooms", "used": usage["usage"]["rooms"], "max": 10}, {"limit": "bots", "used": usage["usage"]["bots"], "max": 20}, {"limit": "ai", "used": usage["usage"]["ai"], "max": 30}], "byLimit": {"rooms": {"limit": "rooms", "used": usage["usage"]["rooms"], "max": 10}, "bots": {"limit": "bots", "used": usage["usage"]["bots"], "max": 20}, "ai": {"limit": "ai", "used": usage["usage"]["ai"], "max": 30}}}
 
 
+
+
+BILLING_PLANS = [
+    {
+        "id": "free",
+        "code": "free",
+        "title": "Free",
+        "description": "Базовый план",
+        "price": 0,
+        "currency": "USD",
+        "interval": "month",
+        "limits": [
+            {"key": "rooms", "title": "rooms", "value": 10},
+            {"key": "bots", "title": "bots", "value": 20},
+            {"key": "ai", "title": "ai", "value": 30},
+        ],
+    }
+]
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _default_subscription():
+    now = datetime.now(timezone.utc)
+    return {
+        "id": "sub_free",
+        "planCode": "free",
+        "status": "active",
+        "currentPeriodStart": now.isoformat(),
+        "currentPeriodEnd": (now + timedelta(days=30)).isoformat(),
+        "cancelAtPeriodEnd": False,
+    }
+
+
+def _billing_sub_key(uid: str) -> str:
+    return f"billing:sub:{uid}"
+
+
+def _billing_history_key(uid: str) -> str:
+    return f"billing:history:{uid}"
+
+
+def _billing_promo_key(uid: str) -> str:
+    return f"billing:promo:{uid}"
+
+
+def _load_subscription(uid: str) -> dict[str, Any]:
+    raw = rdb.get(_billing_sub_key(uid))
+    if not raw:
+        return _default_subscription()
+    try:
+        return json.loads(raw)
+    except Exception:
+        return _default_subscription()
+
+
+def _save_subscription(uid: str, sub: dict[str, Any]):
+    rdb.set(_billing_sub_key(uid), json.dumps(sub))
+
+
+def _append_billing_tx(uid: str, tx: dict[str, Any]):
+    rdb.lpush(_billing_history_key(uid), json.dumps(tx))
+    rdb.ltrim(_billing_history_key(uid), 0, 99)
+
 def usage_impl(uid: str):
     return {"usage": {"rooms": int(rdb.get(f"usage:{uid}:rooms") or 0), "bots": int(rdb.get(f"usage:{uid}:bots") or 0), "ai": int(rdb.get(f"usage:{uid}:ai") or 0)}}
 
@@ -469,6 +579,112 @@ def usage(req: Request):
     uid = require_user(req)
     if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
     return usage_impl(uid)
+
+
+
+@app.get("/api/v1/billing/plans", tags=["profile"])
+def billing_plans(req: Request):
+    if not require_user(req): return err(401,"unauthorized","session cookie is missing or invalid")
+    return {"plans": BILLING_PLANS}
+
+
+@app.get("/api/v1/billing/current", tags=["profile"])
+def billing_current(req: Request):
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    return {"subscription": _load_subscription(uid)}
+
+
+@app.get("/api/v1/billing/history", tags=["profile"])
+def billing_history(req: Request):
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    rows = rdb.lrange(_billing_history_key(uid), 0, 99)
+    txs: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            txs.append(json.loads(row))
+        except Exception:
+            continue
+    return {"transactions": txs}
+
+
+@app.post("/api/v1/billing/checkout", tags=["profile"])
+def billing_checkout(req: Request, body: dict[str, Any]):
+    if (e := require_csrf(req)): return e
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    plan_code = body.get("planCode", "free")
+    plan = next((p for p in BILLING_PLANS if p["code"] == plan_code), None)
+    if not plan: return err(400, "validation_error", "unknown billing plan")
+    now = datetime.now(timezone.utc)
+    sub = {
+        "id": f"sub_{uid}",
+        "planCode": plan_code,
+        "status": "active",
+        "currentPeriodStart": now.isoformat(),
+        "currentPeriodEnd": (now + timedelta(days=30)).isoformat(),
+        "cancelAtPeriodEnd": False,
+        "renewedAt": now.isoformat(),
+    }
+    _save_subscription(uid, sub)
+    _append_billing_tx(uid, {
+        "id": f"tx_{uuid.uuid4().hex[:10]}",
+        "status": "paid",
+        "amount": plan["price"],
+        "currency": plan["currency"],
+        "occurredAt": now.isoformat(),
+        "description": f"Subscription checkout: {plan_code}",
+    })
+    return {"checkoutUrl": "", "status": "paid"}
+
+
+@app.post("/api/v1/billing/cancel", tags=["profile"])
+def billing_cancel(req: Request):
+    if (e := require_csrf(req)): return e
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    sub = _load_subscription(uid)
+    sub["status"] = "canceled"
+    sub["cancelAtPeriodEnd"] = True
+    _save_subscription(uid, sub)
+    _append_billing_tx(uid, {
+        "id": f"tx_{uuid.uuid4().hex[:10]}",
+        "status": "canceled",
+        "amount": 0,
+        "currency": "USD",
+        "occurredAt": _utc_now_iso(),
+        "description": "Subscription canceled",
+    })
+    return Response(status_code=204)
+
+
+@app.post("/api/v1/billing/promo", tags=["profile"])
+def billing_promo(req: Request, body: dict[str, Any]):
+    if (e := require_csrf(req)): return e
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    code = str(body.get("code", "")).strip()
+    if len(code) < 3: return err(400, "validation_error", "promo code is too short")
+    rdb.set(_billing_promo_key(uid), code)
+    return {"status": "applied", "code": code}
+
+
+@app.post("/api/v1/billing/callback-status", tags=["profile"])
+def billing_callback_status(req: Request, body: dict[str, Any]):
+    if (e := require_csrf(req)): return e
+    uid = require_user(req)
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    status = body.get("paymentStatus") or "pending"
+    _append_billing_tx(uid, {
+        "id": body.get("sessionId") or f"tx_{uuid.uuid4().hex[:10]}",
+        "status": status,
+        "amount": 0,
+        "currency": "USD",
+        "occurredAt": _utc_now_iso(),
+        "description": "Payment callback status",
+    })
+    return {"status": "accepted"}
 
 @app.get("/admin/api/stats", tags=["admin"])
 def stats(req: Request):
