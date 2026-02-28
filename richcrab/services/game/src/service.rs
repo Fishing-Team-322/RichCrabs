@@ -11,7 +11,7 @@ use tonic::Status;
 use crate::{
     infrastructure::{
         chat_repository_adapter::DynChatRepository,
-        entitlements_client::{DynEntitlementsClient, EntitlementsClient},
+        entitlements_client::GrpcEntitlementsClient,
         quiz_client::{DynQuizClient, QuizClient},
     },
     repository::RoomChatRepository,
@@ -24,7 +24,7 @@ pub struct GameServiceImpl {
     pub(crate) room_pins: Arc<RwLock<HashMap<String, String>>>,
     pub(crate) chat_repository: DynChatRepository,
     pub(crate) chat_rate_limit: Arc<RwLock<HashMap<String, Instant>>>,
-    pub(crate) entitlements: DynEntitlementsClient,
+    pub(crate) entitlements: GrpcEntitlementsClient,
     pub(crate) quiz: DynQuizClient,
     pub(crate) pin_ttl: Duration,
     pub(crate) chat_min_interval: Duration,
@@ -33,7 +33,7 @@ pub struct GameServiceImpl {
 impl GameServiceImpl {
     pub fn new(
         redis: RedisClient,
-        entitlements: impl EntitlementsClient + 'static,
+        entitlements: GrpcEntitlementsClient,
         quiz: impl QuizClient + 'static,
         chat_repository: RoomChatRepository,
     ) -> Self {
@@ -41,7 +41,7 @@ impl GameServiceImpl {
             redis,
             rooms: Arc::new(RwLock::new(HashMap::new())),
             room_pins: Arc::new(RwLock::new(HashMap::new())),
-            entitlements: Arc::new(entitlements),
+            entitlements,
             quiz: Arc::new(quiz),
             chat_repository: Arc::new(chat_repository),
             chat_rate_limit: Arc::new(RwLock::new(HashMap::new())),

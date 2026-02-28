@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use rand::{distributions::Alphanumeric, Rng};
-use shared::redis_keys;
+use shared::{entitlements_client::EntitlementsApi, redis_keys};
 use tokio::sync::oneshot;
 use tonic::{Request, Response, Status};
 use tracing::info;
@@ -83,8 +83,10 @@ impl GameServiceImpl {
             .and_then(|q| (!q.value.is_empty()).then_some(q.value))
             .ok_or_else(|| Status::invalid_argument("quiz_id is required"))?;
         self.entitlements
-            .check_entitlement(&owner_id, "CREATE_ROOM")
-            .await?;
+            .for_user(&owner_id)
+            .check("CREATE_ROOM")
+            .await
+            .map_err(Status::from)?;
 
         let room_id = uuid::Uuid::new_v4().to_string();
         info!(request_id = %uuid::Uuid::new_v4(), room_id = %room_id, user_id = %owner_id, bot_id = "", "create_room");
@@ -146,8 +148,10 @@ impl GameServiceImpl {
             .insert(room_id.clone(), pin.clone());
         metrics.rooms_active.inc();
         self.entitlements
-            .report_usage(&owner_id, "CREATE_ROOM", 1)
-            .await?;
+            .for_user(&owner_id)
+            .report("CREATE_ROOM", 1)
+            .await
+            .map_err(Status::from)?;
         let invite_path = super::invite::invite_path(&invite_token);
         let invite_qr_svg = super::invite::invite_qr_svg(&invite_path).map_err(Status::internal)?;
 
@@ -177,8 +181,10 @@ impl GameServiceImpl {
             .map(|v| v.value)
             .ok_or_else(|| Status::invalid_argument("requested_by is required"))?;
         self.entitlements
-            .check_entitlement(&requested_by, "START_GAME")
-            .await?;
+            .for_user(&requested_by)
+            .check("START_GAME")
+            .await
+            .map_err(Status::from)?;
         let room = self.resolve_room(&room_id).await?;
         let (state_tx, state_rx) = oneshot::channel();
         room.tx
@@ -202,8 +208,10 @@ impl GameServiceImpl {
             .map_err(|_| Status::internal("room actor response dropped"))?
             .map_err(Status::failed_precondition)?;
         self.entitlements
-            .report_usage(&requested_by, "START_GAME", 1)
-            .await?;
+            .for_user(&requested_by)
+            .report("START_GAME", 1)
+            .await
+            .map_err(Status::from)?;
         Ok(Response::new(proto::richcrab::v1::StartGameResponse {
             started: true,
             started_at: Self::now_ts(),

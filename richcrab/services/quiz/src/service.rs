@@ -1,5 +1,6 @@
+use shared::entitlements_client::EntitlementsApi;
 use sqlx::PgPool;
-use tonic::{transport::Channel, Request, Response, Status};
+use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
 use crate::{
@@ -12,8 +13,7 @@ use crate::{
 pub struct QuizServiceImpl {
     repository: QuizRepository,
     fallback_questions: Vec<proto::richcrab::v1::QuizQuestion>,
-    entitlements:
-        proto::richcrab::v1::entitlements_service_client::EntitlementsServiceClient<Channel>,
+    entitlements: shared::entitlements_client::SharedEntitlementsClient,
     ai_generator: Option<AiGeneratorConfig>,
 }
 
@@ -21,50 +21,15 @@ impl QuizServiceImpl {
     pub fn new(
         pool: PgPool,
         entitlements: proto::richcrab::v1::entitlements_service_client::EntitlementsServiceClient<
-            Channel,
+            tonic::transport::Channel,
         >,
     ) -> Self {
         Self {
             repository: QuizRepository::new(pool),
             fallback_questions: load_fallback_question_bank().unwrap_or_default(),
-            entitlements,
+            entitlements: shared::entitlements_client::SharedEntitlementsClient::new(entitlements),
             ai_generator: load_ai_generator_config_from_env(),
         }
-    }
-
-    async fn check_entitlement(&self, user_id: &str, feature: &str) -> Result<(), Status> {
-        let mut client = self.entitlements.clone();
-        let response = client
-            .check_entitlement(proto::richcrab::v1::CheckEntitlementRequest {
-                user_id: Some(proto::richcrab::v1::UserId {
-                    value: user_id.to_string(),
-                }),
-                feature: feature.to_string(),
-            })
-            .await
-            .map_err(|e| Status::unavailable(format!("entitlements unavailable: {e}")))?
-            .into_inner();
-
-        if response.allowed {
-            Ok(())
-        } else {
-            Err(Status::permission_denied(response.reason))
-        }
-    }
-
-    async fn report_usage(&self, user_id: &str, feature: &str) -> Result<(), Status> {
-        let mut client = self.entitlements.clone();
-        client
-            .report_usage(proto::richcrab::v1::ReportUsageRequest {
-                user_id: Some(proto::richcrab::v1::UserId {
-                    value: user_id.to_string(),
-                }),
-                feature: feature.to_string(),
-                units: 1,
-            })
-            .await
-            .map_err(|e| Status::unavailable(format!("usage reporting failed: {e}")))?;
-        Ok(())
     }
 }
 
@@ -82,8 +47,11 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
         let owner_uuid = Uuid::parse_str(&owner_user_id)
             .map_err(|_| Status::invalid_argument("owner_user_id must be uuid"))?;
 
-        self.check_entitlement(&owner_user_id, "CREATE_QUIZ")
-            .await?;
+        self.entitlements
+            .for_user(&owner_user_id)
+            .check("CREATE_QUIZ")
+            .await
+            .map_err(Status::from)?;
 
         let questions = if req.questions.is_empty() {
             self.fallback_questions.clone()
@@ -98,7 +66,11 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
             questions,
         )
         .await?;
-        self.report_usage(&owner_user_id, "CREATE_QUIZ").await?;
+        self.entitlements
+            .for_user(&owner_user_id)
+            .report("CREATE_QUIZ", 1)
+            .await
+            .map_err(Status::from)?;
 
         Ok(Response::new(proto::richcrab::v1::CreateQuizResponse {
             quiz: Some(quiz),
@@ -254,8 +226,16 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
             .requested_by
             .map(|v| v.value)
             .ok_or_else(|| Status::invalid_argument("requested_by is required"))?;
-        self.check_entitlement(&requester, "AI_GENERATE").await?;
-        self.report_usage(&requester, "AI_GENERATE").await?;
+        self.entitlements
+            .for_user(&requester)
+            .check("AI_GENERATE")
+            .await
+            .map_err(Status::from)?;
+        self.entitlements
+            .for_user(&requester)
+            .report("AI_GENERATE", 1)
+            .await
+            .map_err(Status::from)?;
 
         let requester_uuid = Uuid::parse_str(&requester)
             .map_err(|_| Status::invalid_argument("requested_by must be uuid"))?;

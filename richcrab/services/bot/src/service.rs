@@ -8,6 +8,7 @@ use anyhow::{bail, Context};
 use base64::Engine;
 use chrono::Utc;
 use reqwest::Client;
+use shared::entitlements_client::EntitlementsApi;
 use serde::Deserialize;
 use sqlx::PgPool;
 use tonic::{Request, Response, Status};
@@ -58,9 +59,7 @@ struct TelegramWebhookInfo {
 
 pub struct BotServiceImpl {
     repository: BotRepository,
-    entitlements: proto::richcrab::v1::entitlements_service_client::EntitlementsServiceClient<
-        tonic::transport::Channel,
-    >,
+    entitlements: shared::entitlements_client::SharedEntitlementsClient,
     http: Client,
     encryption_key: String,
     webhook_base_url: String,
@@ -84,7 +83,7 @@ impl BotServiceImpl {
             env::var(shared::config::TELEGRAM_WEBHOOK_BASE_URL).unwrap_or_default();
         Self {
             repository: BotRepository::new(pool),
-            entitlements,
+            entitlements: shared::entitlements_client::SharedEntitlementsClient::new(entitlements),
             http: Client::builder()
                 .connect_timeout(TELEGRAM_CONNECT_TIMEOUT)
                 .timeout(TELEGRAM_REQUEST_TIMEOUT)
@@ -146,33 +145,15 @@ impl BotServiceImpl {
     }
 
     async fn check_and_report(&self, user_id: &str, feature: &str) -> Result<(), Status> {
-        let mut client = self.entitlements.clone();
-        let check = client
-            .check_entitlement(proto::richcrab::v1::CheckEntitlementRequest {
-                user_id: Some(proto::richcrab::v1::UserId {
-                    value: user_id.to_string(),
-                }),
-                feature: feature.to_string(),
-            })
+        let user_entitlements = self.entitlements.for_user(user_id);
+        user_entitlements
+            .check(feature)
             .await
-            .map_err(|e| Status::unavailable(format!("entitlements unavailable: {e}")))?
-            .into_inner();
-
-        if !check.allowed {
-            return Err(Status::permission_denied(check.reason));
-        }
-
-        client
-            .report_usage(proto::richcrab::v1::ReportUsageRequest {
-                user_id: Some(proto::richcrab::v1::UserId {
-                    value: user_id.to_string(),
-                }),
-                feature: feature.to_string(),
-                units: 1,
-            })
+            .map_err(Status::from)?;
+        user_entitlements
+            .report(feature, 1)
             .await
-            .map_err(|e| Status::unavailable(format!("usage reporting failed: {e}")))?;
-
+            .map_err(Status::from)?;
         Ok(())
     }
 

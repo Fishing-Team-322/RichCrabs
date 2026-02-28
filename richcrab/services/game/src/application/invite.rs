@@ -1,7 +1,7 @@
 use chrono::Utc;
 use qrcode::{render::svg, QrCode};
 use serde::Deserialize;
-use shared::redis_keys;
+use shared::{entitlements_client::EntitlementsApi, redis_keys};
 use tokio::sync::oneshot;
 use tonic::{Request, Response, Status};
 use tracing::info;
@@ -138,8 +138,10 @@ impl GameServiceImpl {
             .await
             .map_err(|_| Status::internal("room actor response dropped"))?;
         self.entitlements
-            .check_entitlement(&state.owner_user_id, "MAX_PLAYERS_IN_ROOM")
-            .await?;
+            .for_user(&state.owner_user_id)
+            .check("MAX_PLAYERS_IN_ROOM")
+            .await
+            .map_err(Status::from)?;
         let (tx, rx) = oneshot::channel();
         room.tx
             .send(RoomCommand::Join {
@@ -154,8 +156,10 @@ impl GameServiceImpl {
             .map_err(|_| Status::internal("room actor response dropped"))?
             .map_err(Status::failed_precondition)?;
         self.entitlements
-            .report_usage(&state.owner_user_id, "MAX_PLAYERS_IN_ROOM", 1)
-            .await?;
+            .for_user(&state.owner_user_id)
+            .report("MAX_PLAYERS_IN_ROOM", 1)
+            .await
+            .map_err(Status::from)?;
         metrics.players_connected.inc();
         Ok(Response::new(proto::richcrab::v1::JoinRoomResponse {
             player_id: Some(proto::richcrab::v1::PlayerId { value: player_id }),

@@ -1,6 +1,7 @@
 pub mod config;
 pub mod crypto;
 pub mod db;
+pub mod entitlements_client;
 pub mod errors;
 pub mod ids;
 pub mod redis_client;
