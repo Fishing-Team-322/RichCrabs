@@ -34,6 +34,28 @@ def test_auth_login_happy_path(client, csrf_headers):
     assert "csrfToken" in response.json()
 
 
+def test_auth_login_content_length_matches_body(client, csrf_headers):
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "a@b.c", "password": "x"},
+        cookies=csrf_headers["cookies"],
+        headers=csrf_headers["headers"],
+    )
+    assert response.status_code == 200
+    assert int(response.headers["content-length"]) == len(response.content)
+
+
+def test_auth_register_content_length_matches_body(client, csrf_headers):
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"email": "new@b.c", "password": "x", "displayName": "New"},
+        cookies=csrf_headers["cookies"],
+        headers=csrf_headers["headers"],
+    )
+    assert response.status_code == 200
+    assert int(response.headers["content-length"]) == len(response.content)
+
+
 def test_grpc_error_is_mapped_for_register(client, fake_clients, csrf_headers):
     fake_clients.auth.Register = lambda req: (_ for _ in ()).throw(DummyRpcError(grpc.StatusCode.INVALID_ARGUMENT))
     response = client.post(
