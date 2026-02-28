@@ -17,9 +17,9 @@
 ### 1) Gateway (`docs/gateway_py/`)
 
 - [Обзор](./gateway_py/overview.md)
-- [Архитектура](./gateway_py/architecture.md)
-- [HTTP API и роутинг](./gateway_py/api.md)
-- [Операции и сопровождение](./gateway_py/operations.md)
+- [Роутинг и безопасность](./gateway_py/routing-and-security.md)
+- [Сервисы и мапперы](./gateway_py/services-and-mappers.md)
+- [Тестирование и troubleshooting](./gateway_py/testing-and-troubleshooting.md)
 
 ### 2) Frontend (`docs/frontend/`)
 
