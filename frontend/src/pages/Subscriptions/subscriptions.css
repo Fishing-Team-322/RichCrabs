@@ -1,5 +1,6 @@
 .subscriptionsPage{display:grid;gap:16px}
-.currentPlanCard,.planCard,.historyItem{border:1px solid var(--border);border-radius:16px;padding:16px;background:linear-gradient(165deg,rgba(24,16,40,.9),rgba(13,9,24,.9));box-shadow:var(--shadow-soft)}
+.subscriptionsPageCompact{grid-template-columns:minmax(0,1120px);justify-content:center}
+.currentPlanCard,.planCard,.historyItem,.limitRowCard{border:1px solid var(--border);border-radius:16px;padding:16px;background:linear-gradient(165deg,rgba(24,16,40,.9),rgba(13,9,24,.9));box-shadow:var(--shadow-soft)}
 .subsPills{display:flex;gap:8px;flex-wrap:wrap}
 .subsBadge{display:inline-flex;align-items:center;border-radius:999px;border:1px solid var(--border);padding:4px 10px;font-size:12px;font-weight:600}
 .status-ok{background:rgba(58,210,139,.18);color:#8df1bf}.status-pending{background:rgba(248,181,75,.2);color:#ffd489}.status-error{background:rgba(255,111,142,.2);color:#ffafc3}.status-neutral{background:rgba(157,174,255,.14);color:var(--text-secondary)}
@@ -7,10 +8,17 @@
 .subsActions button:hover,.planCard button:hover,.promoForm button:hover{filter:brightness(1.05)}
 .subsActions button:disabled,.planCard button:disabled,.promoForm button:disabled{background:var(--disabled)}
 .plansGrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-top:12px}
+.plansVertical{grid-template-columns:minmax(0,1fr)}
 .planCard.current{border-color:var(--border-strong);box-shadow:var(--shadow-glow)}
 .planHeader{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.planPrice{font-size:24px;font-weight:700}
-.limitsTableWrap{overflow:auto}.limitsTable{width:100%;border-collapse:collapse;min-width:620px}.limitsTable th,.limitsTable td{border:1px solid var(--border);padding:8px 10px;text-align:left}.limitsTable th{color:var(--text-secondary)}
+
+.limitsVerticalList{display:grid;gap:10px;margin-top:8px}
+.limitRowCard{display:grid;gap:10px}
+.limitRowValues{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.limitValueItem{border:1px solid rgba(148,163,184,.2);border-radius:12px;background:rgba(20,16,56,.45);padding:10px;display:grid;gap:4px}
+.limitValueItem span{color:var(--text-secondary);font-size:13px}
+
 .promoForm{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px}.promoForm input{flex:1;min-width:180px;max-width:360px;height:40px;border:1px solid var(--border);border-radius:12px;padding:0 12px;background:var(--surface-strong);color:var(--text-primary)}
 .subsNotice{margin-top:8px;color:#8df1bf}.subsError{margin-top:8px;color:#ffafc3}.historyList{margin-top:10px;display:grid;gap:8px}
 .historyItem{display:grid;gap:10px;grid-template-columns:minmax(160px,1fr) auto auto;align-items:center}
-@media (max-width:860px){.historyItem{grid-template-columns:1fr}.promoForm input,.promoForm button,.subsActions button,.planCard button{width:100%;max-width:none}}
+@media (max-width:860px){.historyItem{grid-template-columns:1fr}.promoForm input,.promoForm button,.subsActions button,.planCard button{width:100%;max-width:none}.limitRowValues{grid-template-columns:1fr}}

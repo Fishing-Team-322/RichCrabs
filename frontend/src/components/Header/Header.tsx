@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth'
 import { routes } from '../../app/router/routeMap'
 import { useTranslation } from 'react-i18next'
-import LanguageSwitcher from '../LanguageSwitcher'
 
 const Header = () => {
   const { profile, signOut, isLoading } = useAuth()
@@ -10,9 +9,14 @@ const Header = () => {
 
   return (
     <header className="topbar">
-      <strong>{t('header.title')}</strong>
+      <div className="topbarMain">
+        <Link className="topbarHomeLink" to={routes.home}>
+          RichCrabs
+        </Link>
+        <span className="topbarSubtitle">Внутренние разделы</span>
+      </div>
+
       <div className="accountBlock">
-        <LanguageSwitcher />
         {profile ? (
           <>
             <div className="accountMeta">

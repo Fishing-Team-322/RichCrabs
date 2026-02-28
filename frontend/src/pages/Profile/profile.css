@@ -1,6 +1,25 @@
 .profilePage { display: grid; gap: 16px; }
 
-.profileGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.profileGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 980px);
+  gap: 16px;
+  justify-content: center;
+}
+
+.profileGrid .pageCard {
+  padding: 22px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(20, 10, 52, 0.92) 0%, rgba(9, 5, 29, 0.94) 100%);
+  border: 1px solid rgba(127, 90, 240, 0.35);
+  box-shadow: 0 14px 40px rgba(7, 2, 24, 0.42);
+}
+
+.profileGrid h1,
+.profileGrid h2,
+.profileGrid h3 {
+  margin-top: 0;
+}
 
 .profileBasic { display: flex; gap: 16px; align-items: center; min-width: 0; }
 
@@ -24,11 +43,30 @@
 .profileTitle { margin: 0; font-size: 22px; font-weight: 700; overflow-wrap: anywhere; }
 .profileMuted { color: var(--text-secondary); font-size: 14px; overflow-wrap: anywhere; }
 
-.statsGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.statsGrid > div {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  background: rgba(20, 16, 56, 0.45);
+  padding: 12px;
+}
+
 .statsLabel { color: var(--text-secondary); font-size: 13px; }
 .statsValue { font-size: 20px; font-weight: 700; }
 
-.profileMetaCards { display: grid; gap: 14px; }
+.profileMetaCards { display: grid; gap: 12px; }
+
+.profileInfoBlock {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(26, 16, 62, 0.45);
+}
 
 .profileBadge {
   display: inline-flex;
