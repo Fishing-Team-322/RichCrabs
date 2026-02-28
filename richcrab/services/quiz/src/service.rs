@@ -261,12 +261,14 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
             &self.repository,
             self.ai_generator.clone(),
             self.fallback_questions.clone(),
-            requester_uuid,
-            prompt,
-            desired_question_count,
-            difficulty,
-            language,
-            question_format,
+            ai_jobs::AiQuizJobRequest {
+                requester_uuid,
+                prompt,
+                desired_question_count,
+                difficulty,
+                language,
+                question_format,
+            },
         )
         .await?;
 
@@ -415,24 +417,26 @@ mod tests {
         };
         repo.create_ai_quiz_job(&job).await.expect("create job");
 
-        ai_jobs::spawn_ai_quiz_worker(
-            repo.clone(),
-            Some(AiGeneratorConfig {
+        ai_jobs::spawn_ai_quiz_worker(ai_jobs::AiQuizWorkerInput {
+            repository: repo.clone(),
+            ai_generator: Some(AiGeneratorConfig {
                 addr: addr.to_string(),
                 model: "GigaChat-Pro".to_string(),
                 api_key: "test-key".to_string(),
                 request_timeout_ms: 3_000,
                 max_retries: 0,
             }),
-            vec![],
-            job.id,
-            owner,
-            "topic".to_string(),
-            1,
-            None,
-            None,
-            None,
-        );
+            fallback_questions: vec![],
+            job_id: job.id,
+            request: ai_jobs::AiQuizJobRequest {
+                requester_uuid: owner,
+                prompt: "topic".to_string(),
+                desired_question_count: 1,
+                difficulty: None,
+                language: None,
+                question_format: None,
+            },
+        });
 
         tokio::time::sleep(std::time::Duration::from_millis(700)).await;
         let job_after = repo

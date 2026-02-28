@@ -183,13 +183,39 @@ services:
     command: ["/usr/local/bin/bot_ingress"]
     environment: *service_env
     depends_on:
-      game:
-        condition: service_started
+      redis:
+        condition: service_healthy
       postgres:
         condition: service_healthy
     restart: unless-stopped
     ports:
       - "8090:8090"
+
+
+  bot_runner:
+    image: richcrabs/bot-runner:local
+    build: *rust_build
+    command: ["/usr/local/bin/bot_runner"]
+    environment:
+      <<: *service_env
+      SERVICE_ADDR_GAME: "game:50051"
+      BOT_QUEUE_GROUP: "bot_runner"
+      BOT_QUEUE_PARTITIONS: "16"
+      BOT_RUNNER_GLOBAL_LIMIT: "64"
+      BOT_RUNNER_PER_BOT_LIMIT: "1"
+      BOT_QUEUE_MAX_ATTEMPTS: "5"
+      BOT_DEFAULT_QUIZ_ID: "telegram-default-quiz"
+      GW_PUBLIC_BASE_URL: "http://localhost:8080"
+    depends_on:
+      game:
+        condition: service_started
+      bot_ingress:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
   frontend:
     build:

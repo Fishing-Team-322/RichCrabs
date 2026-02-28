@@ -1,7 +1,9 @@
 use std::{sync::OnceLock, time::Instant};
 
 use axum::{http::StatusCode, response::IntoResponse};
-use prometheus::{Encoder, HistogramVec, IntCounterVec, IntGauge, Registry, TextEncoder};
+use prometheus::{
+    Encoder, HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry, TextEncoder,
+};
 use tonic::{service::Interceptor, Request, Status};
 use tracing::{field, info_span};
 use uuid::Uuid;
@@ -17,6 +19,10 @@ pub struct Metrics {
     pub join_ticket_issued_total: IntCounterVec,
     pub tg_updates_total: IntCounterVec,
     pub errors_total: IntCounterVec,
+    pub queue_lag_seconds: IntGaugeVec,
+    pub bot_update_latency_ms: HistogramVec,
+    pub bot_runner_errors_total: IntCounterVec,
+    pub dead_letter_total: IntCounterVec,
 }
 
 impl Metrics {
@@ -47,6 +53,32 @@ impl Metrics {
             &["service", "kind"],
         )
         .unwrap();
+        let queue_lag_seconds = IntGaugeVec::new(
+            prometheus::Opts::new(
+                "queue_lag_seconds",
+                "Lag between enqueue and consume in seconds",
+            ),
+            &["stream"],
+        )
+        .unwrap();
+        let bot_update_latency_ms = HistogramVec::new(
+            prometheus::HistogramOpts::new(
+                "bot_update_latency_ms",
+                "End-to-end bot update latency in milliseconds",
+            ),
+            &["bot_id", "command"],
+        )
+        .unwrap();
+        let bot_runner_errors_total = IntCounterVec::new(
+            prometheus::Opts::new("bot_runner_errors_total", "Bot runner processing errors"),
+            &["bot_id", "kind"],
+        )
+        .unwrap();
+        let dead_letter_total = IntCounterVec::new(
+            prometheus::Opts::new("dead_letter_total", "Total dead-lettered updates"),
+            &["stream"],
+        )
+        .unwrap();
 
         Self {
             rooms_active,
@@ -55,6 +87,10 @@ impl Metrics {
             join_ticket_issued_total,
             tg_updates_total,
             errors_total,
+            queue_lag_seconds,
+            bot_update_latency_ms,
+            bot_runner_errors_total,
+            dead_letter_total,
         }
     }
 }
@@ -91,6 +127,18 @@ pub fn init_metrics() -> &'static Metrics {
         registry
             .register(Box::new(m.errors_total.clone()))
             .expect("register errors_total");
+        registry
+            .register(Box::new(m.queue_lag_seconds.clone()))
+            .expect("register queue_lag_seconds");
+        registry
+            .register(Box::new(m.bot_update_latency_ms.clone()))
+            .expect("register bot_update_latency_ms");
+        registry
+            .register(Box::new(m.bot_runner_errors_total.clone()))
+            .expect("register bot_runner_errors_total");
+        registry
+            .register(Box::new(m.dead_letter_total.clone()))
+            .expect("register dead_letter_total");
         m
     })
 }
@@ -190,6 +238,22 @@ mod tests {
             .errors_total
             .with_label_values(&["svc", "kind"])
             .inc();
+        metrics
+            .queue_lag_seconds
+            .with_label_values(&["stream"])
+            .set(1);
+        metrics
+            .bot_update_latency_ms
+            .with_label_values(&["bot", "create_game"])
+            .observe(10.0);
+        metrics
+            .bot_runner_errors_total
+            .with_label_values(&["bot", "failed"])
+            .inc();
+        metrics
+            .dead_letter_total
+            .with_label_values(&["stream"])
+            .inc();
         let body = metrics_text().expect("metrics text should be generated");
 
         assert!(body.contains("rooms_active"));
@@ -198,5 +262,9 @@ mod tests {
         assert!(body.contains("join_ticket_issued_total"));
         assert!(body.contains("tg_updates_total"));
         assert!(body.contains("errors_total"));
+        assert!(body.contains("queue_lag_seconds"));
+        assert!(body.contains("bot_update_latency_ms"));
+        assert!(body.contains("bot_runner_errors_total"));
+        assert!(body.contains("dead_letter_total"));
     }
 }

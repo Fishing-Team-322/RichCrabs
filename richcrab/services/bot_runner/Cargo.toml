@@ -1,5 +1,5 @@
 [package]
-name = "bot_ingress"
+name = "bot_runner"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,11 +13,13 @@ serde_json.workspace = true
 serde = { version = "1", features = ["derive"] }
 sqlx.workspace = true
 uuid.workspace = true
-axum = "0.7"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
 tonic = { version = "0.12", features = ["transport"] }
-
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-subtle = "2"
 deadpool-redis = "0.18"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+aes-gcm = "0.10"
+base64 = "0.22"
+hex = "0.4"
+rand = "0.8"
