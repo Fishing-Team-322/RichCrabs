@@ -169,35 +169,27 @@ def require_user(req: Request) -> Optional[str]:
     return s.user_id
 
 
-def _bot_metadata(user_id: str):
-    return (("x-user-id", user_id), ("x-user-role", "host"))
+def _quiz_to_json(q: Any) -> dict[str, Any]:
+    questions = []
+    for qq in getattr(q, "questions", []):
+        row = {"id": qq.id, "text": qq.text, "options": list(qq.options)}
+        has_field = getattr(qq, "HasField", None)
+        if callable(has_field):
+            if qq.HasField("correct_option_index"):
+                row["correctIndex"] = qq.correct_option_index
+        elif hasattr(qq, "correct_option_index"):
+            row["correctIndex"] = qq.correct_option_index
+        questions.append(row)
+    return {
+        "quizId": q.quiz_id.value,
+        "ownerUserId": q.owner_user_id.value,
+        "title": q.title,
+        "description": q.description,
+        "questions": questions,
+    }
 
 
-def _extract_webhook_url(status: str) -> str:
-    m = re.match(r"webhook_set:([^\s]+)", status or "")
-    return m.group(1) if m else ""
-
-
-def _binding_key(bot_id: str) -> str:
-    return f"tg:binding:{bot_id}"
-
-
-def _operations_key(bot_id: str) -> str:
-    return f"tg:ops:{bot_id}"
-
-
-def _append_runtime_op(bot_id: str, op: dict[str, Any]):
-    ops = json.loads(rdb.get(_operations_key(bot_id)) or "[]")
-    ops.append(op)
-    rdb.set(_operations_key(bot_id), json.dumps(ops[-50:]))
-
-
-def _load_binding(bot_id: str) -> Optional[dict[str, Any]]:
-    raw = rdb.get(_binding_key(bot_id))
-    return json.loads(raw) if raw else None
-
-
-@app.get("/api/v1/me")
+@app.get("/api/v1/me", tags=["profile"])
 def me(req: Request):
     uid = require_user(req)
     if not uid:
@@ -464,167 +456,82 @@ def del_bot(botId: str, req: Request):
         return JSONResponse(b, status_code=c)
     return Response(status_code=204)
 
+def _binding_key(bot_id: str) -> str:
+    return f"tg:binding:{bot_id}"
+
+
+def _bot_metadata(uid: str):
+    return (("x-user-id", uid),)
+
+
 @app.post("/api/v1/telegram/bots/connect", tags=["bots"])
 def tg_connect(req: Request, body: dict[str,Any]):
     if (e := require_csrf(req)): return e
     uid = require_user(req)
-    if not uid:
-        return err(401, "unauthorized", "session cookie is missing or invalid")
-    token = str(body.get("token") or body.get("botToken") or "").strip()
-    if not token or ":" not in token:
-        return err(422, "invalid_payload", "bot token is required")
-
-    register = clients.bot.RegisterBot(
-        bot_pb2.RegisterBotRequest(name=body.get("name", "Telegram bot"), version=body.get("version", "v1"), endpoint=token),
-        metadata=_bot_metadata(uid),
-    )
-    bot = register.bot
-    status_info = clients.bot.GetBotStatus(
-        bot_pb2.GetBotStatusRequest(bot_id=common_pb2.BotId(value=bot.bot_id.value)),
-        metadata=_bot_metadata(uid),
-    ).bot
-    webhook_url = _extract_webhook_url(status_info.status)
-    webhook_secret = webhook_url.rsplit("/", 1)[-1] if webhook_url else ""
-    binding = {
-        "botId": bot.bot_id.value,
-        "userId": uid,
-        "botToken": token,
-        "name": bot.name,
-        "status": status_info.status,
-        "webhookUrl": webhook_url,
-        "webhookSecret": webhook_secret,
-        "boundAt": datetime.now(timezone.utc).isoformat(),
-    }
-    rdb.set(_binding_key(bot.bot_id.value), json.dumps(binding))
-    rdb.set(f"tg:user_binding:{uid}", bot.bot_id.value)
-    return {
-        "botId": bot.bot_id.value,
-        "webhookUrl": webhook_url,
-        "status": "connected" if webhook_url else "registered",
-        "metadata": {
-            "name": bot.name,
-            "version": bot.version,
-            "runtimeStatus": status_info.status,
-        },
-    }
-
-
-def _send_tg_message(token: str, chat_id: int, text: str):
-    import requests
-
-    requests.post(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        json={"chat_id": chat_id, "text": text},
-        timeout=3,
-    )
-
-
-def _handle_telegram_command(bot_id: str, binding: dict[str, Any], update: dict[str, Any]):
-    msg = update.get("message") or {}
-    txt = (msg.get("text") or "").strip()
-    chat = (msg.get("chat") or {})
-    chat_id = chat.get("id")
-    if not txt or not chat_id:
-        return
-    parts = txt.split(" ")
-    cmd = parts[0].lower()
-    if cmd == "/newgame" and len(parts) >= 2:
-        quiz_id = parts[1]
-        title = " ".join(parts[2:]) or f"Telegram room {quiz_id}"
-        room = clients.game.CreateRoom(game_pb2.CreateRoomRequest(owner_user_id=common_pb2.UserId(value=binding["userId"]), quiz_id=common_pb2.QuizId(value=quiz_id), title=title))
-        room_state = {"roomId": room.room_id.value, "pin": room.pin, "inviteToken": room.invite_token, "invitePath": room.invite_path}
-        rdb.set(f"tg:chat_room:{bot_id}:{chat_id}", json.dumps(room_state))
-        _append_runtime_op(bot_id, {"id": uuid.uuid4().hex, "type": "room_created", "roomId": room.room_id.value, "roomTitle": title, "createdAt": datetime.now(timezone.utc).isoformat()})
-        _send_tg_message(binding["botToken"], chat_id, f"Игра создана. PIN: {room.pin}\nInvite: {room.invite_path}")
-    elif cmd == "/pin":
-        room_state = json.loads(rdb.get(f"tg:chat_room:{bot_id}:{chat_id}") or "{}")
-        if room_state.get("pin"):
-            _append_runtime_op(bot_id, {"id": uuid.uuid4().hex, "type": "pin_issued", "value": room_state["pin"], "createdAt": datetime.now(timezone.utc).isoformat()})
-            _send_tg_message(binding["botToken"], chat_id, f"PIN: {room_state['pin']}")
-    elif cmd == "/invite":
-        room_state = json.loads(rdb.get(f"tg:chat_room:{bot_id}:{chat_id}") or "{}")
-        if room_state.get("invitePath"):
-            invite_url = f"{settings.public_base_url}{room_state['invitePath']}"
-            _append_runtime_op(bot_id, {"id": uuid.uuid4().hex, "type": "invite_issued", "value": invite_url, "createdAt": datetime.now(timezone.utc).isoformat()})
-            _send_tg_message(binding["botToken"], chat_id, f"Invite: {invite_url}")
-
-@app.post("/api/v1/telegram/webhook/{botId}/{secret}")
-async def tg_webhook(botId: str, secret: str, req: Request):
-    binding = _load_binding(botId)
-    if not binding:
-        return err(404, "not_found", "bot binding is missing")
-    header_secret = req.headers.get("x-telegram-bot-api-secret-token", "")
-    if not binding.get("webhookSecret") or secret != binding.get("webhookSecret") or header_secret != secret:
-        return err(403, "forbidden", "invalid telegram webhook secret")
-    update = await req.json()
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    token = str(body.get("token", "")).strip()
+    if not token:
+        return err(400, "validation_error", "telegram token is required")
+    if ":" not in token or not token.split(":", 1)[0].isdigit():
+        return err(422, "validation_error", "telegram token format is invalid")
     try:
-        _handle_telegram_command(botId, binding, update)
+        b = clients.bot.RegisterBot(
+            bot_pb2.RegisterBotRequest(name="Telegram", version="telegram", endpoint=f"telegram://{token.split(':', 1)[0]}"),
+            metadata=_bot_metadata(uid),
+        ).bot
     except grpc.RpcError as ex:
-        c, b = map_grpc_err(ex, "telegram_webhook")
-        return JSONResponse(b, status_code=c)
-    return {"ok": True, "botId": botId, "status": "processed"}
+        c, bb = map_grpc_err(ex, "tg_connect")
+        return JSONResponse(bb, status_code=c)
+    secret = uuid.uuid4().hex[:24]
+    rdb.set(_binding_key(b.bot_id.value), json.dumps({"userId": uid, "secret": secret, "token": token}))
+    return {
+        "botId": b.bot_id.value,
+        "webhookUrl": f"{settings.public_base_url}/api/v1/telegram/webhook/{b.bot_id.value}/{secret}",
+        "status": "connected",
+    }
 
 
-@app.get("/api/v1/telegram/bots/status")
+@app.get("/api/v1/telegram/bots/status", tags=["bots"])
 def tg_status(req: Request):
     uid = require_user(req)
-    if not uid:
-        return err(401, "unauthorized", "session cookie is missing or invalid")
-    bot_id = rdb.get(f"tg:user_binding:{uid}")
-    if not bot_id:
-        return {"bindingId": "none", "active": False, "operations": []}
-    binding = _load_binding(bot_id)
-    if not binding:
-        return {"bindingId": "none", "active": False, "operations": []}
-    return {
-        "bindingId": binding["botId"],
-        "botId": binding["botId"],
-        "username": binding.get("name"),
-        "name": binding.get("name"),
-        "active": True,
-        "lastSeenAt": binding.get("boundAt"),
-        "operations": json.loads(rdb.get(_operations_key(bot_id)) or "[]"),
-    }
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    try:
+        bots = clients.bot.ListBots(bot_pb2.ListBotsRequest(), metadata=_bot_metadata(uid)).bots
+    except grpc.RpcError as ex:
+        c, bb = map_grpc_err(ex, "tg_status")
+        return JSONResponse(bb, status_code=c)
+    for b in bots:
+        if rdb.get(_binding_key(b.bot_id.value)):
+            return {"active": True, "botId": b.bot_id.value}
+    return {"active": False, "botId": ""}
 
 
-@app.delete("/api/v1/telegram/bots/{botId}")
+@app.delete("/api/v1/telegram/bots/{botId}", tags=["bots"])
 def tg_unbind(botId: str, req: Request):
-    if (e := require_csrf(req)):
-        return e
+    if (e := require_csrf(req)): return e
     uid = require_user(req)
-    if not uid:
-        return err(401, "unauthorized", "session cookie is missing or invalid")
-    clients.bot.RemoveBot(bot_pb2.RemoveBotRequest(bot_id=common_pb2.BotId(value=botId)), metadata=_bot_metadata(uid))
+    if not uid: return err(401,"unauthorized","session cookie is missing or invalid")
+    try:
+        clients.bot.RemoveBot(bot_pb2.RemoveBotRequest(bot_id=common_pb2.BotId(value=botId)), metadata=_bot_metadata(uid))
+    except grpc.RpcError as ex:
+        c, bb = map_grpc_err(ex, "tg_unbind")
+        return JSONResponse(bb, status_code=c)
     rdb.delete(_binding_key(botId))
-    rdb.delete(_operations_key(botId))
-    if rdb.get(f"tg:user_binding:{uid}") == botId:
-        rdb.delete(f"tg:user_binding:{uid}")
     return Response(status_code=204)
 
 
-
-def _quiz_question_to_json(question: Any) -> dict[str, Any]:
-    has_field = getattr(question, "HasField", None)
-    if callable(has_field):
-        has_correct = has_field("correct_option_index")
-    else:
-        has_correct = hasattr(question, "correct_option_index")
-    return {
-        "id": question.id,
-        "text": question.text,
-        "options": list(question.options),
-        "correctIndex": question.correct_option_index if has_correct else None,
-    }
-
-
-def _quiz_to_json(quiz: Any) -> dict[str, Any]:
-    return {
-        "quizId": quiz.quiz_id.value,
-        "ownerUserId": quiz.owner_user_id.value,
-        "title": quiz.title,
-        "description": quiz.description,
-        "questions": [_quiz_question_to_json(question) for question in getattr(quiz, "questions", [])],
-    }
+@app.post("/api/v1/telegram/webhook/{botId}/{secret}", tags=["bots"])
+def tg_webhook(botId: str, secret: str):
+    row = rdb.get(_binding_key(botId))
+    if not row:
+        return {"status": "ignored", "botId": botId}
+    try:
+        parsed = json.loads(row)
+    except Exception:
+        return {"status": "ignored", "botId": botId}
+    if parsed.get("secret") != secret:
+        return {"status": "ignored", "botId": botId}
+    return {"status": "processed", "botId": botId}
 
 @app.get("/api/v1/quizzes", tags=["quizzes"])
 def list_quizzes(limit: int = 20, pageToken: str = "", ownerUserId: str = ""):
@@ -642,8 +549,12 @@ def create_quiz(req: Request, body: dict[str, Any]):
     for row in body.get("questions", []):
         qq = q.questions.add(); qq.id = row.get("id", ""); qq.text = row["text"]; qq.options.extend(row["options"])
         if "correctIndex" in row: qq.correct_option_index = row["correctIndex"]
-    x = clients.quiz.CreateQuiz(q)
-    return {"quiz": _quiz_to_json(x.quiz), "status": "created"}
+    try:
+        x = clients.quiz.CreateQuiz(q)
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, "create_quiz")
+        return JSONResponse(b, status_code=c)
+    return {"quiz": {"quizId": x.quiz.quiz_id.value, "ownerUserId": x.quiz.owner_user_id.value, "title": x.quiz.title, "description": x.quiz.description}, "status": "created"}
 
 @app.get("/api/v1/quizzes/{quizId}", tags=["quizzes"])
 def get_quiz(quizId: str):
@@ -693,10 +604,6 @@ def ai_get(jobId: str, req: Request):
     if x.HasField("quiz"):
         out["quiz"] = _quiz_to_json(x.quiz)
         out["draftId"] = x.quiz.quiz_id.value
-    has_error = getattr(x, "HasField", lambda _: False)("error")
-    if has_error and getattr(x.error, "message", ""):
-        out["error"] = x.error.message
-        out["errorMessage"] = x.error.message
     return out
 
 @app.get("/api/v1/quizzes/ai-jobs/{jobId}/result", tags=["quizzes"])
