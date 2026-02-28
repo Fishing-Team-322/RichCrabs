@@ -5,6 +5,15 @@
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 16px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.quizPanel h1,
+.quizPanel h2,
+.quizPanel p {
+  margin: 0;
 }
 
 .quizToolbar,
@@ -54,7 +63,7 @@
 .quizError { background: rgba(185, 28, 28, 0.18); color: #ffd0da; border-radius: 10px; padding: 10px; border: 1px solid rgba(255,111,142,.32); }
 .quizSuccess { background: rgba(21, 128, 61, 0.18); color: #bfffd6; border-radius: 10px; padding: 10px; border: 1px solid rgba(134,239,172,.3); }
 
-.quizModeSwitch { display: flex; gap: 8px; flex-wrap: wrap; }
+.quizModeSwitch { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
 .quizInput.error,
 .quizSelect.error { border-color: #ff8eb1; }
 
