@@ -21,6 +21,29 @@ service GameService {
   rpc GetRoomChatMessages(GetRoomChatMessagesRequest) returns (GetRoomChatMessagesResponse);
   rpc SubscribeRoomEvents(SubscribeRoomEventsRequest) returns (stream RoomEvent);
   rpc GetRoomState(GetRoomStateRequest) returns (GetRoomStateResponse);
+  rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
+}
+
+message ListRoomsRequest {
+  UserId owner_user_id = 1;
+  uint32 limit = 2;
+}
+
+message RoomSnapshot {
+  RoomId room_id = 1;
+  string pin = 2;
+  UserId owner_user_id = 3;
+  QuizId quiz_id = 4;
+  string title = 5;
+  string state = 6;
+  repeated PlayerState players = 7;
+  google.protobuf.Timestamp updated_at = 8;
+  string invite_path = 9;
+}
+
+message ListRoomsResponse {
+  repeated RoomSnapshot rooms = 1;
+  optional Error error = 2;
 }
 
 message ChatMessage {
