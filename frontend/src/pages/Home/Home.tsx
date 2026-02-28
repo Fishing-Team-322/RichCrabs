@@ -5,6 +5,7 @@ import useAuth from '../../hooks/useAuth'
 import { routes } from '../../app/router/routeMap'
 import { preloadJoinFlow } from '../../app/router/lazyPages'
 import { Badge } from '../../components/ui'
+import { serviceApi } from '../../services/serviceApi'
 import './Home.css'
 
 type HomeItem = { title: string; description: string }
@@ -15,6 +16,7 @@ const HomePage: React.FC = () => {
   const { isAuthenticated, profile } = useAuth()
   const { t } = useTranslation()
   const [openFaq, setOpenFaq] = useState(0)
+  const [apiStatus, setApiStatus] = useState<'loading' | 'ok' | 'error'>('loading')
   const [theme, setTheme] = useState<'dark' | 'light'>(
     () => (typeof window !== 'undefined' && window.localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark'),
   )
@@ -27,6 +29,21 @@ const HomePage: React.FC = () => {
     root.setAttribute('data-theme', theme)
     localStorage.setItem(THEME_STORAGE_KEY, theme)
   }, [theme])
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      const results = await Promise.allSettled([serviceApi.health(), serviceApi.session()])
+      const hasErrors = results.some((result) => result.status === 'rejected')
+      if (hasErrors) {
+        setApiStatus('error')
+        return
+      }
+
+      setApiStatus('ok')
+    }
+
+    void bootstrap()
+  }, [])
 
   const plans = useMemo(
     () => [
@@ -79,6 +96,9 @@ const HomePage: React.FC = () => {
       <section className="homeHero">
         <div className="homeHeroContent">
           <Badge tone="neutral">{t('home.badge')}</Badge>
+          <div className="homeMuted" aria-live="polite">
+            API: {apiStatus === 'loading' ? 'подключение…' : apiStatus === 'ok' ? 'подключено' : 'недоступно'}
+          </div>
           <h1 className="homeTitle">
             {isAuthenticated
               ? t('home.titleAuth', { name: profile?.displayName ?? 'player' })
