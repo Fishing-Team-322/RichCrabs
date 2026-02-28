@@ -53,9 +53,9 @@ def require_csrf(req: Request):
     return None
 
 
-def set_auth(resp: Response, claims: SessionClaims):
+def set_auth(resp: Response, claims: SessionClaims, csrf_token: Optional[str] = None):
     tok = issue_session_token(claims, settings.session_ttl_seconds)
-    csrf = issue_csrf_token()
+    csrf = csrf_token or issue_csrf_token()
     resp.set_cookie(settings.session_cookie_name, tok, path=settings.session_cookie_path, secure=settings.session_cookie_secure, httponly=settings.session_cookie_httponly, samesite="lax")
     resp.set_cookie(settings.csrf_cookie_name, csrf, path=settings.csrf_cookie_path, secure=settings.csrf_cookie_secure, httponly=settings.csrf_cookie_httponly, samesite="lax")
     return csrf
@@ -124,9 +124,9 @@ def register(req: Request, body: dict[str, Any]):
     if res.email_taken:
         return err(409, "email_taken", "email already registered")
     u = res.user
-    out = JSONResponse({"user": {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}, "csrfToken": ""})
-    token = set_auth(out, SessionClaims(session_type="auth", role="host", user_id=u.id))
-    out.body = json.dumps({"user": {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}, "csrfToken": token}).encode()
+    csrf_token = issue_csrf_token()
+    out = JSONResponse({"user": {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}, "csrfToken": csrf_token})
+    set_auth(out, SessionClaims(session_type="auth", role="host", user_id=u.id), csrf_token=csrf_token)
     return out
 
 
@@ -142,9 +142,9 @@ def login(req: Request, body: dict[str, Any]):
     if not res.authenticated:
         return err(401, "unauthorized", "invalid email or password")
     u = res.user
-    out = JSONResponse({"user": {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}, "csrfToken": ""})
-    token = set_auth(out, SessionClaims(session_type="auth", role="host", user_id=u.id))
-    out.body = json.dumps({"user": {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}, "csrfToken": token}).encode()
+    csrf_token = issue_csrf_token()
+    out = JSONResponse({"user": {"id": u.id, "email": u.email, "displayName": u.display_name, "avatarUrl": u.avatar_url}, "csrfToken": csrf_token})
+    set_auth(out, SessionClaims(session_type="auth", role="host", user_id=u.id), csrf_token=csrf_token)
     return out
 
 
