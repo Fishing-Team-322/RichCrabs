@@ -17,13 +17,13 @@ describe('quizApi contract', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/quizzes', expect.objectContaining({ method: 'GET' }))
   })
 
-  it('creates draft via /api/v1/quizzes with exactly four options in seed question', async () => {
+  it('creates draft via /api/v1/quizzes and lets backend provide starter questions', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ quiz: { quizId: 'q1', title: 'Quiz', questions: [] } }))
     const draft = await quizApi.draft()
     expect(draft.id).toBe('q1')
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/quizzes', expect.objectContaining({
       method: 'POST',
-      body: expect.stringContaining('Вариант 4'),
+      body: JSON.stringify({ title: 'Новый квиз', questions: [] }),
     }))
   })
 
