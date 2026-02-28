@@ -21,6 +21,7 @@ class Config(BaseModel):
     grpc_bot_addr: str = os.getenv("GW_GRPC_BOT_ADDR", "bot:50055")
     grpc_auth_addr: str = os.getenv("GW_GRPC_AUTH_ADDR", "auth:50056")
     redis_url: str = os.getenv("GW_REDIS_URL", "redis://redis:6379")
+    telegram_token_keyring: str = os.getenv("GW_TELEGRAM_TOKEN_KEYRING", "v1:dev-insecure-telegram-token-key")
     session_signing_key: str = os.getenv("GW_SESSION_SIGNING_KEY", "dev-insecure-session-key")
     session_cookie_name: str = os.getenv("GW_SESSION_COOKIE_NAME", "QB-SESSION")
     session_cookie_secure: bool = _b("GW_SESSION_COOKIE_SECURE", False)
