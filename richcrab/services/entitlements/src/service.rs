@@ -84,6 +84,11 @@ impl EntitlementsServiceImpl {
             }
         }
 
+        self.user_repository
+            .ensure_exists(user_id)
+            .await
+            .map_err(|e| Status::internal(format!("user ensure failed: {e}")))?;
+
         let user_plan_code = self
             .user_repository
             .find_plan_code(user_id)
@@ -211,6 +216,11 @@ impl proto::richcrab::v1::entitlements_service_server::EntitlementsService
         let period_start = Self::period_start();
         let [rooms_created, rooms_started, bots_registered, ai_jobs_started, quizzes_created_count, messages_sent_count] =
             Self::usage_units(&req.feature, req.units);
+
+        self.user_repository
+            .ensure_exists(user_id)
+            .await
+            .map_err(|e| Status::internal(format!("user ensure failed: {e}")))?;
 
         self.usage_repository
             .increment(
