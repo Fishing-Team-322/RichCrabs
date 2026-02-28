@@ -13,6 +13,9 @@ pub const SERVICE_ADDR_BOT_INGRESS: &str = "SERVICE_ADDR_BOT_INGRESS";
 pub const SERVICE_ADDR_AUTH: &str = "SERVICE_ADDR_AUTH";
 pub const LOG_LEVEL: &str = "LOG_LEVEL";
 pub const MIGRATIONS_DIR: &str = "MIGRATIONS_DIR";
+pub const GIGACHAT_API_ADDR: &str = "GIGACHAT_API_ADDR";
+pub const GIGACHAT_API_KEY: &str = "GIGACHAT_API_KEY";
+pub const GIGACHAT_MODEL: &str = "GIGACHAT_MODEL";
 
 #[derive(Debug, Clone)]
 pub struct AppConfig {
