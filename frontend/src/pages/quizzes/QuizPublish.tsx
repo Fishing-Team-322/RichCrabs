@@ -112,7 +112,7 @@ const QuizPublish = () => {
       </div>
 
       <div className="quizPanel">
-        <h2>Проверка валидности перед publish</h2>
+        <h2>Проверка валидности перед публикацией</h2>
         {validationErrors.length === 0 ? (
           <div className="quizSuccess">Валидация пройдена. Квиз можно публиковать.</div>
         ) : (
@@ -127,10 +127,10 @@ const QuizPublish = () => {
 
         <div className="quizQuestionActions">
           <button className="quizButton primary" disabled={busy || validationErrors.length > 0} onClick={() => void publishQuiz()}>
-            {busy ? 'Публикация...' : 'Publish'}
+            {busy ? 'Публикация...' : 'Опубликовать'}
           </button>
           <button className="quizButton" disabled={busy} onClick={() => void unpublishQuiz()}>
-            Unpublish
+            Снять с публикации
           </button>
         </div>
       </div>
