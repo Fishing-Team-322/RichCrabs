@@ -22,6 +22,17 @@ rdb = redis.from_url(settings.redis_url, decode_responses=True)
 app = FastAPI(title="QuizBattle Gateway API", docs_url="/docs", openapi_url="/openapi.json")
 
 
+def _room_event_to_dict(ev: Any) -> dict[str, Any]:
+    try:
+        return MessageToDict(ev, preserving_proto_field_name=True)
+    except Exception:
+        raw = str(ev).replace("\n", " ")
+        try:
+            return json.loads(raw)
+        except Exception:
+            return {"raw": raw}
+
+
 def err(code: int, error: str, message: str, details: Any = None):
     body: dict[str, Any] = {"error": error, "message": message}
     if details is not None:
@@ -660,7 +671,7 @@ async def ws(ws: WebSocket):
                 ev = await asyncio.to_thread(_next_stream_event, stream)
                 if ev is None:
                     return
-                event_dict = MessageToDict(ev, preserving_proto_field_name=True)
+                event_dict = _room_event_to_dict(ev)
                 await ws.send_json({"type": "room_event", "event": event_dict})
                 chat_event = event_dict.get("chat_message_posted")
                 if chat_event:
