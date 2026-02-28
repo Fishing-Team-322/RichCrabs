@@ -394,8 +394,18 @@ mod tests {
                 .await
         });
 
-        let repo = QuizRepository::new(pool);
+        let repo = QuizRepository::new(pool.clone());
         let owner = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, telegram_user_id, display_name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(owner)
+        .bind(i64::MAX - 7)
+        .bind("quiz-ai-job-test")
+         .execute(&pool)
+        .await
+        .expect("seed owner user");
+
         let now = chrono::Utc::now();
         let job = AiQuizJob {
             id: Uuid::new_v4(),
