@@ -179,7 +179,6 @@ pub(crate) fn spawn_ai_quiz_worker(input: AiQuizWorkerInput) {
             }
         };
 
-        let job_id = params.job_id;
         if let Err(err) = validate_questions(&generated.questions) {
             let _ = repository
                 .fail_ai_quiz_job(job_id, &format!("generation failed validation: {err}"))
