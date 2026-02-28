@@ -116,10 +116,10 @@ const QuizEdit = () => {
   if (!draft) return <div className="quizError">{error || 'Черновик не найден.'}</div>
 
   return (
-    <section className="quizPage">
+    <section className="quizPage quizPageEditor">
       <div className="quizPanel">
         <h1>Редактор квиза</h1>
-        <div className="quizGrid">
+        <div className="quizGrid quizMetaGrid">
           <label>
             Название
             <input
@@ -197,7 +197,7 @@ const QuizEdit = () => {
           </button>
         </div>
 
-        <div className="quizPage">
+        <div className="quizQuestionsList">
           {draft.questions.map((question, questionIndex) => (
             <article className="quizQuestionCard" key={question.id}>
               <div className="quizQuestionHeader">
