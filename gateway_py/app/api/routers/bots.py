@@ -1,4 +1,3 @@
-import json
 import grpc
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
@@ -9,7 +8,7 @@ from app.config import settings
 from app.grpc_clients.core import clients, map_grpc_err
 from app.proto_gen import bot_pb2, common_pb2
 from app.schemas import RegisterBotRequest, TelegramConnectRequest, UpdateBotRequest
-from app.services.bot_service import bot_metadata, binding_key, rdb, store_binding
+from app.services.bot_service import bot_metadata, binding_key, parse_binding, rdb, store_binding
 
 router = APIRouter(tags=["bots"])
 
@@ -92,7 +91,7 @@ def tg_unbind(botId: str, req: Request):
 def tg_webhook(botId: str, secret: str, req: Request):
     row = rdb.get(binding_key(botId))
     if not row: return {'status': 'ignored', 'botId': botId}
-    try: parsed = json.loads(row)
+    try: parsed = parse_binding(botId, row)
     except Exception: return {'status': 'ignored', 'botId': botId}
     if req.headers.get('x-telegram-bot-api-secret-token', '') != secret: return {'status': 'ignored', 'botId': botId}
     return {'status': 'processed', 'botId': botId}
