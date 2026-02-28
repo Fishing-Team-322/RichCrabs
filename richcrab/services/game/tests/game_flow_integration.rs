@@ -1,6 +1,8 @@
 use chrono::Utc;
 use game::{
-    domain::{GameQuestion, RoomLifecycleState, RoomState},
+    domain::{
+        GameQuestion, RoomLifecycleState, RoomSettings, RoomState, RoomTimers, RoomVisibility,
+    },
     room_actor::{spawn_room_actor, RoomCommand},
 };
 use tokio::sync::oneshot;
@@ -10,6 +12,15 @@ async fn create_room_issue_ticket_join_start_submit_and_game_end() {
     let room_id = uuid::Uuid::new_v4().to_string();
     let owner_id = uuid::Uuid::new_v4().to_string();
     let state = RoomState {
+        settings: RoomSettings {
+            player_limit: 20,
+            visibility: RoomVisibility::Private,
+            timers: RoomTimers {
+                lobby_timer_sec: 45,
+                question_timer_sec: 30,
+                answer_reveal_sec: 10,
+            },
+        },
         room_id: room_id.clone(),
         owner_user_id: owner_id.clone(),
         quiz_id: "quiz-1".to_string(),

@@ -9,6 +9,7 @@ import { setProfile } from '../../store/slices'
 import { quizApi } from '../../services/quizApi'
 import { roomsApi } from '../../services/roomsApi'
 import { joinApi } from '../../services/joinApi'
+import { billingApi } from '../../services/billingApi'
 
 vi.mock('../../services/quizApi', () => ({
   quizApi: {
@@ -29,6 +30,12 @@ vi.mock('../../services/joinApi', () => ({
   },
 }))
 
+vi.mock('../../services/billingApi', () => ({
+  billingApi: {
+    current: vi.fn(),
+  },
+}))
+
 describe('integration: room create + join flow', () => {
   it('creates room and shows pin', async () => {
     vi.mocked(quizApi.list).mockResolvedValue([
@@ -42,6 +49,8 @@ describe('integration: room create + join flow', () => {
         questionsCount: 10,
       },
     ])
+
+    vi.mocked(billingApi.current).mockResolvedValue({ id: 'sub1', planCode: 'free', status: 'active', currentPeriodEnd: new Date().toISOString() })
 
     vi.mocked(roomsApi.create).mockResolvedValue({
       id: 'room-1',

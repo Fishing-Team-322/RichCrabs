@@ -37,12 +37,18 @@ def _install_proto_stubs():
         def HasField(self, field):
             return hasattr(self, field)
 
+
+    class RoomVisibility:
+        ROOM_VISIBILITY_UNSPECIFIED = 0
+        ROOM_VISIBILITY_PRIVATE = 1
+        ROOM_VISIBILITY_PUBLIC = 2
+
     pb2_classes = {
         "auth_pb2": ["RegisterRequest", "LoginRequest", "GetMeRequest", "UpdateProfileRequest", "ChangePasswordRequest", "GetAdminStatsRequest", "SetUserBanRequest"],
         "bot_pb2": ["RegisterBotRequest", "ListBotsRequest", "GetBotStatusRequest", "UpdateBotStatusRequest", "RemoveBotRequest"],
         "common_pb2": ["UserId", "QuizId", "RoomId", "PlayerId", "BotId"],
         "entitlements_pb2": [],
-        "game_pb2": ["CreateRoomRequest", "RegenerateInviteRequest", "GetRoomStateRequest", "ListRoomsRequest", "JoinRoomRequest", "StartGameRequest", "PauseGameRequest", "ResumeGameRequest", "NextQuestionRequest", "LeaveRoomRequest", "KickPlayerRequest", "SubscribeRoomEventsRequest", "SubmitAnswerRequest", "PingRequest"],
+        "game_pb2": ["CreateRoomRequest", "RegenerateInviteRequest", "GetRoomStateRequest", "ListRoomsRequest", "JoinRoomRequest", "StartGameRequest", "PauseGameRequest", "ResumeGameRequest", "NextQuestionRequest", "LeaveRoomRequest", "KickPlayerRequest", "SubscribeRoomEventsRequest", "SubmitAnswerRequest", "PingRequest", "RoomSettings", "RoomTimers", "RoomVisibility"],
         "join_pb2": ["IssueJoinTicketByPinRequest", "IssueJoinTicketByInviteRequest"],
         "quiz_pb2": ["ListQuizzesRequest", "CreateQuizRequest", "GetQuizRequest", "UpdateQuizRequest", "PublishQuizRequest", "StartAiQuizJobRequest", "GetAiQuizJobRequest"],
         "richcrab_pb2": ["PingRequest"],
@@ -59,6 +65,8 @@ def _install_proto_stubs():
                 setattr(module, name, CreateQuizRequest)
             elif mod_name == "quiz_pb2" and name == "GetAiQuizJobResponse":
                 setattr(module, name, GetAiQuizJobResponse)
+            elif mod_name == "game_pb2" and name == "RoomVisibility":
+                setattr(module, name, RoomVisibility)
             else:
                 setattr(module, name, Msg)
         sys.modules[f"app.proto_gen.{mod_name}"] = module
@@ -130,10 +138,10 @@ class FakeClients:
             SetUserBan=lambda req: _ns(),
         )
         self.game = _ns(
-            CreateRoom=lambda req: _ns(pin="123456", invite_token="inv1", invite_path="/invite/inv1", invite_qr_svg="<svg></svg>", room_id=_ns(value="room-1")),
+            CreateRoom=lambda req: _ns(pin="123456", invite_token="inv1", invite_path="/invite/inv1", invite_qr_svg="<svg></svg>", room_id=_ns(value="room-1"), settings=getattr(req, "settings", None)),
             RegenerateInvite=lambda req: _ns(invite_token="inv2", invite_path="/invite/inv2", invite_qr_svg="<svg></svg>"),
-            ListRooms=lambda req: _ns(rooms=[_ns(room_id=_ns(value="room-1"), pin="123456", owner_user_id=_ns(value="u1"), quiz_id=_ns(value="q1"), title="Room 1", state="LOBBY", updated_at=_ns(seconds=1, nanos=0), invite_path="/invite/inv1", players=[_ns(player_id=_ns(value="p1"), display_name="P1", score=0, team_id="A")])]),
-            GetRoomState=lambda req: _ns(room_id=_ns(value="room-1"), state="LOBBY", players=[_ns(player_id=_ns(value="p1"), display_name="P1", score=0)]),
+            ListRooms=lambda req: _ns(rooms=[_ns(room_id=_ns(value="room-1"), pin="123456", owner_user_id=_ns(value="u1"), quiz_id=_ns(value="q1"), title="Room 1", state="LOBBY", updated_at=_ns(seconds=1, nanos=0), invite_path="/invite/inv1", settings=_ns(player_limit=24, visibility=2, timers=_ns(lobby_timer_sec=45, question_timer_sec=25, answer_reveal_sec=7)), players=[_ns(player_id=_ns(value="p1"), display_name="P1", score=0, team_id="A")])]),
+            GetRoomState=lambda req: _ns(room_id=_ns(value="room-1"), pin="123456", quiz_id=_ns(value="q1"), owner_user_id=_ns(value="u1"), title="Room 1", invite_path="/invite/inv1", settings=_ns(player_limit=24, visibility=2, timers=_ns(lobby_timer_sec=45, question_timer_sec=25, answer_reveal_sec=7)), state="LOBBY", players=[_ns(player_id=_ns(value="p1"), display_name="P1", score=0)]),
             JoinRoom=lambda req: _ns(player_id=_ns(value="p1")),
             StartGame=lambda req: _ns(started=True),
             PauseGame=lambda req: _ns(paused=True),
