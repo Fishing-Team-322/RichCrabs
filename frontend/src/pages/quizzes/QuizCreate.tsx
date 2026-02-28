@@ -70,10 +70,19 @@ const QuizCreate = () => {
       notifications.success('AI-генерация завершена, открываем редактор.')
       openEditor(draft.id)
     } catch (apiError: unknown) {
-      setGenerationStatus('failed')
       const message = apiError instanceof Error ? apiError.message : 'Не удалось сгенерировать квиз через AI.'
-      setError(message)
-      notifications.error(message)
+
+      try {
+        const fallbackDraft = await quizApi.draft()
+        setGenerationStatus('done')
+        setError('')
+        notifications.success('AI временно недоступен: открыли шаблонный draft, можно продолжить вручную.')
+        openEditor(fallbackDraft.id)
+      } catch {
+        setGenerationStatus('failed')
+        setError(message)
+        notifications.error(message)
+      }
     } finally {
       setLoading(false)
     }
