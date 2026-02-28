@@ -92,9 +92,29 @@ def _ns(**kwargs):
 class FakeRedis:
     def __init__(self):
         self._data = {}
+        self._lists = {}
 
     def get(self, key):
         return self._data.get(key)
+
+    def set(self, key, value):
+        self._data[key] = value
+        return True
+
+    def lpush(self, key, value):
+        self._lists.setdefault(key, []).insert(0, value)
+        return len(self._lists[key])
+
+    def ltrim(self, key, start, end):
+        items = self._lists.get(key, [])
+        self._lists[key] = items[start:end + 1]
+        return True
+
+    def lrange(self, key, start, end):
+        items = self._lists.get(key, [])
+        if end == -1:
+            end = len(items) - 1
+        return items[start:end + 1]
 
 
 class FakeClients:
