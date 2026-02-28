@@ -48,8 +48,15 @@ export interface RoomSettingsDto {
 }
 
 export interface CreateRoomRequestDto {
+  ownerUserId: string
   quizId: string
   settings: RoomSettingsDto
+}
+
+export interface RoomInviteDto {
+  inviteToken: string
+  invitePath: string
+  inviteQrSvg: string
 }
 
 export interface RoomSummaryDto {

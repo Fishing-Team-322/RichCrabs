@@ -5,44 +5,95 @@ import type {
   ListRoomsParams,
   RoomDetailsDto,
   RoomStateDto,
+  RoomInviteDto,
   RoomsListResponseDto,
 } from '../types/room.types'
 
-const ROOMS_BASE = '/api/rooms'
+const GAMES_BASE = '/api/v1/games'
 
-const queryList = (params: ListRoomsParams = {}): string => {
-  const search = new URLSearchParams()
-  if (params.status && params.status !== 'all') {
-    search.set('status', params.status)
-  }
-
-  const raw = search.toString()
-  return raw ? `?${raw}` : ''
+const toRoomStatus = (state: string): RoomDetailsDto['status'] => {
+  if (state === 'playing') return 'active'
+  if (state === 'paused') return 'paused'
+  if (state === 'finished') return 'finished'
+  return 'waiting'
 }
+
+const mapStateToRoomDetails = (payload: {
+  pin: string
+  state: string
+  players: Array<{ playerId: string; name: string }>
+}): RoomDetailsDto => ({
+  id: payload.pin,
+  quizId: '',
+  quizTitle: payload.pin,
+  pin: payload.pin,
+  inviteLink: `/invite/${payload.pin}`,
+  status: toRoomStatus(payload.state),
+  playersCount: payload.players.length,
+  playerLimit: 100,
+  hostId: '',
+  updatedAt: new Date().toISOString(),
+  isHost: true,
+  settings: {
+    playerLimit: 100,
+    privacy: 'private',
+    timers: {
+      lobbyTimerSec: 30,
+      questionTimerSec: 20,
+      answerRevealSec: 5,
+    },
+  },
+  players: payload.players.map((player, index) => ({
+    id: player.playerId,
+    name: player.name,
+    team: index % 2 === 0 ? 'A' : 'B',
+  })),
+})
 
 export const roomsApi = {
   create: (payload: CreateRoomRequestDto) =>
-    apiFetch<RoomDetailsDto>(ROOMS_BASE, {
+    apiFetch<{ pin: string; invitePath: string }>(GAMES_BASE, {
       method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+      body: JSON.stringify({ ownerUserId: payload.ownerUserId, quizId: payload.quizId, title: `Quiz ${payload.quizId}` }),
+    }).then((res): RoomDetailsDto => ({
+      ...mapStateToRoomDetails({ pin: res.pin, state: 'lobby', players: [] }),
+      inviteLink: res.invitePath,
+      settings: payload.settings,
+      playerLimit: payload.settings.playerLimit,
+    })),
 
-  list: (params: ListRoomsParams = {}) => apiFetch<RoomsListResponseDto>(`${ROOMS_BASE}${queryList(params)}`),
+  list: (_params: ListRoomsParams = {}) =>
+    apiFetch<Array<{ pin: string; state: string; players: Array<{ playerId: string; name: string }> }>>(GAMES_BASE).then(
+      (rooms): RoomsListResponseDto => ({ rooms: rooms.map(mapStateToRoomDetails) }),
+    ),
 
-  open: (roomId: string) =>
-    apiFetch<RoomDetailsDto>(`${ROOMS_BASE}/${encodeURIComponent(roomId)}/open`, {
+  open: async (roomId: string) => {
+    await apiFetch<void>(`${GAMES_BASE}/${encodeURIComponent(roomId)}/start`, {
       method: 'POST',
-    }),
+    })
+    return roomsApi.details(roomId)
+  },
 
-  pause: (roomId: string) =>
-    apiFetch<RoomDetailsDto>(`${ROOMS_BASE}/${encodeURIComponent(roomId)}/pause`, {
+  pause: async (roomId: string) => {
+    await apiFetch<void>(`${GAMES_BASE}/${encodeURIComponent(roomId)}/pause`, {
       method: 'POST',
-    }),
+    })
+    return roomsApi.details(roomId)
+  },
 
-  details: (roomId: string) => apiFetch<RoomDetailsDto>(`${ROOMS_BASE}/${encodeURIComponent(roomId)}`),
+  details: (roomId: string) =>
+    apiFetch<{ pin: string; state: string; players: Array<{ playerId: string; name: string }> }>(
+      `${GAMES_BASE}/${encodeURIComponent(roomId)}`,
+    ).then(mapStateToRoomDetails),
 
   close: (roomId: string) =>
-    apiFetch<void>(`${ROOMS_BASE}/${encodeURIComponent(roomId)}/close`, {
+    apiFetch<void>(`${GAMES_BASE}/${encodeURIComponent(roomId)}/leave`, {
+      method: 'POST',
+    }),
+
+
+  regenerateInvite: (roomId: string) =>
+    apiFetch<RoomInviteDto>(`${GAMES_BASE}/${encodeURIComponent(roomId)}/invite/regenerate`, {
       method: 'POST',
     }),
 
@@ -71,7 +122,6 @@ export const roomsApi = {
     }
   },
 
-  getOpenRooms: () => apiFetch<GameDto[]>('/api/games/open'),
-  getRoomState: (roomId: string) =>
-    apiFetch<RoomStateDto>(`/api/games/${encodeURIComponent(roomId)}/state`),
+  getOpenRooms: () => apiFetch<GameDto[]>(GAMES_BASE),
+  getRoomState: (roomId: string) => apiFetch<RoomStateDto>(`${GAMES_BASE}/${encodeURIComponent(roomId)}/state`),
 }

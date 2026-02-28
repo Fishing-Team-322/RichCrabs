@@ -6,6 +6,28 @@ on:
   workflow_dispatch:
 
 jobs:
+  gateway_py:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: gateway_py/requirements*.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r gateway_py/requirements.txt
+      - name: Proto generation smoke check
+        run: |
+          bash gateway_py/scripts/gen_proto.sh
+          python -c "import pathlib; files=list(pathlib.Path('gateway_py/app/proto_gen').glob('*_pb2.py')); assert files, 'No generated protobuf modules found in gateway_py/app/proto_gen'"
+      - name: Static import check
+        run: PYTHONPATH=gateway_py python -c "import app.main"
+      - name: Tests
+        run: pytest gateway_py/tests -q
+
   test:
     runs-on: ubuntu-latest
     services:
@@ -45,8 +67,23 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install sqlx-cli
-        run: cargo install sqlx-cli --no-default-features --features rustls,postgres
+        with:
+          key: ${{ runner.os }}-rust-stable-${{ hashFiles('richcrab/Cargo.lock') }}
+      - name: Cache sqlx-cli + cargo install artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/sqlx
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ~/.cargo/git/checkouts/
+          key: ${{ runner.os }}-rust-stable-sqlx-cli-0.8.6-${{ hashFiles('richcrab/Cargo.lock') }}
+      - name: Install sqlx-cli (if cache miss)
+        run: |
+          if ! command -v sqlx >/dev/null 2>&1; then
+            cargo install sqlx-cli --version 0.8.6 --locked --no-default-features --features rustls,postgres
+          fi
       - name: Run migrations
         run: sqlx migrate run --source richcrab/migrations
       - name: Format check
@@ -101,5 +138,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-rust-stable-${{ hashFiles('richcrab/Cargo.lock') }}
       - name: Run load test placeholder
         run: cargo test --manifest-path richcrab/Cargo.toml -p smoke_load --test load_smoke -- --ignored

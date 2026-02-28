@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event'
 import CreateRoom from '../../pages/CreateRoom/CreateRoom'
 import JoinPage from '../../pages/join/JoinPage'
 import { renderWithProviders } from '../../test/renderWithProviders'
+import { createAppStore } from '../../store/store'
+import { setProfile } from '../../store/slices'
 import { quizApi } from '../../services/quizApi'
 import { roomsApi } from '../../services/roomsApi'
 import { joinApi } from '../../services/joinApi'
@@ -62,8 +64,18 @@ describe('integration: room create + join flow', () => {
     })
 
     const user = userEvent.setup()
+    const store = createAppStore()
+    store.dispatch(
+      setProfile({
+        id: 'u-1',
+        displayName: 'Host',
+        email: 'host@example.com',
+        gamesPlayed: 0,
+        wins: 0,
+      }),
+    )
 
-    renderWithProviders(<CreateRoom />)
+    renderWithProviders(<CreateRoom />, { store })
 
     await user.click(await screen.findByRole('button', { name: 'Создать комнату' }))
 

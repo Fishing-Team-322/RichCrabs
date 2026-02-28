@@ -2,6 +2,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
 use chrono::Utc;
 use futures::Stream;
+use qrcode::{render::svg, QrCode};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::Deserialize;
 use shared::{redis_client::RedisClient, redis_keys};
@@ -20,6 +21,20 @@ struct JoinTicketPayload {
     room_id: String,
     display_name: String,
     issued_at_unix: i64,
+}
+
+fn invite_path(invite_token: &str) -> String {
+    format!("/join?inviteToken={invite_token}")
+}
+
+fn invite_qr_svg(path: &str) -> Result<String, String> {
+    let qr = QrCode::new(path).map_err(|e| format!("failed to generate invite QR code: {e}"))?;
+
+    Ok(qr
+        .render::<svg::Color>()
+        .min_dimensions(246, 246)
+        .quiet_zone(true)
+        .build())
 }
 
 pub struct GameServiceImpl {
@@ -199,6 +214,14 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             )
             .await
             .map_err(|e| Status::internal(format!("failed to write invite token: {e}")))?;
+        self.redis
+            .set_with_ttl(
+                &redis_keys::room_invite_token_key(&room_id),
+                &invite_token,
+                self.pin_ttl,
+            )
+            .await
+            .map_err(|e| Status::internal(format!("failed to write room invite token: {e}")))?;
 
         let initial_state = RoomState {
             room_id: room_id.clone(),
@@ -220,13 +243,96 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         metrics.rooms_active.inc();
         self.report_usage(&owner_id, "CREATE_ROOM", 1).await?;
 
+        let invite_path = invite_path(&invite_token);
+        let invite_qr_svg = invite_qr_svg(&invite_path).map_err(Status::internal)?;
+
         Ok(Response::new(proto::richcrab::v1::CreateRoomResponse {
             room_id: Some(proto::richcrab::v1::RoomId { value: room_id }),
             pin,
             invite_token,
             created_at: Self::now_ts(),
             error: None,
+            invite_path,
+            invite_qr_svg,
         }))
+    }
+
+    async fn regenerate_invite(
+        &self,
+        request: Request<proto::richcrab::v1::RegenerateInviteRequest>,
+    ) -> Result<Response<proto::richcrab::v1::RegenerateInviteResponse>, Status> {
+        let req = request.into_inner();
+        let room_id = req
+            .room_id
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("room_id is required"))?;
+        let requested_by = req
+            .requested_by
+            .map(|v| v.value)
+            .ok_or_else(|| Status::invalid_argument("requested_by is required"))?;
+
+        let room = self.resolve_room(&room_id).await?;
+        let (state_tx, state_rx) = oneshot::channel();
+        room.tx
+            .send(RoomCommand::GetState { response: state_tx })
+            .await
+            .map_err(|_| Status::unavailable("room is unavailable"))?;
+        let state = state_rx
+            .await
+            .map_err(|_| Status::internal("room actor response dropped"))?;
+
+        if requested_by != state.owner_user_id {
+            return Err(Status::permission_denied(
+                "only room owner can regenerate invite",
+            ));
+        }
+
+        let previous_token = self
+            .redis
+            .get_value(&redis_keys::room_invite_token_key(&room_id))
+            .await
+            .map_err(|e| Status::internal(format!("failed to read room invite token: {e}")))?;
+
+        let invite_token = uuid::Uuid::new_v4().to_string();
+        self.redis
+            .set_with_ttl(
+                &redis_keys::invite_key(&invite_token),
+                &room_id,
+                self.pin_ttl,
+            )
+            .await
+            .map_err(|e| Status::internal(format!("failed to write invite token: {e}")))?;
+        self.redis
+            .set_with_ttl(
+                &redis_keys::room_invite_token_key(&room_id),
+                &invite_token,
+                self.pin_ttl,
+            )
+            .await
+            .map_err(|e| Status::internal(format!("failed to write room invite token: {e}")))?;
+
+        if let Some(previous_token) = previous_token {
+            if previous_token != invite_token {
+                self.redis
+                    .delete_key(&redis_keys::invite_key(previous_token))
+                    .await
+                    .map_err(|e| {
+                        Status::internal(format!("failed to delete old invite token: {e}"))
+                    })?;
+            }
+        }
+
+        let invite_path = invite_path(&invite_token);
+        let invite_qr_svg = invite_qr_svg(&invite_path).map_err(Status::internal)?;
+
+        Ok(Response::new(
+            proto::richcrab::v1::RegenerateInviteResponse {
+                invite_token,
+                invite_path,
+                invite_qr_svg,
+                error: None,
+            },
+        ))
     }
 
     async fn join_room(
@@ -712,5 +818,29 @@ impl proto::richcrab::v1::health_server::Health for HealthServiceImpl {
         Ok(Response::new(proto::richcrab::v1::PingResponse {
             message: "pong".to_string(),
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{invite_path, invite_qr_svg};
+
+    #[test]
+    fn invite_path_is_relative() {
+        let token = "abc123";
+        let path = invite_path(token);
+
+        assert!(path.starts_with('/'));
+        assert!(path.contains("inviteToken=abc123"));
+        assert!(!path.contains("://"));
+    }
+
+    #[test]
+    fn invite_qr_svg_is_valid_svg() {
+        let svg = invite_qr_svg("/join?inviteToken=abc123").expect("qr svg is generated");
+
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("</svg>"));
+        assert!(svg.contains("<rect"));
     }
 }

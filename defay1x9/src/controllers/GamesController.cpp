@@ -133,7 +133,7 @@ void RegisterGamesRoutes(const Config& conf, QuizCoreClient& quizCore, Entitleme
         Json::Value responseBody;
         responseBody["pin"] = out->pin;
         responseBody["inviteToken"] = out->invite_token;
-        responseBody["inviteUrl"] = conf.public_base_url + "/invite/" + out->invite_token;
+        responseBody["inviteUrl"] = conf.public_base_url + out->invite_path;  // invite_path domain-agnostic by design
         responseBody["wsUrl"] = conf.public_base_url + "/ws";
         spdlog::info("create_game_ok request_id={} pin={} room_id={} player_id=-", requestId, out->pin, out->room_id);
 

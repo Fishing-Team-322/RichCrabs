@@ -272,7 +272,7 @@ components:
           example: token123
         inviteUrl:
           type: string
-          example: http://localhost:8080/invite/token123
+          example: http://localhost:8080/join?inviteToken=token123
         wsUrl:
           type: string
           example: ws://localhost:8080/ws
