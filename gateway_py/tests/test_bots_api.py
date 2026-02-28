@@ -60,6 +60,16 @@ def test_tg_connect_status_unbind_happy_path(client, host_session_cookie, csrf_h
     assert body["botId"] == "b1"
     assert body["status"] == "connected"
 
+    from app.services.bot_service import binding_key, rdb
+    import json
+
+    stored = rdb.get(binding_key("b1"))
+    parsed = json.loads(stored)
+    assert "token" not in parsed
+    assert parsed.get("tokenCiphertext")
+    assert parsed.get("tokenNonce")
+    assert parsed.get("tokenKeyVersion")
+
     status = client.get("/api/v1/telegram/bots/status", cookies=host_session_cookie)
     assert status.status_code == 200
     status_body = status.json()
@@ -107,3 +117,25 @@ def test_tg_connect_and_webhook_flow(client, host_session_cookie, csrf_headers):
     )
     assert webhook.status_code == 200
     assert webhook.json()["status"] == "processed"
+
+
+def test_tg_webhook_migrates_legacy_plaintext_binding(client, fake_rdb):
+    import json
+    from app.services.bot_service import binding_key
+
+    fake_rdb.set(binding_key("b1"), json.dumps({"userId": "u1", "secret": "secret", "token": "123:abc"}))
+
+    webhook = client.post(
+        "/api/v1/telegram/webhook/b1/secret",
+        json={"message": {"text": "/pin", "chat": {"id": 1}}},
+        headers={"x-telegram-bot-api-secret-token": "secret"},
+    )
+
+    assert webhook.status_code == 200
+    assert webhook.json()["status"] == "processed"
+
+    migrated = json.loads(fake_rdb.get(binding_key("b1")))
+    assert "token" not in migrated
+    assert migrated.get("tokenCiphertext")
+    assert migrated.get("tokenNonce")
+    assert migrated.get("tokenKeyVersion")

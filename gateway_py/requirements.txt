@@ -5,6 +5,7 @@ grpcio-tools==1.74.0
 redis==6.4.0
 httpx==0.28.1
 pydantic==2.11.7
+cryptography==44.0.1
 PyYAML==6.0.2
 python-multipart==0.0.20
 pytest==8.3.4
