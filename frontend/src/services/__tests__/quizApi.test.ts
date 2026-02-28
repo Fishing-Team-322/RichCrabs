@@ -46,6 +46,17 @@ describe('quizApi contract', () => {
     ).rejects.toThrow('bad prompt')
   })
 
+
+
+  it('uses draftId from ai job status when generation is done', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ jobId: 'j1', status: 'done', draftId: 'q42' }))
+      .mockResolvedValueOnce(jsonResponse({ quiz: { quizId: 'q42', title: 'AI', questions: [] } }))
+
+    const draft = await quizApi.generateDraft({ topic: 'Topic', difficulty: 'easy', questionCount: 5, language: 'ru', format: 'single' })
+    expect(draft.id).toBe('q42')
+  })
+
   it('uses quiz CRUD endpoints', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')

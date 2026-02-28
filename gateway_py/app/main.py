@@ -523,12 +523,37 @@ def tg_unbind(botId: str, req: Request):
         rdb.delete(f"tg:user_binding:{uid}")
     return Response(status_code=204)
 
+
+
+def _quiz_question_to_json(question: Any) -> dict[str, Any]:
+    has_field = getattr(question, "HasField", None)
+    if callable(has_field):
+        has_correct = has_field("correct_option_index")
+    else:
+        has_correct = hasattr(question, "correct_option_index")
+    return {
+        "id": question.id,
+        "text": question.text,
+        "options": list(question.options),
+        "correctIndex": question.correct_option_index if has_correct else None,
+    }
+
+
+def _quiz_to_json(quiz: Any) -> dict[str, Any]:
+    return {
+        "quizId": quiz.quiz_id.value,
+        "ownerUserId": quiz.owner_user_id.value,
+        "title": quiz.title,
+        "description": quiz.description,
+        "questions": [_quiz_question_to_json(question) for question in getattr(quiz, "questions", [])],
+    }
+
 @app.get("/api/v1/quizzes")
 def list_quizzes(limit: int = 20, pageToken: str = "", ownerUserId: str = ""):
     req = quiz_pb2.ListQuizzesRequest(page_size=limit, page_token=pageToken)
     if ownerUserId: req.owner_user_id.value = ownerUserId
     x = clients.quiz.ListQuizzes(req)
-    return {"limit": limit, "nextPageToken": x.next_page_token, "items": [{"quizId": q.quiz_id.value, "ownerUserId": q.owner_user_id.value, "title": q.title, "description": q.description, "questions": [{"id":qq.id,"text":qq.text,"options":list(qq.options),"correctIndex":qq.correct_option_index if qq.HasField('correct_option_index') else None} for qq in q.questions]} for q in x.quizzes]}
+    return {"limit": limit, "nextPageToken": x.next_page_token, "items": [_quiz_to_json(q) for q in x.quizzes]}
 
 @app.post("/api/v1/quizzes")
 def create_quiz(req: Request, body: dict[str, Any]):
@@ -540,12 +565,12 @@ def create_quiz(req: Request, body: dict[str, Any]):
         qq = q.questions.add(); qq.id = row.get("id", ""); qq.text = row["text"]; qq.options.extend(row["options"])
         if "correctIndex" in row: qq.correct_option_index = row["correctIndex"]
     x = clients.quiz.CreateQuiz(q)
-    return {"quiz": {"quizId": x.quiz.quiz_id.value, "ownerUserId": x.quiz.owner_user_id.value, "title": x.quiz.title, "description": x.quiz.description}, "status": "created"}
+    return {"quiz": _quiz_to_json(x.quiz), "status": "created"}
 
 @app.get("/api/v1/quizzes/{quizId}")
 def get_quiz(quizId: str):
     q = clients.quiz.GetQuiz(quiz_pb2.GetQuizRequest(quiz_id=common_pb2.QuizId(value=quizId))).quiz
-    return {"quiz": {"quizId": q.quiz_id.value, "ownerUserId": q.owner_user_id.value, "title": q.title, "description": q.description, "questions": [{"id":qq.id,"text":qq.text,"options":list(qq.options)} for qq in q.questions]}}
+    return {"quiz": _quiz_to_json(q)}
 
 @app.patch("/api/v1/quizzes/{quizId}")
 def upd_quiz(quizId: str, req: Request, body: dict[str,Any]):
@@ -553,8 +578,17 @@ def upd_quiz(quizId: str, req: Request, body: dict[str,Any]):
     cur = clients.quiz.GetQuiz(quiz_pb2.GetQuizRequest(quiz_id=common_pb2.QuizId(value=quizId))).quiz
     if "title" in body: cur.title = body["title"]
     if "description" in body: cur.description = body["description"]
+    if "questions" in body:
+        del cur.questions[:]
+        for row in body["questions"]:
+            qq = cur.questions.add()
+            qq.id = row.get("id", "")
+            qq.text = row["text"]
+            qq.options.extend(row["options"])
+            if "correctIndex" in row and row["correctIndex"] is not None:
+                qq.correct_option_index = row["correctIndex"]
     x = clients.quiz.UpdateQuiz(quiz_pb2.UpdateQuizRequest(quiz=cur))
-    return {"quiz": {"quizId": x.quiz.quiz_id.value, "ownerUserId": x.quiz.owner_user_id.value, "title": x.quiz.title, "description": x.quiz.description}, "status": "updated"}
+    return {"quiz": _quiz_to_json(x.quiz), "status": "updated"}
 
 @app.post("/api/v1/quizzes/{quizId}/publish")
 def pub_quiz(quizId: str, req: Request):
@@ -579,7 +613,8 @@ def ai_get(jobId: str, req: Request):
     x = clients.quiz.GetAiQuizJob(quiz_pb2.GetAiQuizJobRequest(job_id=jobId, requested_by=common_pb2.UserId(value=uid)))
     out = {"jobId": x.job_id, "status": x.status.lower()}
     if x.HasField("quiz"):
-        out["quiz"] = {"quizId": x.quiz.quiz_id.value, "title": x.quiz.title}
+        out["quiz"] = _quiz_to_json(x.quiz)
+        out["draftId"] = x.quiz.quiz_id.value
     has_error = getattr(x, "HasField", lambda _: False)("error")
     if has_error and getattr(x.error, "message", ""):
         out["error"] = x.error.message
