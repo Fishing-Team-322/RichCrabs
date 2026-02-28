@@ -88,6 +88,7 @@ describe('integration: room create + join flow', () => {
       token: 'player-token',
       gameId: 'room-1',
       playerId: 'p-1',
+      wsUrl: 'ws://localhost:8080/ws',
     })
 
     const user = userEvent.setup()

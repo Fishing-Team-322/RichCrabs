@@ -50,6 +50,7 @@ const JoinPage = () => {
       playerSession.saveToken(response.token)
       playerSession.savePlayerName(pinForm.playerName.trim())
       playerSession.savePlayerId(response.playerId)
+      playerSession.saveWsUrl(response.wsUrl)
       notifications.success('Вы успешно подключились к комнате.')
       navigate(routes.quizRuntime.replace(':roomId', response.gameId))
     } catch (joinError: unknown) {
@@ -73,6 +74,7 @@ const JoinPage = () => {
       playerSession.saveToken(response.token)
       playerSession.savePlayerName(inviteForm.playerName.trim())
       playerSession.savePlayerId(response.playerId)
+      playerSession.saveWsUrl(response.wsUrl)
       notifications.success('Вы успешно подключились к комнате.')
       navigate(routes.quizRuntime.replace(':roomId', response.gameId))
     } catch (joinError: unknown) {

@@ -10,11 +10,13 @@ import {
   sendAnswer,
   sendStartGame,
   subscribeConnectionEvents,
+  toAnswerResultDto,
+  toRoomStateDto,
   type ConnectionQuality,
   type ConnectionSnapshot,
 } from '../services/socket'
 import type { RoomStateDto, Team } from '../types/room.types'
-import type { QuizAnswerResultDto } from '../types/quiz.types'
+import type { QuizAnswerResultDto, QuizQuestionDto } from '../types/quiz.types'
 
 export type QuizScreen = 'lobby' | 'question' | 'feedback' | 'scoreboard' | 'final'
 
@@ -40,6 +42,7 @@ interface UseGamesState {
 
 export const useGames = (roomId: string): UseGamesState => {
   const token = playerSession.getToken()
+  const wsUrl = playerSession.getWsUrl()
   const playerName = playerSession.getPlayerName()
   const playerId = playerSession.getPlayerId()
 
@@ -75,7 +78,7 @@ export const useGames = (roomId: string): UseGamesState => {
       return
     }
 
-    const socket = connectSocket(token, roomId)
+    const socket = connectSocket(token, roomId, wsUrl)
     const resetTimers = () => {
       setTimeout(() => {
         setScreen((prev) => (prev === 'feedback' ? 'scoreboard' : prev))
@@ -104,19 +107,19 @@ export const useGames = (roomId: string): UseGamesState => {
       }
     }
 
-    const onGameState = (state: RoomStateDto) => {
+    const onRoomState = (statePayload: { room_id: string; state: string; players: Array<{ player_id: string; display_name: string; score: number }> }) => {
+      const state = toRoomStateDto(statePayload)
       setError('')
       updateByGameState(state)
       setHasAnswered(false)
     }
 
-    const onReconnectState = (state: RoomStateDto) => {
-      setError('Состояние восстановлено после переподключения.')
-      updateByGameState(state)
-      setHasAnswered(!state.canAnswer)
+    const onRoomEvent = (_payload: { event: Record<string, unknown> }) => {
+      requestGameState()
     }
 
-    const onAnswerResult = (result: QuizAnswerResultDto) => {
+    const onSubmitAnswerResult = (payload: { accepted: boolean; score_delta: number }) => {
+      const result: QuizAnswerResultDto = toAnswerResultDto(payload)
       setAnswerResult(result)
       setScreen('feedback')
       resetTimers()
@@ -140,26 +143,26 @@ export const useGames = (roomId: string): UseGamesState => {
       }
     }
 
-    socket.off('gameState', onGameState)
-    socket.off('reconnectState', onReconnectState)
-    socket.off('answerResult', onAnswerResult)
+    socket.off('room_state', onRoomState)
+    socket.off('room_event', onRoomEvent)
+    socket.off('submit_answer_result', onSubmitAnswerResult)
 
-    socket.on('gameState', onGameState)
-    socket.on('reconnectState', onReconnectState)
-    socket.on('answerResult', onAnswerResult)
+    socket.on('room_state', onRoomState)
+    socket.on('room_event', onRoomEvent)
+    socket.on('submit_answer_result', onSubmitAnswerResult)
 
     const unsubscribeConnection = subscribeConnectionEvents(onConnectionEvent)
 
     requestGameState()
 
     return () => {
-      socket.off('gameState', onGameState)
-      socket.off('reconnectState', onReconnectState)
-      socket.off('answerResult', onAnswerResult)
+      socket.off('room_state', onRoomState)
+      socket.off('room_event', onRoomEvent)
+      socket.off('submit_answer_result', onSubmitAnswerResult)
       unsubscribeConnection()
       disconnectSocket()
     }
-  }, [roomId, token])
+  }, [roomId, token, wsUrl])
 
   const handleAnswer = (index: number) => {
     if (!gameState || hasAnswered || !gameState.canAnswer) {
@@ -167,7 +170,8 @@ export const useGames = (roomId: string): UseGamesState => {
     }
 
     setHasAnswered(true)
-    sendAnswer(index)
+    const questionId = (gameState.currentQuestion as QuizQuestionDto | null)?.id ?? ''
+    sendAnswer(questionId, String(index))
   }
 
   return {
