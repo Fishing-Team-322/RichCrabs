@@ -165,7 +165,7 @@ export async function apiFetch<T>(
       return undefined as T
     }
 
-    const parsedBody = JSON.parse(rawBody) as unknown
+    const parsedBody = JSON.parse(rawBody) as T | ApiEnvelope<T>
     return normalizeResponse<T>(parsedBody)
   } catch {
     return undefined as T
