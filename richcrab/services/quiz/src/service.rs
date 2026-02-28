@@ -18,6 +18,19 @@ fn normalize_desired_question_count(desired_question_count: Option<u32>) -> usiz
         .unwrap_or(5)
         .clamp(1, AI_GENERATE_QUESTION_COUNT_MAX) as usize
 }
+fn default_quiz_seed_questions() -> Vec<proto::richcrab::v1::QuizQuestion> {
+    vec![proto::richcrab::v1::QuizQuestion {
+        id: "seed-1".to_string(),
+        text: "Новый вопрос".to_string(),
+        options: vec![
+            "Вариант 1".to_string(),
+            "Вариант 2".to_string(),
+            "Вариант 3".to_string(),
+            "Вариант 4".to_string(),
+        ],
+        correct_option_index: Some(0),
+    }]
+}
 
 pub struct QuizServiceImpl {
     repository: QuizRepository,
@@ -63,7 +76,11 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
             .map_err(Status::from)?;
 
         let questions = if req.questions.is_empty() {
-            self.fallback_questions.clone()
+            if self.fallback_questions.is_empty() {
+                default_quiz_seed_questions()
+            } else {
+                self.fallback_questions.clone()
+            }
         } else {
             req.questions
         };
@@ -308,7 +325,10 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_desired_question_count, AI_GENERATE_QUESTION_COUNT_MAX};
+    use super::{
+        default_quiz_seed_questions, normalize_desired_question_count,
+        AI_GENERATE_QUESTION_COUNT_MAX,
+    };
     use std::{env, sync::Arc};
 
     use sqlx::postgres::PgPoolOptions;
@@ -375,6 +395,15 @@ mod tests {
             normalize_desired_question_count(Some(AI_GENERATE_QUESTION_COUNT_MAX + 1)),
             AI_GENERATE_QUESTION_COUNT_MAX as usize
         );
+    }
+
+    #[test]
+    fn default_seed_questions_always_include_a_valid_question() {
+        let questions = default_quiz_seed_questions();
+
+        assert_eq!(questions.len(), 1);
+        assert_eq!(questions[0].options.len(), 4);
+        assert_eq!(questions[0].correct_option_index, Some(0));
     }
 
     #[tokio::test]
