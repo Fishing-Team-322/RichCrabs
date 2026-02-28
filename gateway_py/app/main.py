@@ -428,7 +428,11 @@ def _host_action(req: Request, pin: str, action: str):
     rq = game_pb2.StartGameRequest if action == "start" else game_pb2.PauseGameRequest
     if action == "resume": rq = game_pb2.ResumeGameRequest
     if action == "next": rq = game_pb2.NextQuestionRequest
-    fn(rq(room_id=common_pb2.RoomId(value=room["roomId"]), requested_by=common_pb2.UserId(value=s.user_id)))
+    try:
+        fn(rq(room_id=common_pb2.RoomId(value=s.room_id), requested_by=common_pb2.UserId(value=s.user_id)))
+    except grpc.RpcError as ex:
+        c, b = map_grpc_err(ex, f"game_{action}")
+        return JSONResponse(b, status_code=c)
     return Response(status_code=204)
 
 
