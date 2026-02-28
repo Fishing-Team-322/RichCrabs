@@ -167,11 +167,11 @@ const Profile = () => {
         </article>
 
         <article className="pageCard profileMetaCards">
-          <div>
+          <div className="profileInfoBlock">
             <h2>Текущий тариф</h2>
             <div className="profileBadge">{planLabel(profile.subscription)}</div>
           </div>
-          <div>
+          <div className="profileInfoBlock">
             <h2>Telegram-бот</h2>
             <div className={profile.telegramBotConnected ? 'statusOk' : 'statusMuted'}>
               {profile.telegramBotConnected ? `Подключен${profile.telegramBotUsername ? `: @${profile.telegramBotUsername}` : ''}` : 'Не подключен'}
