@@ -3,6 +3,7 @@
 .roomsPageDetails {
   grid-template-columns: minmax(0, 980px);
   align-content: start;
+  justify-content: center;
 }
 
 .roomsPageDetails .roomsHeader {

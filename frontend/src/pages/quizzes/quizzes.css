@@ -3,7 +3,31 @@
 .quizPageCreate {
   grid-template-columns: minmax(0, 980px);
   align-content: start;
+  justify-content: center;
   align-items: flex-start;
+}
+
+
+.quizPageEditor {
+  grid-template-columns: minmax(0, 980px);
+  align-content: start;
+  justify-content: center;
+}
+
+.quizPageEditor .quizMetaGrid,
+.quizPageEditor .quizInlineFields {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+
+.quizPageEditor .quizQuestionHeader {
+  align-items: flex-start;
+}
+
+.quizQuestionsList {
+  display: grid;
+  gap: 12px;
 }
 
 .quizPanel {
