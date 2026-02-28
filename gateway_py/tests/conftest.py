@@ -99,22 +99,9 @@ class FakeRedis:
 
     def set(self, key, value):
         self._data[key] = value
-        return True
 
-    def lpush(self, key, value):
-        self._lists.setdefault(key, []).insert(0, value)
-        return len(self._lists[key])
-
-    def ltrim(self, key, start, end):
-        items = self._lists.get(key, [])
-        self._lists[key] = items[start:end + 1]
-        return True
-
-    def lrange(self, key, start, end):
-        items = self._lists.get(key, [])
-        if end == -1:
-            end = len(items) - 1
-        return items[start:end + 1]
+    def delete(self, key):
+        self._data.pop(key, None)
 
 
 class FakeClients:
@@ -153,11 +140,11 @@ class FakeClients:
             GetAiQuizJob=lambda req: _ns(job_id=req.job_id, status="DONE", HasField=lambda f: False),
         )
         self.bot = _ns(
-            RegisterBot=lambda req, metadata=None: _ns(bot=_ns(bot_id=_ns(value="b1"), name=req.name, version=req.version, status="active")),
-            ListBots=lambda req, metadata=None: _ns(bots=[_ns(bot_id=_ns(value="b1"), name="Bot", version="1", status="active")]),
-            GetBotStatus=lambda req, metadata=None: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="active")),
-            UpdateBotStatus=lambda req, metadata=None: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="disabled")),
-            RemoveBot=lambda req, metadata=None: _ns(),
+            RegisterBot=lambda req, **kwargs: _ns(bot=_ns(bot_id=_ns(value="b1"), name=req.name, version=req.version, status="active")),
+            ListBots=lambda req, **kwargs: _ns(bots=[_ns(bot_id=_ns(value="b1"), name="Bot", version="1", status="active")]),
+            GetBotStatus=lambda req, **kwargs: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="webhook_set:http://localhost/api/v1/telegram/webhook/b1/secret pending:0")),
+            UpdateBotStatus=lambda req, **kwargs: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="disabled")),
+            RemoveBot=lambda req, **kwargs: _ns(),
         )
         self.health = _ns(Ping=lambda req: _ns())
 

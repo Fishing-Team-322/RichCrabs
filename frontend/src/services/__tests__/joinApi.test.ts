@@ -10,15 +10,17 @@ describe('joinApi contract', () => {
   })
 
   it('joins by pin via /api/v1/games/{pin}/join', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ joinTicket: 't', roomPin: 'ABC123', playerId: 'p1' }))
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ joinTicket: 't', roomPin: 'ABC123', playerId: 'p1', wsUrl: 'ws://localhost:8080/ws' }))
     const joined = await joinApi.joinByPin('ABC123', 'Alice')
     expect(joined.gameId).toBe('ABC123')
+    expect(joined.wsUrl).toBe('ws://localhost:8080/ws')
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/games/ABC123/join', expect.objectContaining({ method: 'POST' }))
   })
 
   it('joins by invite via /api/v1/invites/{token}/join', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ joinTicket: 't', playerId: 'p1' }))
-    await joinApi.joinByInviteToken('token', 'Alice')
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ joinTicket: 't', playerId: 'p1', wsUrl: 'ws://localhost:8080/ws' }))
+    const joined = await joinApi.joinByInviteToken('token', 'Alice')
+    expect(joined.wsUrl).toBe('ws://localhost:8080/ws')
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/invites/token/join', expect.objectContaining({ method: 'POST' }))
   })
 })

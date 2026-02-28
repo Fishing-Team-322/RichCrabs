@@ -1,11 +1,14 @@
 mod domain;
+mod repository;
 mod room_actor;
 mod service;
 
 use std::{env, net::SocketAddr, time::Duration};
 
+use repository::RoomChatRepository;
 use service::{GameServiceImpl, HealthServiceImpl};
 use shared::redis_client::RedisClient;
+use sqlx::postgres::PgPoolOptions;
 use tokio::time::sleep;
 use tonic::transport::Server;
 
@@ -94,6 +97,7 @@ async fn main() -> anyhow::Result<()> {
     shared::observability::init_metrics();
 
     let redis_url = env::var(shared::config::REDIS_URL)?;
+    let database_url = env::var(shared::config::DATABASE_URL)?;
     let entitlements_addr = env::var(shared::config::SERVICE_ADDR_ENTITLEMENTS)?;
     let quiz_addr = env::var(shared::config::SERVICE_ADDR_QUIZ)?;
     let addr: SocketAddr = env::var(shared::config::SERVICE_ADDR_GAME)?.parse()?;
@@ -105,9 +109,15 @@ async fn main() -> anyhow::Result<()> {
         2,
         Duration::from_millis(50),
     )?;
+    let pool = PgPoolOptions::new()
+        .max_connections(10)
+        .connect(&database_url)
+        .await?;
+    let chat_repository = RoomChatRepository::new(pool);
+
     let entitlements = connect_entitlements_with_retry(&entitlements_addr).await?;
     let quiz = connect_quiz_with_retry(&quiz_addr).await?;
-    let game_service = GameServiceImpl::new(redis, entitlements, quiz);
+    let game_service = GameServiceImpl::new(redis, entitlements, quiz, chat_repository);
     let health_ping_service = HealthServiceImpl;
 
     let (mut health_reporter, health_service) = tonic_health::server::health_reporter();

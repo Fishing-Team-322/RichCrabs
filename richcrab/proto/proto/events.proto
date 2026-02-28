@@ -26,8 +26,17 @@ message RoomEvent {
     ErrorEvent error = 12;
     AnswerLockedEvent answer_locked = 13;
     ScoreUpdatedEvent score_updated = 14;
+    ChatMessagePostedEvent chat_message_posted = 15;
   }
   google.protobuf.Timestamp emitted_at = 20;
+}
+
+message ChatMessagePostedEvent {
+  RoomId room_id = 1;
+  string message_id = 2;
+  string author = 3;
+  string body = 4;
+  google.protobuf.Timestamp created_at = 5;
 }
 
 message RoomCreatedEvent {
