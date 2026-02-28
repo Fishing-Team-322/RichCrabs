@@ -10,6 +10,12 @@
 | CSRF bootstrap | `/api/v1/auth/csrf` | GET | Получить CSRF token |
 | Logout | `/api/v1/auth/logout` | POST | Очистить сессию |
 
+## Платформа (`serviceApi`)
+
+| UI экран | Endpoint | Метод | Назначение |
+|---|---|---|---|
+| Home bootstrap | `/api/v1/healthz`, `/api/v1/session` | GET | Проверка доступности gateway и статуса текущей сессии |
+
 ## Квизы (`quizApi`)
 
 | Метод сервиса | Endpoint | Метод | Gateway shape |

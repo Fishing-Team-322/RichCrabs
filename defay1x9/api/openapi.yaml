@@ -30,6 +30,29 @@ tags:
   - name: Session
     description: Active session information.
 
+x-tagGroups:
+  - name: Platform
+    tags:
+      - Service
+      - Session
+      - WebSocket
+  - name: Identity
+    tags:
+      - Auth
+      - Profile
+  - name: Gameplay
+    tags:
+      - Games
+      - Invites
+      - Quizzes
+  - name: Integrations
+    tags:
+      - Telegram
+      - Bots
+  - name: Operations
+    tags:
+      - Admin
+
 components:
   securitySchemes:
     sessionCookie:
