@@ -83,6 +83,7 @@ services:
       SERVICE_ADDR_BOT: ${SERVICE_ADDR_BOT:-0.0.0.0:50055}
       SERVICE_ADDR_BOT_INGRESS: ${SERVICE_ADDR_BOT_INGRESS:-0.0.0.0:8090}
       SERVICE_ADDR_AUTH: ${SERVICE_ADDR_AUTH:-0.0.0.0:50056}
+      MIGRATIONS_DIR: ${MIGRATIONS_DIR:-/app/richcrab/migrations}
     depends_on:
       postgres:
         condition: service_healthy

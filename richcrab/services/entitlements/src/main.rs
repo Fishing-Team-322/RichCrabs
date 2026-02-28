@@ -14,6 +14,8 @@ async fn main() -> anyhow::Result<()> {
     shared::observability::init_metrics();
 
     let database_url = env::var(shared::config::DATABASE_URL)?;
+    let migrations_dir = env::var(shared::config::MIGRATIONS_DIR)
+        .unwrap_or_else(|_| "/app/richcrab/migrations".to_string());
     let redis_url = env::var(shared::config::REDIS_URL)?;
     let addr: SocketAddr = env::var(shared::config::SERVICE_ADDR_ENTITLEMENTS)?.parse()?;
 
@@ -28,6 +30,8 @@ async fn main() -> anyhow::Result<()> {
         2,
         Duration::from_millis(50),
     )?;
+    shared::db::run_migrations(&pool, &migrations_dir).await?;
+
     let svc = EntitlementsServiceImpl::new(pool, redis);
 
     let (mut health_reporter, health_service) = tonic_health::server::health_reporter();

@@ -40,10 +40,11 @@ jobs:
       - name: Validate critical schema objects
         run: |
           set -euo pipefail
-          psql -h localhost -U richcrab -d richcrab -v ON_ERROR_STOP=1 -c "SELECT to_regclass('public.gateway_users') AS gateway_users;" | tee /tmp/migration_check_gateway_users.txt
-          rg "gateway_users" /tmp/migration_check_gateway_users.txt
-          psql -h localhost -U richcrab -d richcrab -v ON_ERROR_STOP=1 -c "SELECT to_regclass('public.users') AS users;" | tee /tmp/migration_check_users.txt
-          rg "users" /tmp/migration_check_users.txt
+          gateway_users_regclass=$(psql -h localhost -U richcrab -d richcrab -v ON_ERROR_STOP=1 -tA -c "SELECT to_regclass('public.gateway_users');")
+          users_regclass=$(psql -h localhost -U richcrab -d richcrab -v ON_ERROR_STOP=1 -tA -c "SELECT to_regclass('public.users');")
+
+          test "$gateway_users_regclass" = "gateway_users"
+          test "$users_regclass" = "users"
 
   gateway_py:
     runs-on: ubuntu-latest
