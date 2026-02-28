@@ -109,6 +109,14 @@ class FakeRedis:
         self._data[key] = value
         return True
 
+    def incr(self, key):
+        value = int(self._data.get(key, 0)) + 1
+        self._data[key] = str(value)
+        return value
+
+    def expire(self, key, seconds):
+        return True
+
     def lpush(self, key, value):
         self._lists.setdefault(key, []).insert(0, value)
         return len(self._lists[key])

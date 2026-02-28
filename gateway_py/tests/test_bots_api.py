@@ -109,14 +109,50 @@ def test_tg_connect_and_webhook_flow(client, host_session_cookie, csrf_headers):
         headers=csrf_headers["headers"],
     )
     assert connect.status_code == 200
+    secret = connect.json()["webhookUrl"].rsplit("/", 1)[-1]
 
     webhook = client.post(
-        "/api/v1/telegram/webhook/b1/secret",
+        f"/api/v1/telegram/webhook/b1/{secret}",
         json={"message": {"text": "/pin", "chat": {"id": 1}}},
-        headers={"x-telegram-bot-api-secret-token": "secret"},
+        headers={"x-telegram-bot-api-secret-token": secret},
     )
     assert webhook.status_code == 200
     assert webhook.json()["status"] == "processed"
+
+
+def test_tg_webhook_missing_secret_header(client):
+    webhook = client.post(
+        "/api/v1/telegram/webhook/b1/secret",
+        json={"message": {"text": "/pin", "chat": {"id": 1}}},
+    )
+    assert webhook.status_code == 401
+
+
+def test_tg_webhook_wrong_secret_header(client, host_session_cookie, csrf_headers):
+    cookies = {**host_session_cookie, **csrf_headers["cookies"]}
+    connect = client.post(
+        "/api/v1/telegram/bots/connect",
+        json={"token": "123:abc"},
+        cookies=cookies,
+        headers=csrf_headers["headers"],
+    )
+    secret = connect.json()["webhookUrl"].rsplit("/", 1)[-1]
+
+    webhook = client.post(
+        f"/api/v1/telegram/webhook/b1/{secret}",
+        json={"message": {"text": "/pin", "chat": {"id": 1}}},
+        headers={"x-telegram-bot-api-secret-token": "wrong"},
+    )
+    assert webhook.status_code == 403
+
+
+def test_tg_webhook_wrong_bot_id_secret_pair(client):
+    webhook = client.post(
+        "/api/v1/telegram/webhook/missing-bot/secret",
+        json={"message": {"text": "/pin", "chat": {"id": 1}}},
+        headers={"x-telegram-bot-api-secret-token": "secret"},
+    )
+    assert webhook.status_code == 404
 
 
 def test_tg_webhook_migrates_legacy_plaintext_binding(client, fake_rdb):
