@@ -29,7 +29,7 @@ const QuizRow = memo(({ quiz }: { quiz: QuizListItemDto }) => (
     <td>{quiz.language}</td>
     <td>{quiz.questionsCount}</td>
     <td>{new Date(quiz.updatedAt).toLocaleString()}</td>
-    <td style={{ display: 'flex', gap: 8 }}>
+    <td className="quizActionsCell">
       <Link to={routes.quizzesEdit.replace(':quizId', quiz.id)} className="ui-button">
         Редактировать
       </Link>
@@ -72,12 +72,12 @@ const QuizzesList = () => {
   }, [])
 
   return (
-    <section className="homePage">
-      <div className="pageCard homePage">
+    <section className="quizPage">
+      <div className="pageCard">
         <h1>Мои квизы</h1>
         <Tabs items={tabItems} active={status} onChange={onTabsChange} />
-        <div className="homeActions">
-          <div style={{ minWidth: 240, flex: 1 }}>
+        <div className="quizToolbar">
+          <div style={{ minWidth: 0, flex: 1 }}>
             <Input placeholder="Поиск по названию" value={search} onChange={onSearchChange} />
           </div>
           <div style={{ minWidth: 160 }}>

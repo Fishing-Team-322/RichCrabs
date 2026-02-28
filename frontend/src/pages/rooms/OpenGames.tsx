@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState, type UIEvent } from 'react'
+import { memo, useCallback, useEffect, useState, type CSSProperties, type UIEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { routes } from '../../app/router/routeMap'
 import { useInterval } from '../../hooks/useInterval'
@@ -39,6 +39,7 @@ const OpenGames = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [scrollTop, setScrollTop] = useState(0)
+  const [columns, setColumns] = useState(3)
 
   const loadRooms = useCallback(async () => {
     try {
@@ -60,8 +61,26 @@ const OpenGames = () => {
     void loadRooms()
   }, 5000)
 
+
+  useEffect(() => {
+    const updateColumns = () => {
+      if (window.innerWidth < 760) {
+        setColumns(1)
+        return
+      }
+      if (window.innerWidth < 1024) {
+        setColumns(2)
+        return
+      }
+      setColumns(3)
+    }
+
+    updateColumns()
+    window.addEventListener('resize', updateColumns)
+    return () => window.removeEventListener('resize', updateColumns)
+  }, [])
+
   const virtualized = rooms.length >= VIRTUALIZATION_THRESHOLD
-  const columns = 3
   const totalRows = Math.ceil(rooms.length / columns)
   const startRow = Math.floor(scrollTop / CARD_HEIGHT)
   const visibleRows = Math.ceil(VIEWPORT_HEIGHT / CARD_HEIGHT) + 2
@@ -110,7 +129,7 @@ const OpenGames = () => {
       ) : (
         <div className="roomsVirtualized" onScroll={onScroll} style={virtualized ? { maxHeight: VIEWPORT_HEIGHT, overflowY: 'auto' } : undefined}>
           {topSpacerHeight > 0 ? <div style={{ height: topSpacerHeight }} aria-hidden="true" /> : null}
-          <div className="roomsGrid">
+          <div className={`roomsGrid ${virtualized ? 'is-virtualized' : ''}`} style={virtualized ? ({ ['--rooms-columns' as string]: String(columns) } as CSSProperties) : undefined}>
             {visibleRooms.map((room) => (
               <RoomCard room={room} key={room.id} />
             ))}

@@ -11,7 +11,11 @@
 .roomsActions,
 .roomsInline { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
-.roomsGrid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.roomsGrid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+.roomsGrid.is-virtualized {
+  grid-template-columns: repeat(var(--rooms-columns, 3), minmax(0, 1fr));
+}
 
 .roomCard {
   border: 1px solid var(--border);
@@ -21,9 +25,10 @@
   gap: 8px;
   background: linear-gradient(165deg, rgba(24, 16, 40, 0.9), rgba(13, 9, 24, 0.9));
   box-shadow: var(--shadow-soft);
+  min-width: 0;
 }
 
-.roomMeta { color: var(--text-secondary); font-size: 14px; }
+.roomMeta { color: var(--text-secondary); font-size: 14px; overflow-wrap: anywhere; }
 
 .roomStatus {
   display: inline-flex;
@@ -49,10 +54,11 @@
 .roomForm select {
   border: 1px solid var(--border);
   border-radius: 12px;
-  min-height: 40px;
+  min-height: 42px;
   padding: 0 12px;
   background: var(--surface-strong);
   color: var(--text-primary);
+  width: 100%;
 }
 
 .roomButton,
@@ -66,6 +72,11 @@
   text-decoration: none;
   cursor: pointer;
   transition: var(--transition);
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .roomButton.primary {
@@ -93,10 +104,18 @@
   display: grid;
   gap: 8px;
   width: fit-content;
+  max-width: 100%;
   padding: 10px;
   border: 1px dashed var(--border-strong);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.02);
+}
+
+.roomQr canvas,
+.roomQr svg,
+.roomQr img {
+  max-width: 100%;
+  height: auto;
 }
 
 .roomForm input.error,
@@ -113,6 +132,14 @@
   margin: 0 auto;
 }
 
-.joinCard .roomButton.primary {
-  min-width: 180px;
+@media (max-width: 1024px) {
+  .roomsGrid.is-virtualized { --rooms-columns: 2; }
+}
+
+@media (max-width: 760px) {
+  .roomsGrid,
+  .roomsGrid.is-virtualized { --rooms-columns: 1; grid-template-columns: 1fr; }
+  .roomButton,
+  .roomLink { width: 100%; }
+  .roomsActions { width: 100%; }
 }

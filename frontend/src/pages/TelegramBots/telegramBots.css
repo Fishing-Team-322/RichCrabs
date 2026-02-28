@@ -70,7 +70,7 @@
 
 .operationsBlock { grid-column: 1 / -1; }
 .operationsBlock ul { margin: 8px 0 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 12px; }
-.operationsBlock li { display: flex; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.operationsBlock li { display: flex; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .operationsBlock li:last-child { border-bottom: 0; }
 .operationsBlock li span { color: var(--text-secondary); font-size: 13px; }
 .telegramBotsForm input.error { border-color: #ff8eb1; }
@@ -78,4 +78,7 @@
 
 @media (max-width: 840px) {
   .telegramBotsStatusGrid { grid-template-columns: 1fr; }
+  .telegramBotsStatusHead { align-items: flex-start; flex-direction: column; }
+  .telegramBotsActions button,
+  .telegramBotsStatusHead button { width: 100%; min-height: 40px; }
 }
