@@ -63,7 +63,11 @@ export const botsApi = {
       method: 'POST',
       body: JSON.stringify({ token: payload.token }),
     }).then(mapConnectToBinding),
-  status: () => apiFetch<TelegramBotRuntimeStatusDto>(TELEGRAM_STATUS),
+  status: () =>
+    apiFetch<TelegramBotRuntimeStatusDto>(TELEGRAM_STATUS).then((status) => ({
+      ...status,
+      operations: Array.isArray(status.operations) ? status.operations : [],
+    })),
   unbind: async () => {
     const status = await botsApi.status()
     if (!status.botId) return

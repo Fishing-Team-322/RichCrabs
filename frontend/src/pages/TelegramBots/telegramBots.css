@@ -47,7 +47,8 @@
 }
 
 .telegramBotsError,
-.telegramBotsSuccess {
+.telegramBotsSuccess,
+.telegramBotsOffline {
   margin-top: 10px;
   border-radius: 10px;
   padding: 10px 12px;
@@ -56,6 +57,7 @@
 
 .telegramBotsError { background: rgba(185, 28, 28, 0.2); color: #ffd0da; }
 .telegramBotsSuccess { background: rgba(21, 128, 61, 0.2); color: #bbf7d0; }
+.telegramBotsOffline { background: rgba(37, 99, 235, 0.2); color: #bfdbfe; border: 1px solid rgba(56, 189, 248, 0.35); }
 
 .telegramBotsHint { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .telegramBotsHint ol { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }

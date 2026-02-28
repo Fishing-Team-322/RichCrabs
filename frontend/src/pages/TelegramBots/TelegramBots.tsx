@@ -34,16 +34,17 @@ const TelegramBots = () => {
   const [validation, setValidation] = useState<ValidateTelegramBotResponseDto | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [backendUnavailable, setBackendUnavailable] = useState(false)
 
   const loadStatus = async () => {
     setIsLoading(true)
     setError(null)
     try {
       setStatus(await botsApi.status())
+      setBackendUnavailable(false)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Не удалось загрузить статус бота'
-      setError(message)
-      notifications.error(message)
+      setBackendUnavailable(true)
+      setError('Сервис ботов временно недоступен. Раздел работает в демо-режиме без сохранения.')
       setStatus(null)
     } finally {
       setIsLoading(false)
@@ -64,6 +65,10 @@ const TelegramBots = () => {
 
   const onValidate = async (event: FormEvent) => {
     event.preventDefault()
+    if (backendUnavailable) {
+      setSuccess('Проверка токена отключена: backend пока не подключен.')
+      return
+    }
     if (!validateTokenInput()) return
 
     setIsValidating(true)
@@ -92,6 +97,10 @@ const TelegramBots = () => {
   }
 
   const onBind = async () => {
+    if (backendUnavailable) {
+      setSuccess('Привязка недоступна в демо-режиме, но интерфейс полностью готов к работе.')
+      return
+    }
     if (!validateTokenInput()) return
     setIsBinding(true)
     setError(null)
@@ -114,6 +123,10 @@ const TelegramBots = () => {
   }
 
   const onUnbind = async () => {
+    if (backendUnavailable) {
+      setSuccess('Отключение токена недоступно в демо-режиме.')
+      return
+    }
     setIsUnbinding(true)
     setError(null)
     setSuccess(null)
@@ -139,6 +152,11 @@ const TelegramBots = () => {
         <h1>{t('bots.title')}</h1>
         <p className="telegramBotsMuted">{t('bots.subtitle')}</p>
         <div className="telegramBotsWarning">⚠️ Пользовательский код бота не исполняется. Используется общий runtime платформы RichCrabs.</div>
+        {backendUnavailable && (
+          <div className="telegramBotsOffline">
+            Backend недоступен, поэтому операции сохранения отключены. Вы можете открыть раздел и посмотреть интерфейс в общем стиле.
+          </div>
+        )}
         {error && <div className="telegramBotsError">{error}</div>}
         {success && <div className="telegramBotsSuccess">{success}</div>}
 
@@ -148,21 +166,21 @@ const TelegramBots = () => {
             {tokenError && <span className="ui-help">{tokenError}</span>}
           </label>
           <div className="telegramBotsActions">
-            <button type="submit" disabled={isValidating || isBinding || !token.trim()}>{isValidating ? 'Проверяем...' : 'Проверить токен'}</button>
-            <button type="button" className="secondary" onClick={() => void onBind()} disabled={isBinding || isValidating || !token.trim() || validation?.ok === false}>{isBinding ? 'Привязываем...' : 'Сохранить привязку'}</button>
-            <button type="button" className="danger" onClick={() => void onUnbind()} disabled={isUnbinding || !status}>{isUnbinding ? 'Отключаем...' : 'Отключить токен'}</button>
+            <button type="submit" disabled={backendUnavailable || isValidating || isBinding || !token.trim()}>{isValidating ? 'Проверяем...' : 'Проверить токен'}</button>
+            <button type="button" className="secondary" onClick={() => void onBind()} disabled={backendUnavailable || isBinding || isValidating || !token.trim() || validation?.ok === false}>{isBinding ? 'Привязываем...' : 'Сохранить привязку'}</button>
+            <button type="button" className="danger" onClick={() => void onUnbind()} disabled={backendUnavailable || isUnbinding || !status}>{isUnbinding ? 'Отключаем...' : 'Отключить токен'}</button>
           </div>
         </form>
       </article>
 
       <article className="pageCard">
         <div className="telegramBotsStatusHead"><h2>Runtime-статус</h2><button type="button" className="secondary" onClick={() => void loadStatus()} disabled={isLoading}>{isLoading ? 'Обновляем...' : 'Обновить статус'}</button></div>
-        {isLoading ? <div className="telegramBotsStatusSkeleton"><Skeleton height={20} /><Skeleton height={20} /><Skeleton height={20} /><Skeleton height={120} /></div> : !status ? <p className="telegramBotsMuted">Бот пока не привязан.</p> : (
+        {isLoading ? <div className="telegramBotsStatusSkeleton"><Skeleton height={20} /><Skeleton height={20} /><Skeleton height={20} /><Skeleton height={120} /></div> : backendUnavailable ? <p className="telegramBotsMuted">Runtime-статус недоступен без backend. Показываем только интерфейс.</p> : !status ? <p className="telegramBotsMuted">Бот пока не привязан.</p> : (
           <div className="telegramBotsStatusGrid">
             <div><div className="statusLabel">Бот</div><div className="statusValue">{status.name || status.username || '—'}</div></div>
             <div><div className="statusLabel">Состояние</div><div className={`statusValue ${status.active ? 'ok' : 'muted'}`}>{status.active ? 'Активен' : 'Неактивен'}</div></div>
             <div><div className="statusLabel">Last seen</div><div className="statusValue">{formatDate(status.lastSeenAt)}</div></div>
-            <div className="operationsBlock"><div className="statusLabel">Последние операции</div>{status.operations.length ? <ul>{status.operations.slice(0, 8).map((operation) => <li key={operation.id}><strong>{operationLabel(operation)}</strong><span>{formatDate(operation.createdAt)}</span></li>)}</ul> : <p className="telegramBotsMuted">Операций пока нет.</p>}</div>
+            <div className="operationsBlock"><div className="statusLabel">Последние операции</div>{(status.operations || []).length ? <ul>{(status.operations || []).slice(0, 8).map((operation) => <li key={operation.id}><strong>{operationLabel(operation)}</strong><span>{formatDate(operation.createdAt)}</span></li>)}</ul> : <p className="telegramBotsMuted">Операций пока нет.</p>}</div>
           </div>
         )}
       </article>
