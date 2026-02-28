@@ -1,5 +1,7 @@
 export type FieldErrors<T extends string> = Partial<Record<T, string>>
 
+export const QUIZ_QUESTION_COUNT_MAX = 20
+
 const roomPinRegex = /^\d{4,10}$/
 const inviteTokenRegex = /^[A-Za-z0-9_-]{6,128}$/
 const telegramTokenRegex = /^\d{6,12}:[A-Za-z0-9_-]{20,}$/
@@ -48,8 +50,10 @@ export interface QuizCreateFormData {
 export const validateQuizCreate = (data: QuizCreateFormData): FieldErrors<'topic' | 'questionCount' | 'language'> => {
   const errors: FieldErrors<'topic' | 'questionCount' | 'language'> = {}
   if (data.topic.trim().length < 3) errors.topic = 'Укажите тему минимум из 3 символов.'
-  if (!Number.isInteger(data.questionCount) || data.questionCount < 1 || data.questionCount > 50) {
-    errors.questionCount = 'Количество вопросов: от 1 до 50.'
+  if (!Number.isInteger(data.questionCount) || data.questionCount < 1) {
+    errors.questionCount = `Количество вопросов: от 1 до ${QUIZ_QUESTION_COUNT_MAX}.`
+  } else if (data.questionCount > QUIZ_QUESTION_COUNT_MAX) {
+    errors.questionCount = `Слишком много вопросов. Максимум: ${QUIZ_QUESTION_COUNT_MAX}.`
   }
   if (data.language.trim().length < 2) errors.language = 'Укажите язык квиза.'
   return errors
