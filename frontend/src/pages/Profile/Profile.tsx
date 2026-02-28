@@ -3,15 +3,14 @@ import { profileApi } from '../../services/profileApi'
 import { useAppDispatch } from '../../store/hooks'
 import { setProfile } from '../../store/slices'
 import { useTranslation } from 'react-i18next'
-import LanguageSwitcher from '../../components/LanguageSwitcher'
 import type { SessionDto, UserDto } from '../../types/auth.types'
 import './profile.css'
 
 const planLabel = (plan?: string) => {
   if (!plan) return 'Не указан'
-  if (plan === 'basic') return 'Basic'
-  if (plan === 'premium') return 'Premium'
-  if (plan === 'pro') return 'Pro'
+  if (plan === 'basic') return 'Базовый'
+  if (plan === 'premium') return 'Премиум'
+  if (plan === 'pro') return 'Про'
   return plan
 }
 
@@ -25,7 +24,6 @@ const Profile = () => {
   const [name, setName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
   const [timezone, setTimezone] = useState('')
-  const [locale, setLocale] = useState('')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
   const [currentPassword, setCurrentPassword] = useState('')
@@ -46,7 +44,6 @@ const Profile = () => {
         setName(data.displayName || '')
         setAvatarUrl(data.avatarUrl || '')
         setTimezone(data.timezone || '')
-        setLocale(data.locale || '')
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Не удалось загрузить профиль'
         setError(message)
@@ -90,7 +87,7 @@ const Profile = () => {
         displayName: name.trim(),
         avatarUrl: avatarUrl.trim() || undefined,
         timezone: timezone.trim() || undefined,
-        locale: locale.trim() || undefined,
+        locale: 'ru-RU',
       })
       setLocalProfile(updated)
       dispatch(setProfile(updated))
@@ -133,7 +130,6 @@ const Profile = () => {
       <div className="profileGrid">
         <article className="pageCard">
           <h1>{t('profile.title')}</h1>
-          <LanguageSwitcher />
           <div className="profileBasic">
             {profile.avatarUrl ? <img src={profile.avatarUrl} alt={profile.displayName} className="profileAvatar" /> : <div className="profileAvatar fallback">{profile.displayName[0]}</div>}
             <div>
@@ -156,7 +152,7 @@ const Profile = () => {
               <div className="statsValue">{profile.wins}</div>
             </div>
             <div>
-              <div className="statsLabel">Win rate</div>
+              <div className="statsLabel">Процент побед</div>
               <div className="statsValue">{winRate}</div>
             </div>
             <div>
@@ -167,11 +163,11 @@ const Profile = () => {
         </article>
 
         <article className="pageCard profileMetaCards">
-          <div>
+          <div className="profileInfoBlock">
             <h2>Текущий тариф</h2>
             <div className="profileBadge">{planLabel(profile.subscription)}</div>
           </div>
-          <div>
+          <div className="profileInfoBlock">
             <h2>Telegram-бот</h2>
             <div className={profile.telegramBotConnected ? 'statusOk' : 'statusMuted'}>
               {profile.telegramBotConnected ? `Подключен${profile.telegramBotUsername ? `: @${profile.telegramBotUsername}` : ''}` : 'Не подключен'}
@@ -191,12 +187,12 @@ const Profile = () => {
               <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://..." />
             </label>
             <label>
-              Timezone
+              Часовой пояс
               <input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="Europe/Moscow" />
             </label>
             <label>
-              Locale
-              <input value={locale} onChange={(e) => setLocale(e.target.value)} placeholder="ru-RU" />
+              Язык интерфейса
+              <input value="Только русский (ru-RU)" readOnly />
             </label>
             <button type="submit" disabled={saveState === 'saving'}>
               {saveState === 'saving' ? 'Сохраняем...' : 'Сохранить профиль'}
@@ -232,7 +228,7 @@ const Profile = () => {
                   <strong>{session.current ? 'Текущая сессия' : session.id}</strong>
                   <span>{session.ip || 'IP неизвестен'}</span>
                   <span>{session.lastSeenAt || session.createdAt || 'Нет времени активности'}</span>
-                  <span>{session.userAgent || 'Unknown client'}</span>
+                  <span>{session.userAgent || 'Клиент не определен'}</span>
                 </li>
               ))}
             </ul>

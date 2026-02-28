@@ -16,10 +16,12 @@
 }
 
 .brandBlock {
+  display: inline-flex;
   font-size: 22px;
   font-weight: 800;
   margin-bottom: 22px;
   color: #d6cbff;
+  text-decoration: none;
 }
 
 .navItem {
@@ -52,26 +54,33 @@
 }
 
 .topbar {
-  margin: 14px 18px 8px;
-  padding: 12px 16px;
+  margin: 14px 18px 10px;
+  padding: 14px 18px;
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: rgba(14, 10, 26, 0.86);
+  background: linear-gradient(120deg, rgba(14, 10, 26, 0.9), rgba(22, 14, 44, 0.88));
   backdrop-filter: blur(12px);
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  gap: 14px;
   align-items: center;
 }
 
-.breadcrumbs {
-  margin: 0 18px;
-  padding: 8px 2px;
+.topbarMain {
+  display: grid;
+  gap: 2px;
+}
+
+.topbarHomeLink {
+  font-size: 20px;
+  font-weight: 800;
+  text-decoration: none;
+  color: #e6dcff;
+}
+
+.topbarSubtitle {
+  font-size: 13px;
   color: var(--text-secondary);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 14px;
 }
 
 .contentMain {
@@ -112,7 +121,6 @@
 
 @media (max-width: 760px) {
   .topbar,
-  .breadcrumbs,
   .contentMain {
     margin-left: 12px;
     margin-right: 12px;
@@ -123,6 +131,10 @@
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .topbarMain {
+    width: 100%;
   }
 
   .contentMain {

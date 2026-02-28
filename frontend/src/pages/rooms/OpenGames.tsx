@@ -13,6 +13,18 @@ const statusFilters: Array<{ label: string; value: RoomStatus | 'all' }> = [
   { label: 'Пауза', value: 'paused' },
 ]
 
+const statusLabel = (status: RoomStatus) => {
+  if (status === 'waiting') return 'Ожидание'
+  if (status === 'active') return 'Идет игра'
+  if (status === 'paused') return 'Пауза'
+  return 'Завершена'
+}
+
+const normalizeRoomsError = (message: string) => {
+  if (message.toLowerCase().includes('internal server error')) return 'Внутренняя ошибка сервера'
+  return message
+}
+
 const VIRTUALIZATION_THRESHOLD = 24
 const CARD_HEIGHT = 190
 const VIEWPORT_HEIGHT = 620
@@ -20,7 +32,7 @@ const VIEWPORT_HEIGHT = 620
 const RoomCard = memo(({ room }: { room: RoomSummaryDto }) => (
   <article className="roomCard" key={room.id}>
     <strong>{room.quizTitle}</strong>
-    <span className={`roomStatus ${room.status}`}>{room.status}</span>
+    <span className={`roomStatus ${room.status}`}>{statusLabel(room.status)}</span>
     <div className="roomMeta">
       Игроки: {room.playersCount}/{room.playerLimit}
     </div>
@@ -47,7 +59,8 @@ const OpenGames = () => {
       setRooms(response.rooms)
       setError('')
     } catch (apiError: unknown) {
-      setError(apiError instanceof Error ? apiError.message : 'Не удалось получить список комнат.')
+      const message = apiError instanceof Error ? apiError.message : 'Не удалось получить список комнат.'
+      setError(normalizeRoomsError(message))
     } finally {
       setLoading(false)
     }
@@ -60,7 +73,6 @@ const OpenGames = () => {
   useInterval(() => {
     void loadRooms()
   }, 5000)
-
 
   useEffect(() => {
     const updateColumns = () => {
@@ -96,11 +108,11 @@ const OpenGames = () => {
   }, [])
 
   return (
-    <section className="roomsPage">
+    <section className="roomsPage roomsPageCompact">
       <div className="pageCard roomsHeader">
         <div>
           <h1>Открытые комнаты</h1>
-          <p>Автообновление каждые 5 секунд: waiting/active/paused.</p>
+          <p>Автообновление каждые 5 секунд: ожидание / игра / пауза.</p>
         </div>
         <div className="roomsActions">
           <Link className="roomLink" to={routes.roomsNew}>
@@ -109,7 +121,7 @@ const OpenGames = () => {
         </div>
       </div>
 
-      <div className="pageCard roomsActions">
+      <div className="pageCard roomsActions roomsFiltersRow">
         {statusFilters.map((item) => (
           <button
             key={item.value}

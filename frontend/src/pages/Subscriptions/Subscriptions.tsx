@@ -35,6 +35,21 @@ const statusClass = (status: string) => {
   return 'neutral'
 }
 
+const planTitle = (plan: BillingPlanDto) => {
+  const code = (plan.code || '').toLowerCase()
+  if (code === 'free') return 'Бесплатный'
+  if (code === 'basic') return 'Базовый'
+  if (code === 'premium') return 'Премиум'
+  if (code === 'pro') return 'Про'
+  return plan.title || plan.code
+}
+
+const normalizeError = (message: string) => {
+  if (message.toLowerCase().includes('internal server error')) return 'Внутренняя ошибка сервера'
+  if (message.toLowerCase().includes('unknown')) return 'Неизвестно'
+  return message
+}
+
 const renderLimitValue = (plan: BillingPlanDto, key: string) => {
   const limit = plan.limits?.find((entry) => entry.key === key)
   if (!limit) return '—'
@@ -78,13 +93,15 @@ const Subscriptions = () => {
     if (plansResult.status === 'fulfilled') {
       setPlans(plansResult.value)
     } else {
-      setError(plansResult.reason instanceof Error ? plansResult.reason.message : 'Не удалось загрузить тарифы')
+      const reason = plansResult.reason instanceof Error ? plansResult.reason.message : 'Не удалось загрузить тарифы'
+      setError(normalizeError(reason))
     }
 
     if (currentResult.status === 'fulfilled') {
       setCurrent(currentResult.value)
     } else {
-      setError((prev) => prev || (currentResult.reason instanceof Error ? currentResult.reason.message : 'Не удалось загрузить текущую подписку'))
+      const reason = currentResult.reason instanceof Error ? currentResult.reason.message : 'Не удалось загрузить текущую подписку'
+      setError((prev) => prev || normalizeError(reason))
     }
 
     if (historyResult.status === 'fulfilled') {
@@ -95,7 +112,7 @@ const Subscriptions = () => {
       if (message.includes('404')) {
         setHistoryUnsupported(true)
       } else {
-        setError((prev) => prev || message || 'Не удалось загрузить историю платежей')
+        setError((prev) => prev || normalizeError(message || 'Не удалось загрузить историю платежей'))
       }
     }
 
@@ -115,9 +132,9 @@ const Subscriptions = () => {
     const sendCallback = async () => {
       try {
         await billingApi.paymentCallbackStatus({ paymentStatus: paymentStatus || undefined, sessionId: sessionId || undefined })
-        setCallbackMessage(`Платежный callback принят. Статус: ${paymentStatus || 'unknown'}`)
+        setCallbackMessage(`Платежное уведомление принято. Статус: ${paymentStatus || 'неизвестно'}`)
       } catch {
-        setCallbackMessage(`Не удалось сохранить callback-статус: ${paymentStatus || 'unknown'}`)
+        setCallbackMessage(`Не удалось сохранить статус уведомления: ${paymentStatus || 'неизвестно'}`)
       } finally {
         const nextParams = new URLSearchParams(searchParams)
         nextParams.delete('paymentStatus')
@@ -153,7 +170,7 @@ const Subscriptions = () => {
       await loadData()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Не удалось оформить подписку'
-      setError(message)
+      setError(normalizeError(message))
     } finally {
       setCheckoutPending(null)
     }
@@ -167,7 +184,7 @@ const Subscriptions = () => {
       await loadData()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Не удалось отменить подписку'
-      setError(message)
+      setError(normalizeError(message))
     } finally {
       setCancelPending(false)
     }
@@ -182,7 +199,7 @@ const Subscriptions = () => {
       setPromoMessage('Промокод применен. Скидка учтется при следующей оплате.')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Не удалось применить промокод'
-      setPromoMessage(message)
+      setPromoMessage(normalizeError(message))
     } finally {
       setPromoPending(false)
     }
@@ -193,7 +210,7 @@ const Subscriptions = () => {
   }
 
   return (
-    <section className="subscriptionsPage">
+    <section className="subscriptionsPage subscriptionsPageCompact">
       <article className="pageCard">
         <h1>{t('subscriptions.title')}</h1>
         {callbackMessage && <div className="subsNotice">{callbackMessage}</div>}
@@ -204,7 +221,7 @@ const Subscriptions = () => {
           {current ? (
             <>
               <div className="subsPills">
-                <span className="subsBadge">{current.planCode}</span>
+                <span className="subsBadge">{current.planCode === 'free' ? 'Бесплатный' : current.planCode}</span>
                 <span className={`subsBadge status-${statusClass(current.status)}`}>{statusLabel(current.status)}</span>
               </div>
               <p>Дата продления: {dateTime(current.currentPeriodEnd)}</p>
@@ -222,13 +239,13 @@ const Subscriptions = () => {
 
       <article className="pageCard">
         <h2>Доступные планы</h2>
-        <div className="plansGrid">
+        <div className="plansGrid plansVertical">
           {plans.map((plan) => {
             const isCurrent = current?.planCode === plan.code
             return (
               <div key={plan.id} className={`planCard ${isCurrent ? 'current' : ''}`}>
                 <div className="planHeader">
-                  <h3>{plan.title}</h3>
+                  <h3>{planTitle(plan)}</h3>
                   {isCurrent && <span className="subsBadge">Текущий</span>}
                 </div>
                 <div className="planPrice">
@@ -253,27 +270,20 @@ const Subscriptions = () => {
       {limitRows.length > 0 && (
         <article className="pageCard">
           <h2>Сравнение лимитов</h2>
-          <div className="limitsTableWrap">
-            <table className="limitsTable">
-              <thead>
-                <tr>
-                  <th>Лимит</th>
+          <div className="limitsVerticalList">
+            {limitRows.map((row) => (
+              <div className="limitRowCard" key={row.key}>
+                <strong>{row.title}</strong>
+                <div className="limitRowValues">
                   {plans.map((plan) => (
-                    <th key={plan.id}>{plan.title}</th>
+                    <div key={`${plan.id}-${row.key}`} className="limitValueItem">
+                      <span>{planTitle(plan)}</span>
+                      <b>{renderLimitValue(plan, row.key)}</b>
+                    </div>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {limitRows.map((row) => (
-                  <tr key={row.key}>
-                    <td>{row.title}</td>
-                    {plans.map((plan) => (
-                      <td key={`${plan.id}-${row.key}`}>{renderLimitValue(plan, row.key)}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                </div>
+              </div>
+            ))}
           </div>
         </article>
       )}

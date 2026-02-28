@@ -1,43 +1,55 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { routes } from '../../app/router/routeMap'
-import type { ChangeEvent, UIEvent } from 'react'
+import type { ChangeEvent } from 'react'
 import type { QuizListItemDto, QuizStatus } from '../../types/quiz.types'
-import { Badge, EmptyState, Input, Select, Table, Tabs } from '../../components/ui'
+import { Badge, EmptyState, Input, Select, Tabs } from '../../components/ui'
 import { useAppDispatch, useAppSelector } from '../../store/hooks'
 import { fetchQuizzes, selectQuizzesByFilter, selectQuizzesError, selectQuizzesLoading } from '../../store/slices'
+import './quizzes.css'
 
 const statusOptions: Array<{ value: QuizStatus; label: string }> = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'published', label: 'Published' },
-  { value: 'archived', label: 'Archived' },
+  { value: 'draft', label: 'Черновики' },
+  { value: 'published', label: 'Опубликованные' },
+  { value: 'archived', label: 'Архив' },
 ]
 
 const tabItems = statusOptions.map((item) => ({ key: item.value, label: item.label }))
-const VIRTUALIZATION_THRESHOLD = 20
-const ROW_HEIGHT = 92
-const VIEWPORT_HEIGHT = 540
 
-const QuizRow = memo(({ quiz }: { quiz: QuizListItemDto }) => (
-  <tr>
-    <td>
-      <strong>{quiz.title}</strong>
+const QuizCard = memo(({ quiz }: { quiz: QuizListItemDto }) => (
+  <li className="quizCatalogCard">
+    <div className="quizCatalogHeader">
       <div>
-        <Badge tone="neutral">{quiz.tags.join(', ') || 'без тегов'}</Badge>
+        <strong>{quiz.title}</strong>
+        <div>
+          <Badge tone="neutral">{quiz.tags.join(', ') || 'без тегов'}</Badge>
+        </div>
       </div>
-    </td>
-    <td>{quiz.language}</td>
-    <td>{quiz.questionsCount}</td>
-    <td>{new Date(quiz.updatedAt).toLocaleString()}</td>
-    <td className="quizActionsCell">
-      <Link to={routes.quizzesEdit.replace(':quizId', quiz.id)} className="ui-button">
-        Редактировать
-      </Link>
-      <Link to={routes.quizzesPublish.replace(':quizId', quiz.id)} className="ui-button primary">
-        Publish
-      </Link>
-    </td>
-  </tr>
+      <div className="quizCatalogActions">
+        <Link to={routes.quizzesEdit.replace(':quizId', quiz.id)} className="ui-button">
+          Редактировать
+        </Link>
+        <Link to={routes.quizzesPublish.replace(':quizId', quiz.id)} className="ui-button primary">
+          Опубликовать
+        </Link>
+      </div>
+    </div>
+
+    <dl className="quizCatalogMeta">
+      <div>
+        <dt>Язык</dt>
+        <dd>{quiz.language}</dd>
+      </div>
+      <div>
+        <dt>Вопросы</dt>
+        <dd>{quiz.questionsCount}</dd>
+      </div>
+      <div>
+        <dt>Обновлен</dt>
+        <dd>{new Date(quiz.updatedAt).toLocaleString('ru-RU')}</dd>
+      </div>
+    </dl>
+  </li>
 ))
 
 const QuizzesList = () => {
@@ -48,39 +60,27 @@ const QuizzesList = () => {
   const items = useAppSelector(quizzesSelector)
   const loading = useAppSelector(selectQuizzesLoading)
   const error = useAppSelector(selectQuizzesError)
-  const [scrollTop, setScrollTop] = useState(0)
 
   useEffect(() => {
     void dispatch(fetchQuizzes({ status, search: search.trim() || undefined }))
   }, [dispatch, search, status])
 
   const emptyText = useMemo(() => (loading ? 'Загрузка...' : 'В этом статусе пока нет квизов.'), [loading])
-  const virtualized = items.length >= VIRTUALIZATION_THRESHOLD
-
-  const startIndex = Math.floor(scrollTop / ROW_HEIGHT)
-  const visibleCount = Math.ceil(VIEWPORT_HEIGHT / ROW_HEIGHT) + 6
-  const endIndex = Math.min(items.length, startIndex + visibleCount)
-  const visibleItems = virtualized ? items.slice(startIndex, endIndex) : items
-  const topSpacerHeight = virtualized ? startIndex * ROW_HEIGHT : 0
-  const bottomSpacerHeight = virtualized ? Math.max(0, (items.length - endIndex) * ROW_HEIGHT) : 0
 
   const onTabsChange = useCallback((key: string) => setStatus(key as QuizStatus), [])
   const onSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>) => setSearch(event.target.value), [])
   const onSelectChange = useCallback((event: ChangeEvent<HTMLSelectElement>) => setStatus(event.target.value as QuizStatus), [])
-  const onTableScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
-    setScrollTop(event.currentTarget.scrollTop)
-  }, [])
 
   return (
-    <section className="quizPage">
-      <div className="pageCard">
+    <section className="quizPage quizzesCatalogPage">
+      <div className="pageCard quizzesCatalogHeaderCard">
         <h1>Мои квизы</h1>
         <Tabs items={tabItems} active={status} onChange={onTabsChange} />
-        <div className="quizToolbar">
+        <div className="quizToolbar quizzesCatalogToolbar">
           <div style={{ minWidth: 0, flex: 1 }}>
             <Input placeholder="Поиск по названию" value={search} onChange={onSearchChange} />
           </div>
-          <div style={{ minWidth: 160 }}>
+          <div style={{ minWidth: 180 }}>
             <Select value={status} onChange={onSelectChange}>
               {statusOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -100,23 +100,11 @@ const QuizzesList = () => {
       {items.length === 0 ? (
         <EmptyState text={emptyText} />
       ) : (
-        <div onScroll={onTableScroll} style={virtualized ? { maxHeight: VIEWPORT_HEIGHT, overflowY: 'auto' } : undefined}>
-          <Table headers={['Название', 'Язык', 'Вопросы', 'Обновлен', 'Действия']}>
-            {topSpacerHeight > 0 ? (
-              <tr aria-hidden="true">
-                <td colSpan={5} style={{ height: topSpacerHeight, padding: 0, border: 0 }} />
-              </tr>
-            ) : null}
-            {visibleItems.map((quiz) => (
-              <QuizRow key={quiz.id} quiz={quiz} />
-            ))}
-            {bottomSpacerHeight > 0 ? (
-              <tr aria-hidden="true">
-                <td colSpan={5} style={{ height: bottomSpacerHeight, padding: 0, border: 0 }} />
-              </tr>
-            ) : null}
-          </Table>
-        </div>
+        <ul className="quizCatalogList">
+          {items.map((quiz) => (
+            <QuizCard key={quiz.id} quiz={quiz} />
+          ))}
+        </ul>
       )}
     </section>
   )
