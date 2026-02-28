@@ -12,3 +12,18 @@ RichCrabs — платформа для проведения викторин в
 
 - Общая документация: [docs/README.md](docs/README.md)
 - Инструкция по запуску: [docs/installation.md](docs/installation.md)
+
+
+## Telegram WebApp launch template
+
+Для подключаемых Telegram-ботов используется единый шаблон команд и запуска квиза:
+
+- `/start` — отправляет приветствие и кнопку `web_app` для открытия квиз-интерфейса.
+- `/create_game` — создаёт комнату и возвращает PIN + invite.
+- `/invite` — повторно отправляет invite-ссылку последней комнаты.
+- `/pin` — показывает PIN последней комнаты.
+
+`/start` формирует short-lived launch URL с подписью (HMAC) и полями `bot_id`, `user_id`, `chat_id`, `request_id`, `exp`.
+Backend endpoint `/api/v1/telegram/webapp/launch` валидирует подпись/срок действия и при успехе поднимает web-сессию quiz runtime (cookie), после чего делает redirect в Telegram WebApp UI.
+
+Конфигурация шаблона задаётся env-переменными (например `BOT_CMD_*`, `BOT_TEXT_*`, `BOT_WEBAPP_*`, `GW_TELEGRAM_WEBAPP_*`) и может переиспользоваться всеми ботами без изменения кода.

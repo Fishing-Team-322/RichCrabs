@@ -3,7 +3,7 @@ from app.config import settings
 from app.grpc_clients.core import clients
 from app.services.bot_service import rdb as bot_rdb
 
-from app.api.routers import admin, auth, billing, bots, games, profile, quizzes, system, ws
+from app.api.routers import admin, auth, billing, bots, games, profile, quizzes, system, telegram_webapp, ws
 
 app = FastAPI(
     title='QuizBattle Gateway API',
@@ -11,7 +11,7 @@ app = FastAPI(
     openapi_url='/openapi.json',
 )
 
-for router in [system.router, auth.router, profile.router, games.router, bots.router, quizzes.router, billing.router, admin.router, ws.router]:
+for router in [system.router, auth.router, profile.router, games.router, bots.router, quizzes.router, billing.router, admin.router, telegram_webapp.router, ws.router]:
     app.include_router(router)
 
 # compatibility for tests
