@@ -92,9 +92,39 @@ def _ns(**kwargs):
 class FakeRedis:
     def __init__(self):
         self._data = {}
+        self._lists = {}
 
     def get(self, key):
         return self._data.get(key)
+
+    def set(self, key, value):
+        self._data[key] = value
+        return True
+
+    def lpush(self, key, value):
+        self._lists.setdefault(key, []).insert(0, value)
+        return len(self._lists[key])
+
+    def ltrim(self, key, start, end):
+        items = self._lists.get(key, [])
+        self._lists[key] = items[start:end + 1]
+        return True
+
+    def lrange(self, key, start, end):
+        items = self._lists.get(key, [])
+        if end == -1:
+            end = len(items) - 1
+        return items[start:end + 1]
+
+    def delete(self, key):
+        removed = 0
+        if key in self._data:
+            del self._data[key]
+            removed += 1
+        if key in self._lists:
+            del self._lists[key]
+            removed += 1
+        return removed
 
 
 class FakeClients:
@@ -133,11 +163,11 @@ class FakeClients:
             GetAiQuizJob=lambda req: _ns(job_id=req.job_id, status="DONE", HasField=lambda f: False),
         )
         self.bot = _ns(
-            RegisterBot=lambda req: _ns(bot=_ns(bot_id=_ns(value="b1"), name=req.name, version=req.version, status="active")),
-            ListBots=lambda req: _ns(bots=[_ns(bot_id=_ns(value="b1"), name="Bot", version="1", status="active")]),
-            GetBotStatus=lambda req: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="active")),
-            UpdateBotStatus=lambda req: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="disabled")),
-            RemoveBot=lambda req: _ns(),
+            RegisterBot=lambda req, metadata=None: _ns(bot=_ns(bot_id=_ns(value="b1"), name=req.name, version=req.version, status="active")),
+            ListBots=lambda req, metadata=None: _ns(bots=[_ns(bot_id=_ns(value="b1"), name="Bot", version="1", status="active")]),
+            GetBotStatus=lambda req, metadata=None: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="active")),
+            UpdateBotStatus=lambda req, metadata=None: _ns(bot=_ns(bot_id=_ns(value=req.bot_id.value), name="Bot", version="1", status="disabled")),
+            RemoveBot=lambda req, metadata=None: _ns(),
         )
         self.health = _ns(Ping=lambda req: _ns())
 

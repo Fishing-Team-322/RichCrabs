@@ -9,24 +9,38 @@ describe('billingApi contract', () => {
     vi.restoreAllMocks()
   })
 
-  it('uses /api/v1/entitlements and /api/v1/usage for available billing data', async () => {
+  it('uses dedicated billing endpoints for plans/current/history', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(jsonResponse({ limits: [{ limit: 'rooms', max: 10 }] }))
-      .mockResolvedValueOnce(jsonResponse({ usage: { rooms: 1 } }))
+      .mockResolvedValueOnce(jsonResponse({ plans: [{ id: 'free', code: 'free', title: 'Free', price: 0, currency: 'USD', interval: 'month' }] }))
+      .mockResolvedValueOnce(jsonResponse({ subscription: { id: 'sub1', planCode: 'free', status: 'active', currentPeriodEnd: '2026-03-01T00:00:00.000Z' } }))
+      .mockResolvedValueOnce(jsonResponse({ transactions: [] }))
+
     const plans = await billingApi.plans()
     const current = await billingApi.current()
+    const history = await billingApi.history()
+
     expect(plans[0].code).toBe('free')
     expect(current.planCode).toBe('free')
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/entitlements', expect.objectContaining({ method: 'GET' }))
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/usage', expect.objectContaining({ method: 'GET' }))
+    expect(history.transactions).toEqual([])
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/billing/plans', expect.objectContaining({ method: 'GET' }))
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/billing/current', expect.objectContaining({ method: 'GET' }))
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/v1/billing/history', expect.objectContaining({ method: 'GET' }))
   })
 
-  it('documents missing gateway endpoints for mutable billing operations', async () => {
-    await expect(billingApi.checkout({ planCode: 'pro' })).rejects.toThrow('not implemented')
-    await expect(billingApi.cancel()).rejects.toThrow('not implemented')
-    await expect(billingApi.applyPromo({ code: 'PROMO' })).rejects.toThrow('not implemented')
-    await expect(billingApi.paymentCallbackStatus({ sessionId: 's' })).rejects.toThrow('not implemented')
-    expect(await billingApi.history()).toEqual({ transactions: [] })
+  it('calls mutable billing endpoints', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse({ ok: true }))
+
+    await billingApi.checkout({ planCode: 'free' })
+    await billingApi.cancel()
+    await billingApi.applyPromo({ code: 'PROMO' })
+    await billingApi.paymentCallbackStatus({ sessionId: 's' })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/billing/checkout', expect.objectContaining({ method: 'POST' }))
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/billing/cancel', expect.objectContaining({ method: 'POST' }))
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/billing/promo', expect.objectContaining({ method: 'POST' }))
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/billing/callback-status', expect.objectContaining({ method: 'POST' }))
   })
 })
