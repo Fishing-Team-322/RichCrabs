@@ -4,6 +4,7 @@ import { useAppDispatch } from '../../store/hooks'
 import { restoreSession } from '../../store/slices'
 import Layout from '../../components/Layout'
 import AuthGuard from './guards/AuthGuard'
+import AdminGuard from './guards/AdminGuard'
 import GuestGuard from './guards/GuestGuard'
 import {
   AdminDashboard,
@@ -90,9 +91,11 @@ const AppRouter: React.FC = () => {
             <Route path={routes.bots} element={<TelegramBots />} />
           </Route>
 
-          <Route element={<AdminLayout />}>
-            <Route path={routes.adminDashboard} element={<AdminDashboard />} />
-            <Route path={routes.adminSecurity} element={<AdminSecurity />} />
+          <Route element={<AdminGuard />}>
+            <Route element={<AdminLayout />}>
+              <Route path={routes.adminDashboard} element={<AdminDashboard />} />
+              <Route path={routes.adminSecurity} element={<AdminSecurity />} />
+            </Route>
           </Route>
         </Route>
 

@@ -1,5 +1,13 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit'
 import { authApi } from '../../services/authApi'
+import {
+  clearAdminSession,
+  createAdminProfile,
+  hasPersistedAdminSession,
+  isAdminProfile,
+  matchesAdminCredentials,
+  persistAdminSession,
+} from '../../features/auth/adminAuth'
 import { clearAuthTokens } from '../../services/api'
 import { profileApi } from '../../services/profileApi'
 import type { UserDto } from '../../types/auth.types'
@@ -24,6 +32,12 @@ export const login = createAsyncThunk<UserDto, { email: string; password: string
   'auth/login',
   async (credentials, { rejectWithValue }) => {
     try {
+      if (matchesAdminCredentials(credentials.email.trim(), credentials.password)) {
+        persistAdminSession()
+        return createAdminProfile()
+      }
+
+      clearAdminSession()
       await authApi.csrf()
       const response = await authApi.login(credentials)
       return response.user
@@ -53,6 +67,10 @@ export const restoreSession = createAsyncThunk<
   { rejectValue: string }
 >('auth/restoreSession', async (_, { rejectWithValue }) => {
   try {
+    if (hasPersistedAdminSession()) {
+      return { profile: createAdminProfile() }
+    }
+
     const profile = await profileApi.getProfile()
     return { profile }
   } catch (error) {
@@ -60,11 +78,15 @@ export const restoreSession = createAsyncThunk<
   }
 })
 
-export const logout = createAsyncThunk('auth/logout', async () => {
+export const logout = createAsyncThunk('auth/logout', async (_, { getState }) => {
   try {
-    await authApi.logout()
+    const state = getState() as RootState
+    if (!isAdminProfile(state.auth.profile)) {
+      await authApi.logout()
+    }
   } finally {
     clearAuthTokens()
+    clearAdminSession()
   }
 })
 
@@ -135,4 +157,5 @@ const authSlice = createSlice({
 
 export const { clearAuthError, setProfile } = authSlice.actions
 export const selectAuthState = (state: RootState) => state.auth
+export const selectIsAdmin = (state: RootState) => isAdminProfile(state.auth.profile)
 export default authSlice.reducer

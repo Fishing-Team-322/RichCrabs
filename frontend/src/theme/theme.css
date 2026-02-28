@@ -300,3 +300,29 @@ a { color: inherit; }
 
 
 
+
+
+.authTabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+
+.authTab {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-secondary);
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.authTab.active {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.35), rgba(236, 72, 153, 0.18));
+}
+
+:root[data-theme='light'] .authTab {
+  background: rgba(126, 96, 206, 0.06);
+}
