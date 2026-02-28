@@ -21,6 +21,7 @@ def test_list_games_with_host_session_returns_active_room(client, host_session_c
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["pin"] == "123456"
+    assert payload[0]["roomId"] == "room-1"
 
 
 def test_create_game_requires_valid_session(client, csrf_headers):
@@ -43,7 +44,7 @@ def test_create_game_happy_path(client, host_session_cookie, csrf_headers):
     )
     assert response.status_code == 200
     assert response.json()["pin"] == "123456"
-    assert response.json()["invitePath"] == "/join?inviteToken=inv1"
+    assert response.json()["invitePath"] == "/invite/inv1"
     assert response.json()["inviteQrSvg"].startswith("<svg")
 
 
@@ -54,16 +55,17 @@ def test_regenerate_invite_requires_host_session(client, csrf_headers):
     assert response.status_code == 401
 
 
-def test_regenerate_invite_pin_must_match_session(client, host_session_cookie, csrf_headers):
+def test_regenerate_invite_returns_404_for_unknown_host_room(client, host_session_cookie, csrf_headers):
     cookies = {**host_session_cookie, **csrf_headers['cookies']}
     response = client.post('/api/v1/games/999999/invite/regenerate', cookies=cookies, headers=csrf_headers['headers'])
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 def test_regenerate_invite_happy_path(client, host_session_cookie, csrf_headers):
     cookies = {**host_session_cookie, **csrf_headers["cookies"]}
     response = client.post("/api/v1/games/123456/invite/regenerate", cookies=cookies, headers=csrf_headers["headers"])
     assert response.status_code == 200
     assert response.json()["inviteToken"] == "inv2"
+    assert response.json()["invitePath"] == "/invite/inv2"
 
 
 def test_create_game_grpc_mapped_error(client, host_session_cookie, fake_clients, csrf_headers):

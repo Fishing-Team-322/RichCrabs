@@ -36,6 +36,10 @@ app = FastAPI(
 )
 
 
+def _canonical_invite_path(invite_token: str) -> str:
+    return f"/invite/{invite_token}"
+
+
 def _room_event_to_dict(ev: Any) -> dict[str, Any]:
     try:
         return MessageToDict(ev, preserving_proto_field_name=True)
@@ -45,6 +49,64 @@ def _room_event_to_dict(ev: Any) -> dict[str, Any]:
             return json.loads(raw)
         except Exception:
             return {"raw": raw}
+
+
+def _ts_to_iso8601(ts: Any) -> str:
+    if not ts:
+        return datetime.now(timezone.utc).isoformat()
+    seconds = getattr(ts, "seconds", 0)
+    nanos = getattr(ts, "nanos", 0)
+    return datetime.fromtimestamp(seconds + nanos / 1_000_000_000, tz=timezone.utc).isoformat()
+
+
+def _normalize_room_state(state: str) -> str:
+    normalized = (state or "").lower()
+    if normalized in {"in_progress", "playing"}:
+        return "playing"
+    if normalized == "paused":
+        return "paused"
+    if normalized == "finished":
+        return "finished"
+    if normalized == "closed":
+        return "closed"
+    return "lobby"
+
+
+def _map_room_snapshot(room: Any) -> dict[str, Any]:
+    players = [
+        {
+            "playerId": p.player_id.value,
+            "name": p.display_name,
+            "score": p.score,
+            "teamId": p.team_id if hasattr(p, "team_id") else None,
+        }
+        for p in room.players
+    ]
+    return {
+        "roomId": room.room_id.value,
+        "pin": room.pin,
+        "quizId": room.quiz_id.value if room.quiz_id else "",
+        "title": room.title,
+        "state": _normalize_room_state(room.state),
+        "players": players,
+        "playersCount": len(players),
+        "hostUserId": room.owner_user_id.value if room.owner_user_id else "",
+        "updatedAt": _ts_to_iso8601(room.updated_at),
+        "invitePath": room.invite_path or "",
+    }
+
+
+def _host_rooms(user_id: str):
+    res = clients.game.ListRooms(game_pb2.ListRoomsRequest(owner_user_id=common_pb2.UserId(value=user_id), limit=50))
+    return [_map_room_snapshot(room) for room in res.rooms]
+
+
+def _resolve_host_room(user_id: str, pin: str):
+    rooms = _host_rooms(user_id)
+    for room in rooms:
+        if room["pin"] == pin:
+            return room
+    return None
 
 
 def err(code: int, error: str, message: str, details: Any = None):
@@ -250,16 +312,14 @@ def me_sessions():
 
 @app.get("/api/v1/games", tags=["games"])
 def list_games(req: Request):
-    s = session_from_req(req)
-    if not s or not s.room_id or not s.pin:
+    uid = require_user(req)
+    if not uid:
         return []
     try:
-        x = clients.game.GetRoomState(game_pb2.GetRoomStateRequest(room_id=common_pb2.RoomId(value=s.room_id)))
+        return _host_rooms(uid)
     except grpc.RpcError as ex:
         c, b = map_grpc_err(ex, "list_games")
         return JSONResponse(b, status_code=c)
-    players = [{"playerId": p.player_id.value, "name": p.display_name} for p in x.players]
-    return [{"pin": s.pin, "state": x.state, "players": players}]
 
 @app.post("/api/v1/games", tags=["games"])
 def create_game(req: Request, body: dict[str, Any]):
@@ -272,7 +332,7 @@ def create_game(req: Request, body: dict[str, Any]):
     except grpc.RpcError as ex:
         c,b = map_grpc_err(ex, "create_room"); return JSONResponse(b,status_code=c)
     claims = SessionClaims(session_type="game", role="host", pin=x.pin, room_id=x.room_id.value, user_id=uid)
-    invite_path = x.invite_path or f"/join?inviteToken={x.invite_token}"
+    invite_path = _canonical_invite_path(x.invite_token)
     out = JSONResponse({
         "pin": x.pin,
         "inviteToken": x.invite_token,
@@ -287,16 +347,17 @@ def create_game(req: Request, body: dict[str, Any]):
 @app.post("/api/v1/games/{pin}/invite/regenerate", tags=["games"])
 def regenerate_invite(pin: str, req: Request):
     s = session_from_req(req)
-    if not s or s.role != "host" or not s.room_id or not s.user_id:
+    if not s or s.role != "host" or not s.user_id:
         return err(401, "unauthorized", "session cookie is missing or invalid")
-    if s.pin and s.pin != pin:
-        return err(403, "forbidden", "pin must match host session")
     if (e := require_csrf(req)):
         return e
+    target_room = _resolve_host_room(s.user_id, pin)
+    if not target_room:
+        return err(404, "not_found", "room not found")
     try:
         x = clients.game.RegenerateInvite(
             game_pb2.RegenerateInviteRequest(
-                room_id=common_pb2.RoomId(value=s.room_id),
+                room_id=common_pb2.RoomId(value=target_room["roomId"]),
                 requested_by=common_pb2.UserId(value=s.user_id),
             )
         )
@@ -305,7 +366,7 @@ def regenerate_invite(pin: str, req: Request):
         return JSONResponse(b, status_code=c)
     return {
         "inviteToken": x.invite_token,
-        "invitePath": x.invite_path,
+        "invitePath": _canonical_invite_path(x.invite_token),
         "inviteQrSvg": x.invite_qr_svg,
     }
 
@@ -338,14 +399,26 @@ def join_inv(inviteToken: str, req: Request, body: dict[str, Any]):
 def state(pin: str, req: Request):
     s = session_from_req(req)
     if not s: return err(401, "unauthorized", "session cookie is missing or invalid")
+    if s.role == "host" and s.user_id:
+        try:
+            room = _resolve_host_room(s.user_id, pin)
+        except grpc.RpcError as ex:
+            c, b = map_grpc_err(ex, "room_state")
+            return JSONResponse(b, status_code=c)
+        if not room:
+            return err(404, "not_found", "room not found")
+        return room
     st = clients.game.GetRoomState(game_pb2.GetRoomStateRequest(room_id=common_pb2.RoomId(value=s.room_id)))
     return {"pin": pin, "state": st.state, "players": [{"playerId": p.player_id.value, "name": p.display_name, "score": p.score} for p in st.players]}
 
 
 def _host_action(req: Request, pin: str, action: str):
     s = session_from_req(req)
-    if not s or s.role != "host": return err(401, "unauthorized", "session cookie is missing or invalid")
+    if not s or s.role != "host" or not s.user_id: return err(401, "unauthorized", "session cookie is missing or invalid")
     if (e := require_csrf(req)): return e
+    room = _resolve_host_room(s.user_id, pin)
+    if not room:
+        return err(404, "not_found", "room not found")
     fn = {
         "start": clients.game.StartGame,
         "pause": clients.game.PauseGame,
