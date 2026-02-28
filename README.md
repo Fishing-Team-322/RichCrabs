@@ -8,6 +8,8 @@
 docker compose up -d --build
 ```
 
+`docker compose` теперь поднимает одноразовый сервис `db-migrate`, который применяет SQL-миграции даже при уже существующем `pg_data` volume (когда `initdb`-скрипты Postgres не запускаются повторно).
+
 ## Python gateway (FastAPI)
 
 Gateway полностью переведен на Python (`gateway_py/`) и запускается как сервис `gateway` в `docker-compose.yml`.
