@@ -8,6 +8,7 @@ members = [
   "services/entitlements",
   "services/bot",
   "services/bot_ingress",
+  "services/bot_runner",
   "services/auth",
   "proto",
   "tools/smoke_load",
