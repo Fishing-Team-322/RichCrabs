@@ -3,6 +3,7 @@
 #include <drogon/drogon.h>
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <ctime>
 #include <iomanip>
@@ -266,6 +267,18 @@ bool isValidTelegramTokenFormat(const std::string& token) {
 std::string maskToken(const std::string& token) {
   if (token.size() <= 8) return "***";
   return token.substr(0, 4) + "***" + token.substr(token.size() - 4);
+}
+
+
+bool constantTimeEquals(const std::string& left, const std::string& right) {
+  const auto maxLen = std::max(left.size(), right.size());
+  unsigned char diff = static_cast<unsigned char>(left.size() ^ right.size());
+  for (size_t i = 0; i < maxLen; ++i) {
+    const unsigned char l = i < left.size() ? static_cast<unsigned char>(left[i]) : 0U;
+    const unsigned char r = i < right.size() ? static_cast<unsigned char>(right[i]) : 0U;
+    diff |= static_cast<unsigned char>(l ^ r);
+  }
+  return diff == 0;
 }
 
 std::optional<int64_t> extractInt64(const Json::Value& value) {
@@ -593,9 +606,27 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
           cb(api::jsonErrorResponse(404, api::ErrorCode::kNotFound, "bot not found"));
           return;
         }
-        if (binding->secret != secret) {
+        if (!constantTimeEquals(binding->secret, secret)) {
           cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "invalid webhook secret"));
           return;
+        }
+
+        const auto clientIp = clientIpFromRequest(req);
+        if (!conf.telegram_webhook_ip_allowlist.empty() &&
+            conf.telegram_webhook_ip_allowlist.find(clientIp) == conf.telegram_webhook_ip_allowlist.end()) {
+          cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "telegram source ip is not allowed"));
+          return;
+        }
+        if (conf.telegram_webhook_rate_limit_per_minute > 0) {
+          const auto rateLimit = RedisAllowFixedWindow(
+              conf.redis_url,
+              "rl:telegram_webhook:bot:" + botId + ":ip:" + clientIp,
+              conf.telegram_webhook_rate_limit_per_minute,
+              60);
+          if (rateLimit.has_value() && !rateLimit->allowed) {
+            cb(api::jsonErrorResponse(429, api::ErrorCode::kTooManyAttempts, "rate limit exceeded"));
+            return;
+          }
         }
 
         std::string stateError;
@@ -606,7 +637,11 @@ void RegisterTelegramRoutes(const Config& conf, QuizCoreClient& quizCore, Entitl
         }
 
         const auto headerSecret = req->getHeader("x-telegram-bot-api-secret-token");
-        if (!headerSecret.empty() && headerSecret != secret) {
+        if (headerSecret.empty()) {
+          cb(api::jsonErrorResponse(401, api::ErrorCode::kUnauthorized, "telegram secret header is required"));
+          return;
+        }
+        if (!constantTimeEquals(headerSecret, secret)) {
           cb(api::jsonErrorResponse(403, api::ErrorCode::kForbidden, "telegram secret header mismatch"));
           return;
         }

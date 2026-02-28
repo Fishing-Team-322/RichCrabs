@@ -48,6 +48,8 @@ struct Config final {
   std::string app_env = "development";
   bool auth_local_smoke_fallback_enabled = false;
   std::string session_signing_key;
+  std::unordered_set<std::string> telegram_webhook_ip_allowlist;
+  uint64_t telegram_webhook_rate_limit_per_minute = 0;
 
   security::CsrfConfig csrf{};
   security::SessionCookieConfig session{};
