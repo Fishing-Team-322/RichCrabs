@@ -133,7 +133,7 @@ pub(crate) fn spawn_ai_quiz_worker(input: AiQuizWorkerInput) {
                     Ok(quiz) => quiz,
                     Err(err) => {
                         let _ = repository
-                            .fail_ai_quiz_job(params.job_id, &format!("generation failed: {err}"))
+                            .fail_ai_quiz_job(job_id, &format!("generation failed: {err}"))
                             .await;
                         return;
                     }
@@ -143,7 +143,7 @@ pub(crate) fn spawn_ai_quiz_worker(input: AiQuizWorkerInput) {
                 if fallback_questions.is_empty() {
                     let _ = repository
                         .fail_ai_quiz_job(
-                            params.job_id,
+                            job_id,
                             "AI provider unavailable and fallback bank is empty",
                         )
                         .await;
@@ -182,7 +182,7 @@ pub(crate) fn spawn_ai_quiz_worker(input: AiQuizWorkerInput) {
         if let Err(err) = validate_questions(&generated.questions) {
             let _ = repository
                 .fail_ai_quiz_job(
-                    params.job_id,
+                    job_id,
                     &format!("generation failed validation: {err}"),
                 )
                 .await;
@@ -191,12 +191,12 @@ pub(crate) fn spawn_ai_quiz_worker(input: AiQuizWorkerInput) {
 
         let result_json = quiz_to_json(&generated);
         if let Err(err) = repository
-            .complete_ai_quiz_job(params.job_id, result_json)
+            .complete_ai_quiz_job(job_id, result_json)
             .await
         {
             let _ = repository
                 .fail_ai_quiz_job(
-                    params.job_id,
+                    job_id,
                     &format!("failed to persist generated quiz: {err}"),
                 )
                 .await;

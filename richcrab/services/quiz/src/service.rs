@@ -317,7 +317,11 @@ mod tests {
     use tonic::transport::Server;
     use uuid::Uuid;
 
-    use crate::{application::ai_jobs, config::ai::AiGeneratorConfig, repository::QuizRepository};
+    use crate::{
+        application::ai_jobs,
+        config::ai::AiGeneratorConfig,
+        repository::{AiQuizJob, QuizRepository},
+    };
 
     #[derive(Clone)]
     struct FakeChatService {
@@ -457,7 +461,7 @@ mod tests {
             },
         });
 
-        let job_uuid = Uuid::parse_str(&job_id).expect("job id is uuid");
+        let job_uuid = Uuid::parse_str(&job.id.to_string()).expect("job id is uuid");
         tokio::time::sleep(std::time::Duration::from_millis(700)).await;
         let job_after = repo
             .find_ai_quiz_job_by_id(job_uuid)
