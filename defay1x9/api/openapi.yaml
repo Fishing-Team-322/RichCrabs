@@ -707,6 +707,7 @@ components:
         desiredQuestionCount:
           type: integer
           minimum: 1
+          maximum: 20
           example: 7
         difficulty:
           type: string

@@ -10,6 +10,15 @@ use crate::{
     repository::QuizRepository,
 };
 
+const AI_GENERATE_QUESTION_COUNT_MAX: u32 = 20;
+
+#[inline]
+fn normalize_desired_question_count(desired_question_count: Option<u32>) -> usize {
+    desired_question_count
+        .unwrap_or(5)
+        .clamp(1, AI_GENERATE_QUESTION_COUNT_MAX) as usize
+}
+
 pub struct QuizServiceImpl {
     repository: QuizRepository,
     fallback_questions: Vec<proto::richcrab::v1::QuizQuestion>,
@@ -239,7 +248,7 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
 
         let requester_uuid = Uuid::parse_str(&requester)
             .map_err(|_| Status::invalid_argument("requested_by must be uuid"))?;
-        let desired_question_count = req.desired_question_count.unwrap_or(5).clamp(1, 20) as usize;
+        let desired_question_count = normalize_desired_question_count(req.desired_question_count);
         let difficulty = req
             .difficulty
             .map(|v| v.trim().to_string())
@@ -297,6 +306,7 @@ impl proto::richcrab::v1::quiz_service_server::QuizService for QuizServiceImpl {
 
 #[cfg(test)]
 mod tests {
+    use super::{normalize_desired_question_count, AI_GENERATE_QUESTION_COUNT_MAX};
     use std::{env, sync::Arc};
 
     use sqlx::postgres::PgPoolOptions;
@@ -350,6 +360,19 @@ mod tests {
                 "streaming is not used in tests",
             ))
         }
+    }
+
+    #[test]
+    fn desired_question_count_is_clamped_to_supported_boundaries() {
+        assert_eq!(normalize_desired_question_count(Some(1)), 1);
+        assert_eq!(
+            normalize_desired_question_count(Some(AI_GENERATE_QUESTION_COUNT_MAX)),
+            AI_GENERATE_QUESTION_COUNT_MAX as usize
+        );
+        assert_eq!(
+            normalize_desired_question_count(Some(AI_GENERATE_QUESTION_COUNT_MAX + 1)),
+            AI_GENERATE_QUESTION_COUNT_MAX as usize
+        );
     }
 
     #[tokio::test]
