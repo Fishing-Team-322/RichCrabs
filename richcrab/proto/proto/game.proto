@@ -24,9 +24,29 @@ service GameService {
   rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
 }
 
+
+message RoomTimers {
+  uint32 lobby_timer_sec = 1;
+  uint32 question_timer_sec = 2;
+  uint32 answer_reveal_sec = 3;
+}
+
+enum RoomVisibility {
+  ROOM_VISIBILITY_UNSPECIFIED = 0;
+  ROOM_VISIBILITY_PRIVATE = 1;
+  ROOM_VISIBILITY_PUBLIC = 2;
+}
+
+message RoomSettings {
+  uint32 player_limit = 1;
+  RoomVisibility visibility = 2;
+  RoomTimers timers = 3;
+}
+
 message ListRoomsRequest {
   UserId owner_user_id = 1;
   uint32 limit = 2;
+  bool include_public = 3;
 }
 
 message RoomSnapshot {
@@ -39,6 +59,7 @@ message RoomSnapshot {
   repeated PlayerState players = 7;
   google.protobuf.Timestamp updated_at = 8;
   string invite_path = 9;
+  RoomSettings settings = 10;
 }
 
 message ListRoomsResponse {
@@ -94,6 +115,7 @@ message CreateRoomRequest {
   UserId owner_user_id = 1;
   QuizId quiz_id = 2;
   string title = 3;
+  RoomSettings settings = 4;
 }
 
 message CreateRoomResponse {
@@ -104,6 +126,7 @@ message CreateRoomResponse {
   optional Error error = 5;
   string invite_path = 6;
   string invite_qr_svg = 7;
+  RoomSettings settings = 8;
 }
 
 message JoinRoomRequest {
@@ -230,4 +253,10 @@ message GetRoomStateResponse {
   optional Error error = 6;
   repeated TeamState teams = 7;
   optional QuestionState current_question = 8;
+  string pin = 9;
+  QuizId quiz_id = 10;
+  UserId owner_user_id = 11;
+  string title = 12;
+  string invite_path = 13;
+  RoomSettings settings = 14;
 }

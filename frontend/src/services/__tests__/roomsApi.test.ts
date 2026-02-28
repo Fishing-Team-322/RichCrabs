@@ -19,7 +19,7 @@ describe('roomsApi contract', () => {
     await roomsApi.create({ ownerUserId: 'u1', quizId: 'q1', settings: { playerLimit: 10, privacy: 'private', timers: { lobbyTimerSec: 1, questionTimerSec: 1, answerRevealSec: 1 } } })
     await roomsApi.list()
     await roomsApi.getOpenRooms()
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/games', expect.objectContaining({ method: 'POST', body: JSON.stringify({ ownerUserId: 'u1', quizId: 'q1', title: 'Quiz q1' }) }))
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/games', expect.objectContaining({ method: 'POST', body: JSON.stringify({ ownerUserId: 'u1', quizId: 'q1', title: 'Quiz q1', settings: { playerLimit: 10, privacy: 'private', timers: { lobbyTimerSec: 1, questionTimerSec: 1, answerRevealSec: 1 } } }) }))
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/games', expect.objectContaining({ method: 'GET' }))
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/v1/games', expect.objectContaining({ method: 'GET' }))
   })

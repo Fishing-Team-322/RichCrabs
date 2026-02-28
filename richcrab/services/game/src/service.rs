@@ -17,7 +17,9 @@ use tonic::{Request, Response, Status};
 use tracing::info;
 
 use crate::{
-    domain::{GameQuestion, RoomLifecycleState, RoomState},
+    domain::{
+        GameQuestion, RoomLifecycleState, RoomSettings, RoomState, RoomTimers, RoomVisibility,
+    },
     repository::RoomChatRepository,
     room_actor::{spawn_room_actor, RoomCommand, RoomRegistry},
 };
@@ -43,6 +45,57 @@ fn invite_qr_svg(path: &str) -> Result<String, String> {
         .build())
 }
 
+fn from_proto_settings(settings: Option<proto::richcrab::v1::RoomSettings>) -> RoomSettings {
+    let s = settings.unwrap_or_default();
+    let timers = s.timers.unwrap_or_default();
+    let visibility = match proto::richcrab::v1::RoomVisibility::try_from(s.visibility)
+        .unwrap_or(proto::richcrab::v1::RoomVisibility::Private)
+    {
+        proto::richcrab::v1::RoomVisibility::Public => RoomVisibility::Public,
+        _ => RoomVisibility::Private,
+    };
+
+    RoomSettings {
+        player_limit: if s.player_limit == 0 {
+            20
+        } else {
+            s.player_limit
+        },
+        visibility,
+        timers: RoomTimers {
+            lobby_timer_sec: if timers.lobby_timer_sec == 0 {
+                45
+            } else {
+                timers.lobby_timer_sec
+            },
+            question_timer_sec: if timers.question_timer_sec == 0 {
+                30
+            } else {
+                timers.question_timer_sec
+            },
+            answer_reveal_sec: if timers.answer_reveal_sec == 0 {
+                10
+            } else {
+                timers.answer_reveal_sec
+            },
+        },
+    }
+}
+
+fn to_proto_settings(settings: &RoomSettings) -> proto::richcrab::v1::RoomSettings {
+    proto::richcrab::v1::RoomSettings {
+        player_limit: settings.player_limit,
+        visibility: match settings.visibility {
+            RoomVisibility::Public => proto::richcrab::v1::RoomVisibility::Public as i32,
+            RoomVisibility::Private => proto::richcrab::v1::RoomVisibility::Private as i32,
+        },
+        timers: Some(proto::richcrab::v1::RoomTimers {
+            lobby_timer_sec: settings.timers.lobby_timer_sec,
+            question_timer_sec: settings.timers.question_timer_sec,
+            answer_reveal_sec: settings.timers.answer_reveal_sec,
+        }),
+    }
+}
 pub struct GameServiceImpl {
     redis: RedisClient,
     rooms: RoomRegistry,
@@ -289,6 +342,7 @@ impl GameServiceImpl {
                 nanos: state.updated_at.timestamp_subsec_nanos() as i32,
             }),
             invite_path,
+            settings: Some(to_proto_settings(&state.settings)),
         })
     }
 }
@@ -354,7 +408,10 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             .await
             .map_err(|e| Status::internal(format!("failed to write room invite token: {e}")))?;
 
+        let room_settings = from_proto_settings(req.settings);
+
         let initial_state = RoomState {
+            settings: room_settings.clone(),
             room_id: room_id.clone(),
             owner_user_id: owner_id.clone(),
             quiz_id,
@@ -389,6 +446,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             error: None,
             invite_path,
             invite_qr_svg,
+            settings: Some(to_proto_settings(&room_settings)),
         }))
     }
 
@@ -1011,9 +1069,25 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             })
             .collect();
 
+        let pin = self
+            .room_pins
+            .read()
+            .await
+            .get(&room_id)
+            .cloned()
+            .unwrap_or_default();
+        let invite_token = self
+            .redis
+            .get_value(&redis_keys::room_invite_token_key(&room_id))
+            .await
+            .map_err(|e| Status::internal(format!("failed to load room invite token: {e}")))?;
+        let invite_path = invite_token
+            .map(|token| invite_path(&token))
+            .unwrap_or_default();
+
         Ok(Response::new(proto::richcrab::v1::GetRoomStateResponse {
             room_id: Some(proto::richcrab::v1::RoomId {
-                value: state.room_id,
+                value: state.room_id.clone(),
             }),
             state: state.state.as_str().to_string(),
             players,
@@ -1022,6 +1096,16 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
             error: None,
             teams,
             current_question,
+            pin,
+            quiz_id: Some(proto::richcrab::v1::QuizId {
+                value: state.quiz_id,
+            }),
+            owner_user_id: Some(proto::richcrab::v1::UserId {
+                value: state.owner_user_id,
+            }),
+            title: state.title,
+            invite_path,
+            settings: Some(to_proto_settings(&state.settings)),
         }))
     }
 
@@ -1030,10 +1114,7 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
         request: Request<proto::richcrab::v1::ListRoomsRequest>,
     ) -> Result<Response<proto::richcrab::v1::ListRoomsResponse>, Status> {
         let req = request.into_inner();
-        let owner_user_id = req
-            .owner_user_id
-            .map(|v| v.value)
-            .ok_or_else(|| Status::invalid_argument("owner_user_id is required"))?;
+        let owner_user_id = req.owner_user_id.map(|v| v.value).unwrap_or_default();
         let limit = if req.limit == 0 {
             usize::MAX
         } else {
@@ -1049,12 +1130,21 @@ impl proto::richcrab::v1::game_service_server::GameService for GameServiceImpl {
                 continue;
             };
             let snapshot = self.room_snapshot(&room_id, pin).await?;
-            if snapshot
+            let is_owner_room = snapshot
                 .owner_user_id
                 .as_ref()
                 .map(|owner| owner.value.as_str())
-                != Some(owner_user_id.as_str())
-            {
+                == Some(owner_user_id.as_str());
+            let is_public_room = snapshot
+                .settings
+                .as_ref()
+                .map(|s| {
+                    proto::richcrab::v1::RoomVisibility::try_from(s.visibility)
+                        .unwrap_or(proto::richcrab::v1::RoomVisibility::Private)
+                        == proto::richcrab::v1::RoomVisibility::Public
+                })
+                .unwrap_or(false);
+            if !(is_owner_room || (req.include_public && is_public_room)) {
                 continue;
             }
             rooms.push(snapshot);

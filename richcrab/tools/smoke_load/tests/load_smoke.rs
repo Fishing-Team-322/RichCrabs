@@ -23,6 +23,7 @@ async fn smoke_load_can_run_against_live_stack() {
                 value: "default".to_string(),
             }),
             title: "load-test".to_string(),
+            settings: None,
         })
         .await
         .expect("create room")

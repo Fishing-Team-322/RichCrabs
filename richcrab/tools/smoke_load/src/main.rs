@@ -26,6 +26,7 @@ async fn main() -> anyhow::Result<()> {
                 value: "default".to_string(),
             }),
             title: "smoke room".to_string(),
+            settings: None,
         })
         .await?
         .into_inner();

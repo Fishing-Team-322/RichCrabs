@@ -72,6 +72,34 @@ def _normalize_room_state(state: str) -> str:
     return "lobby"
 
 
+def _visibility_from_settings(settings: Any) -> str:
+    if not settings:
+        return "private"
+    visibility = getattr(settings, "visibility", 0)
+    if visibility == 2:
+        return "public"
+    return "private"
+
+
+def _settings_to_dict(settings: Any) -> dict[str, Any]:
+    if not settings:
+        return {
+            "privacy": "private",
+            "playerLimit": 20,
+            "timers": {"lobbyTimerSec": 45, "questionTimerSec": 30, "answerRevealSec": 10},
+        }
+    timers = getattr(settings, "timers", None)
+    return {
+        "privacy": _visibility_from_settings(settings),
+        "playerLimit": int(getattr(settings, "player_limit", 20) or 20),
+        "timers": {
+            "lobbyTimerSec": int(getattr(timers, "lobby_timer_sec", 45) or 45),
+            "questionTimerSec": int(getattr(timers, "question_timer_sec", 30) or 30),
+            "answerRevealSec": int(getattr(timers, "answer_reveal_sec", 10) or 10),
+        },
+    }
+
+
 def _map_room_snapshot(room: Any) -> dict[str, Any]:
     players = [
         {
@@ -82,6 +110,7 @@ def _map_room_snapshot(room: Any) -> dict[str, Any]:
         }
         for p in room.players
     ]
+    settings = _settings_to_dict(getattr(room, "settings", None))
     return {
         "roomId": room.room_id.value,
         "pin": room.pin,
@@ -93,12 +122,21 @@ def _map_room_snapshot(room: Any) -> dict[str, Any]:
         "hostUserId": room.owner_user_id.value if room.owner_user_id else "",
         "updatedAt": _ts_to_iso8601(room.updated_at),
         "invitePath": room.invite_path or "",
+        "settings": settings,
+        "isPublic": settings["privacy"] == "public",
     }
 
 
-def _host_rooms(user_id: str):
-    res = clients.game.ListRooms(game_pb2.ListRoomsRequest(owner_user_id=common_pb2.UserId(value=user_id), limit=50))
+def _list_rooms(owner_user_id: str = "", include_public: bool = False):
+    req = game_pb2.ListRoomsRequest(limit=50, include_public=include_public)
+    if owner_user_id:
+        req.owner_user_id = common_pb2.UserId(value=owner_user_id)
+    res = clients.game.ListRooms(req)
     return [_map_room_snapshot(room) for room in res.rooms]
+
+
+def _host_rooms(user_id: str):
+    return _list_rooms(owner_user_id=user_id, include_public=True)
 
 
 def _resolve_host_room(user_id: str, pin: str):
@@ -313,9 +351,9 @@ def me_sessions():
 @app.get("/api/v1/games", tags=["games"])
 def list_games(req: Request):
     uid = require_user(req)
-    if not uid:
-        return []
     try:
+        if not uid:
+            return _list_rooms(include_public=True)
         return _host_rooms(uid)
     except grpc.RpcError as ex:
         c, b = map_grpc_err(ex, "list_games")
@@ -328,7 +366,23 @@ def create_game(req: Request, body: dict[str, Any]):
     if not uid or body.get("ownerUserId") != uid:
         return err(403, "forbidden", "ownerUserId must match host session")
     try:
-        x = clients.game.CreateRoom(game_pb2.CreateRoomRequest(owner_user_id=common_pb2.UserId(value=uid), quiz_id=common_pb2.QuizId(value=body["quizId"]), title=body["title"]))
+        room_settings = body.get("settings") or {}
+        timers = room_settings.get("timers") or {}
+        visibility = game_pb2.RoomVisibility.ROOM_VISIBILITY_PUBLIC if room_settings.get("privacy") == "public" else game_pb2.RoomVisibility.ROOM_VISIBILITY_PRIVATE
+        x = clients.game.CreateRoom(game_pb2.CreateRoomRequest(
+            owner_user_id=common_pb2.UserId(value=uid),
+            quiz_id=common_pb2.QuizId(value=body["quizId"]),
+            title=body["title"],
+            settings=game_pb2.RoomSettings(
+                player_limit=int(room_settings.get("playerLimit") or 20),
+                visibility=visibility,
+                timers=game_pb2.RoomTimers(
+                    lobby_timer_sec=int(timers.get("lobbyTimerSec") or 45),
+                    question_timer_sec=int(timers.get("questionTimerSec") or 30),
+                    answer_reveal_sec=int(timers.get("answerRevealSec") or 10),
+                ),
+            ),
+        ))
     except grpc.RpcError as ex:
         c,b = map_grpc_err(ex, "create_room"); return JSONResponse(b,status_code=c)
     claims = SessionClaims(session_type="game", role="host", pin=x.pin, room_id=x.room_id.value, user_id=uid)
@@ -339,6 +393,8 @@ def create_game(req: Request, body: dict[str, Any]):
         "invitePath": invite_path,
         "inviteQrSvg": x.invite_qr_svg,
         "wsUrl": f"{settings.public_base_url}/ws",
+        "settings": _settings_to_dict(getattr(x, "settings", None)),
+        "isPublic": _visibility_from_settings(getattr(x, "settings", None)) == "public",
     })
     set_auth(out, claims)
     return out
@@ -409,7 +465,19 @@ def state(pin: str, req: Request):
             return err(404, "not_found", "room not found")
         return room
     st = clients.game.GetRoomState(game_pb2.GetRoomStateRequest(room_id=common_pb2.RoomId(value=s.room_id)))
-    return {"pin": pin, "state": st.state, "players": [{"playerId": p.player_id.value, "name": p.display_name, "score": p.score} for p in st.players]}
+    return {
+        "pin": st.pin or pin,
+        "state": st.state,
+        "players": [{"playerId": p.player_id.value, "name": p.display_name, "score": p.score} for p in st.players],
+        "roomId": st.room_id.value if st.room_id else "",
+        "quizId": st.quiz_id.value if getattr(st, "quiz_id", None) else "",
+        "title": getattr(st, "title", ""),
+        "hostUserId": st.owner_user_id.value if getattr(st, "owner_user_id", None) else "",
+        "invitePath": getattr(st, "invite_path", ""),
+        "settings": _settings_to_dict(getattr(st, "settings", None)),
+        "isPublic": _visibility_from_settings(getattr(st, "settings", None)) == "public",
+    }
+
 
 
 def _host_action(req: Request, pin: str, action: str):
